@@ -1,0 +1,21 @@
+# Databricks bundle state and local caches
+.databricks/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Session transcripts (contain prompts and notes; not reviewed for publishing)
+SESSION_LOG*.md
+SESSION_LOG*.docx
+prompts.pdf
+
+# Baseline run artifacts: row-level pipeline snapshots and logs (~33 MB). Regenerate with
+#   python baseline/collect_metrics.py ...   and   python baseline/build_report*.py
+# The reports (before_agents_report*.md), configs (*.yaml) and scripts stay in the repo.
+baseline/*.json
+baseline/*.jsonl
+baseline/v2/*.json
+baseline/v2/*.log
+baseline/*.log
+baseline/*.err

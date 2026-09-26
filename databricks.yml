@@ -1,0 +1,57 @@
+bundle:
+  name: netsuite_ingestion
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: UC catalog that will hold the poc_bronze / poc_silver / poc_reject schemas
+    default: poc_netsuite
+  source_pg_host:
+    description: Lakebase Postgres endpoint host for the netsuite-sample project (source data)
+    default: ep-orange-mountain-d84ghrmd.database.us-east-2.cloud.databricks.com
+  meta_pg_host:
+    description: Lakebase Postgres endpoint host for the aidq-metadata project (control tables)
+    default: ep-withered-pond-d8augt33.database.us-east-2.cloud.databricks.com
+  pg_user:
+    description: Postgres user for both Lakebase endpoints (OAuth database credential subject)
+    default: suhasv@gmail.com
+  bronze_rebuild:
+    description: >
+      "true" ONLY for the one full refresh that rebuilds bronze from the source (e.g. the migration
+      to the single streaming bronze table, or a recovery). It makes bronze.py ignore the key ledger
+      and define no top-up flows, and makes sync_ledger rebuild the ledger. Leave "false" for every
+      normal run; a normal run must never be a full refresh.
+    default: "false"
+  flow_scope:
+    description: >
+      "pending_only" (default) defines once-flows only for dates missing from the key ledger, plus
+      top-ups for late rows. "all_dates" defines a flow for every source date on every run; it costs
+      ~0.45 s of planning per flow (1,600 flows = ~12 min), so it is only for small date counts.
+    default: "pending_only"
+  schedule_pause_status:
+    description: >
+      UNPAUSED to let netsuite_ingestion_daily actually run on its cron schedule, PAUSED to
+      keep it defined but inactive. Note: bundle `mode: development` (the dev target) pauses
+      schedules regardless of this value -- only the prod target's schedule can actually fire.
+    default: "PAUSED"
+
+targets:
+  dev:
+    mode: development
+    default: true
+    variables:
+      # dev writes to its own schemas in the `workspace` catalog: the prod pipeline owns the tables in poc_netsuite
+      # (a catalog cannot be created through the API on Default Storage).
+      catalog: workspace
+
+  prod:
+    mode: production
+    workspace:
+      root_path: /Workspace/Users/suhasv@gmail.com/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      schedule_pause_status: "UNPAUSED"
+    permissions:
+      - user_name: suhasv@gmail.com
+        level: CAN_MANAGE

@@ -1,0 +1,16 @@
+# Defect config for the "before agents" baseline run (--init, seed 42).
+# 1% of eligible rows per defect. late_arriving is --increment only, so it is
+# not part of this init baseline.
+allow_overlap: false
+
+rates:
+  null_business_key: 0.01
+  duplicate_business_key: 0.01
+  negative_amount: 0.01
+  amount_mismatch: 0.01
+  invalid_enum: 0.01
+  end_before_start: 0.01
+  orphan_lines: 0.01
+  customer_null_company_name: 0.01
+  customer_malformed_email: 0.01
+  customer_updated_before_created: 0.01

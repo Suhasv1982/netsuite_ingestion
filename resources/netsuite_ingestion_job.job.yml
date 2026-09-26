@@ -1,0 +1,100 @@
+resources:
+  jobs:
+    netsuite_ingestion_daily:
+      name: netsuite_ingestion_daily
+      schedule:
+        quartz_cron_expression: "0 0 6 * * ?" # daily at 06:00
+        timezone_id: "UTC"
+        pause_status: ${var.schedule_pause_status}
+      tasks:
+        - task_key: refresh_credentials
+          spark_python_task:
+            python_file: ../src/netsuite_ingestion/refresh_credentials.py
+            parameters:
+              - "--secret-scope"
+              - "netsuite_ingestion_poc"
+              - "--source-endpoint"
+              - "projects/netsuite-sample/branches/production/endpoints/primary"
+              - "--source-key"
+              - "source_pg_token"
+              - "--meta-endpoint"
+              - "projects/aidq-metadata/branches/production/endpoints/primary"
+              - "--meta-key"
+              - "meta_pg_token"
+          environment_key: default
+
+        - task_key: run_pipeline
+          depends_on:
+            - task_key: refresh_credentials
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.netsuite_ingestion_poc.id}
+
+        - task_key: log_run_audit
+          depends_on:
+            - task_key: run_pipeline
+          run_if: ALL_DONE
+          spark_python_task:
+            python_file: ../src/netsuite_ingestion/log_run_audit.py
+            parameters:
+              - "--secret-scope"
+              - "netsuite_ingestion_poc"
+              - "--meta-pg-host"
+              - "${var.meta_pg_host}"
+              - "--meta-pg-user"
+              - "${var.pg_user}"
+              - "--meta-pg-key"
+              - "meta_pg_token"
+              - "--catalog"
+              - "${var.catalog}"
+              - "--run-id"
+              - "{{job.run_id}}"
+          environment_key: default
+
+        - task_key: sync_ledger
+          depends_on:
+            - task_key: run_pipeline
+          run_if: ALL_DONE
+          spark_python_task:
+            python_file: ../src/netsuite_ingestion/sync_ledger.py
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--secret-scope"
+              - "netsuite_ingestion_poc"
+              - "--meta-pg-host"
+              - "${var.meta_pg_host}"
+              - "--meta-pg-user"
+              - "${var.pg_user}"
+              - "--meta-pg-key"
+              - "meta_pg_token"
+              - "--bronze-rebuild"
+              - "${var.bronze_rebuild}"
+          environment_key: default
+
+        - task_key: ledger_check
+          depends_on:
+            - task_key: sync_ledger
+          run_if: ALL_DONE
+          spark_python_task:
+            python_file: ../src/netsuite_ingestion/ledger_check.py
+            parameters:
+              - "--catalog"
+              - "${var.catalog}"
+              - "--secret-scope"
+              - "netsuite_ingestion_poc"
+              - "--meta-pg-host"
+              - "${var.meta_pg_host}"
+              - "--meta-pg-user"
+              - "${var.pg_user}"
+              - "--meta-pg-key"
+              - "meta_pg_token"
+              - "--run-id"
+              - "{{job.run_id}}"
+          environment_key: default
+
+      environments:
+        - environment_key: default
+          spec:
+            client: "3"
+            dependencies:
+              - databricks-sdk>=0.94.0

@@ -1,0 +1,37 @@
+# Defect config for tools/netsuite_gen.py. Every rate is a fraction (0..1) of
+# the eligible rows emitted in that run, and every defect is OFF (0) by default.
+# Pass with:  python tools/netsuite_gen.py --init --seed 42 --config defects.yaml
+#
+# allow_overlap: false  -> a row carries at most one defect, so the manifest
+#                          attributes every violation to exactly one defect.
+allow_overlap: false
+
+rates:
+  # -- business keys (memberships, certifications, transactions, lines).
+  #    Never applied to customers: it has a primary key.
+  null_business_key: 0.0        # key set to NULL
+  duplicate_business_key: 0.0   # same key twice in the same created_date snapshot
+
+  # -- transaction lines
+  negative_amount: 0.0          # amount < 0
+  amount_mismatch: 0.0          # amount != quantity * rate
+  orphan_lines: 0.0             # transaction_internal_id points to no transaction
+
+  # -- enums: membership_status, certification_type, transactions.type get a
+  #    value outside the valid set (see INVALID_ENUM_VALUES in netsuite_gen.py)
+  invalid_enum: 0.0
+
+  # -- dates (memberships: start_date/end_date, certifications: start/end)
+  end_before_start: 0.0
+
+  # -- customers (no key defects)
+  customer_null_company_name: 0.0
+  customer_malformed_email: 0.0
+  customer_updated_before_created: 0.0   # not visible in bronze (dates are dropped)
+
+  # -- --increment only: NEW rows backdated to an older snapshot, with
+  #    updated_date older than the table's current watermark
+  late_arriving: 0.0
+
+# Schema drift is not a rate: pass --apply-schema-drift to --increment to add
+# netsuite_transactions.custbody_region once.

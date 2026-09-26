@@ -1,0 +1,16 @@
+resources:
+  pipelines:
+    guard_canary:
+      name: guard_canary
+      catalog: ${var.catalog}
+      schema: canary
+      serverless: true
+      continuous: false
+      root_path: "../src/netsuite_ingestion"
+      libraries:
+        - glob:
+            include: ../src/netsuite_ingestion/canary/canary_pipeline.py
+      configuration:
+        bronze_rebuild: "false"
+        flow_scope: pending_only
+        bundle_target: ${bundle.target}

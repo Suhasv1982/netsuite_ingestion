@@ -1,0 +1,32 @@
+resources:
+  jobs:
+    guard_canary_check:
+      name: guard_canary_check
+      description: >
+        Weekly check that the full-refresh guard in bronze.py still works: a tiny scratch pipeline is given a
+        normal update, a full refresh and a selective refresh, and the job fails unless the refreshes are blocked
+        with the guard's BLOCKED message and normal updates still complete. A failure means the platform changed how
+        refreshes are reported in the pipeline event log; fix the guard before the next full refresh.
+      schedule:
+        quartz_cron_expression: "0 0 7 ? * MON" # Mondays 07:00
+        timezone_id: "UTC"
+        pause_status: PAUSED # paused for now; unpause deliberately
+      tasks:
+        - task_key: run_canary
+          spark_python_task:
+            python_file: ../src/netsuite_ingestion/canary/run_canary.py
+            parameters:
+              - "--pipeline-id"
+              - "${resources.pipelines.guard_canary.id}"
+              - "--catalog"
+              - "${var.catalog}"
+              - "--schema"
+              - "canary"
+          environment_key: default
+
+      environments:
+        - environment_key: default
+          spec:
+            client: "3"
+            dependencies:
+              - databricks-sdk>=0.94.0

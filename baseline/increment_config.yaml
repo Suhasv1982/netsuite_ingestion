@@ -1,0 +1,6 @@
+# Baseline --increment: normal updates (always on) plus late-arriving rows.
+# No other defects. Run with --apply-schema-drift to add custbody_region.
+allow_overlap: false
+
+rates:
+  late_arriving: 0.10   # 10% of the NEW rows per incremental table are backdated

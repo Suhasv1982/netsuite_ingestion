@@ -1,0 +1,22 @@
+resources:
+  pipelines:
+    netsuite_ingestion_poc:
+      name: netsuite_ingestion_poc
+      catalog: ${var.catalog}
+      schema: default
+      serverless: true
+      continuous: false
+      root_path: "../src/netsuite_ingestion"
+      libraries:
+        - glob:
+            include: ../src/netsuite_ingestion/transformations/**
+      configuration:
+        source_pg_host: ${var.source_pg_host}
+        source_pg_user: ${var.pg_user}
+        meta_pg_host: ${var.meta_pg_host}
+        meta_pg_user: ${var.pg_user}
+        bronze_rebuild: ${var.bronze_rebuild}
+        bundle_target: ${bundle.target}
+        flow_scope: ${var.flow_scope}
+        ledger_table: ${var.catalog}.ledger.bronze_keys
+        ledger_fingerprint_table: ${var.catalog}.ledger.bronze_fingerprints

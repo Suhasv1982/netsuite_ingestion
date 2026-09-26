@@ -1,0 +1,11 @@
+update 6ee304cd-938b-4301-9f0b-58cd2c21585f: FAILED
+
+BLOCKED: update 6ee304cd-938b-4301-9f0b-58cd2c21585f of pipeline 98d66f50-6117-41f6-b26c-8f1a3708a563 was stopped before it changed any data. It is a full refresh of ALL tables with bronze_rebuild=false.
+WHY: normal runs define once-flows only for dates missing from the key ledger (flow_scope=pending_only). A full refresh empties the bronze streaming tables first, so with only those flows bronze would be rebuilt from the pending dates and lose everything else (measured: every incremental bronze table ended with 0 rows).
+TO RE-RUN with bronze_rebuild=true (defines a flow for every source date, ignores the ledger, no top-ups):
+  1. databricks bundle deploy -t dev --var="bronze_rebuild=true" --profile <PROFILE>
+  2. databricks bundle run netsuite_ingestion_daily -t dev --pipeline-params full_refresh=true --profile <PROFILE>
+  3. databricks bundle deploy -t dev --var="bronze_rebuild=false" --profile <PROFILE>   # back to normal runs
+
+bronze before {'netsuite_memberships': 3281, 'netsuite_transaction_lines': 39378}
+bronze after  {'netsuite_memberships': 3281, 'netsuite_transaction_lines': 39378}
