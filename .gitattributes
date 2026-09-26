@@ -1,3 +1,4 @@
 # Shell hooks must keep LF line endings (a CRLF shebang breaks them on Windows checkouts)
 .githooks/* text eol=lf
 *.sh text eol=lf
+migrations/*.sql text eol=lf

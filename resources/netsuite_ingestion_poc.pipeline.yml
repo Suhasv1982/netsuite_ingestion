@@ -15,6 +15,7 @@ resources:
         source_pg_user: ${var.pg_user}
         meta_pg_host: ${var.meta_pg_host}
         meta_pg_user: ${var.pg_user}
+        meta_pg_token_key: ${var.meta_pg_token_key}
         bronze_rebuild: ${var.bronze_rebuild}
         bundle_target: ${bundle.target}
         flow_scope: ${var.flow_scope}

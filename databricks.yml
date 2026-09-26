@@ -14,6 +14,14 @@ variables:
   meta_pg_host:
     description: Lakebase Postgres endpoint host for the aidq-metadata project (control tables)
     default: ep-withered-pond-d8augt33.database.us-east-2.cloud.databricks.com
+  meta_pg_endpoint:
+    description: Lakebase endpoint resource path of the metadata database (used to mint the OAuth credential)
+    default: projects/aidq-metadata/branches/production/endpoints/primary
+  meta_pg_token_key:
+    description: >
+      Secret key (in scope netsuite_ingestion_poc) holding the metadata-database credential. Differs per
+      target so a dev run can never overwrite the credential that prod reads.
+    default: meta_pg_token
   pg_user:
     description: Postgres user for both Lakebase endpoints (OAuth database credential subject)
     default: ${workspace.current_user.userName}
@@ -45,6 +53,10 @@ targets:
       # dev writes to its own schemas in the `workspace` catalog: the prod pipeline owns the tables in poc_netsuite
       # (a catalog cannot be created through the API on Default Storage).
       catalog: workspace
+      # dev reads and writes the `dev` branch of aidq-metadata (copy-on-write of production, created 2026-09-26)
+      meta_pg_endpoint: projects/aidq-metadata/branches/dev/endpoints/primary
+      meta_pg_host: ep-aged-cell-d8guvji9.database.us-east-2.cloud.databricks.com
+      meta_pg_token_key: meta_pg_token_dev
 
   prod:
     mode: production
