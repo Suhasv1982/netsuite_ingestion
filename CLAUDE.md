@@ -2,6 +2,8 @@
 
 Instructions for Claude Code and any other agent. They apply on top of the README.
 
+At the start of every session, read docs/STATUS.md and check git status and open PRs before doing anything.
+
 ## Git
 
 * Work on a branch and open a pull request. **Never push directly to `main`.** Do not merge a pull request unless
