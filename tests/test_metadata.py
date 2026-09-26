@@ -18,6 +18,7 @@ from metadata import (
     build_dq_reason_expr,
     _blank_to_none,
     build_soft_expectations,
+    filter_active_rules,
     has_merge_keys,
 )
 
@@ -192,3 +193,70 @@ class TestBronzeTableName:
     def test_one_bronze_table_per_source(self):
         assert bronze_table_name("netsuite_customers") == "poc_bronze.netsuite_customers"
         assert bronze_table_name("netsuite_memberships") == "poc_bronze.netsuite_memberships"
+
+
+class TestFilterActiveRules:
+    def test_inactive_rule_is_dropped(self):
+        rules = [
+            {"rule_name": "on", "is_active": True},
+            {"rule_name": "off", "is_active": False},
+        ]
+        assert [r["rule_name"] for r in filter_active_rules(rules)] == ["on"]
+
+    def test_missing_or_null_is_active_counts_as_active(self):
+        # metadata database without migration 001: the column does not exist yet
+        rules = [{"rule_name": "old"}, {"rule_name": "null", "is_active": None}]
+        assert len(filter_active_rules(rules)) == 2
+
+    def test_inactive_rules_do_not_reach_any_builder(self):
+        rules = filter_active_rules([
+            {"severity": "HARD", "rule_name": "H", "rule_expr": "a > 0", "is_active": False},
+            {"severity": "SOFT", "rule_name": "S", "rule_expr": "b > 0", "is_active": False},
+            {"severity": "HARD", "rule_name": "K", "rule_expr": "c > 0", "is_active": True},
+        ])
+        assert build_dq_predicate(rules) == "(c > 0)"
+        assert build_soft_expectations(rules) == {}
+        assert "'H'" not in build_dq_reason_expr(rules)
+
+
+class TestPgConnFromConf:
+    """pg_conn_from_conf picks the secret key from <prefix>_pg_token_key, defaulting to <prefix>_pg_token."""
+
+    class _Conf:
+        def __init__(self, values):
+            self.values = values
+
+        def get(self, key, default=None):
+            return self.values.get(key, default)
+
+    class _Spark:
+        def __init__(self, values):
+            self.conf = TestPgConnFromConf._Conf(values)
+
+    class _Secrets:
+        def __init__(self):
+            self.asked = None
+
+        def get(self, scope, key):
+            self.asked = (scope, key)
+            return "tok"
+
+    class _Dbutils:
+        def __init__(self):
+            self.secrets = TestPgConnFromConf._Secrets()
+
+    def test_default_key_when_no_override(self):
+        from metadata import pg_conn_from_conf
+
+        dbu = self._Dbutils()
+        conn = pg_conn_from_conf(self._Spark({"meta_pg_host": "h", "meta_pg_user": "u"}), dbu, "meta")
+        assert dbu.secrets.asked == ("netsuite_ingestion_poc", "meta_pg_token")
+        assert (conn.host, conn.user, conn.token) == ("h", "u", "tok")
+
+    def test_override_key_for_dev(self):
+        from metadata import pg_conn_from_conf
+
+        dbu = self._Dbutils()
+        conf = {"meta_pg_host": "h", "meta_pg_user": "u", "meta_pg_token_key": "meta_pg_token_dev"}
+        pg_conn_from_conf(self._Spark(conf), dbu, "meta")
+        assert dbu.secrets.asked == ("netsuite_ingestion_poc", "meta_pg_token_dev")

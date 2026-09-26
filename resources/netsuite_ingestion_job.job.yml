@@ -18,9 +18,9 @@ resources:
               - "--source-key"
               - "source_pg_token"
               - "--meta-endpoint"
-              - "projects/aidq-metadata/branches/production/endpoints/primary"
+              - "${var.meta_pg_endpoint}"
               - "--meta-key"
-              - "meta_pg_token"
+              - "${var.meta_pg_token_key}"
           environment_key: default
 
         - task_key: run_pipeline
@@ -43,7 +43,7 @@ resources:
               - "--meta-pg-user"
               - "${var.pg_user}"
               - "--meta-pg-key"
-              - "meta_pg_token"
+              - "${var.meta_pg_token_key}"
               - "--catalog"
               - "${var.catalog}"
               - "--run-id"
@@ -66,7 +66,7 @@ resources:
               - "--meta-pg-user"
               - "${var.pg_user}"
               - "--meta-pg-key"
-              - "meta_pg_token"
+              - "${var.meta_pg_token_key}"
               - "--bronze-rebuild"
               - "${var.bronze_rebuild}"
           environment_key: default
@@ -87,7 +87,7 @@ resources:
               - "--meta-pg-user"
               - "${var.pg_user}"
               - "--meta-pg-key"
-              - "meta_pg_token"
+              - "${var.meta_pg_token_key}"
               - "--run-id"
               - "{{job.run_id}}"
           environment_key: default

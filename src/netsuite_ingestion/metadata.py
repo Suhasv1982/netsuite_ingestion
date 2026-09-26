@@ -82,7 +82,9 @@ def pg_conn_from_conf(spark, dbutils, prefix: str, secret_scope: str = "netsuite
     """Build a PgConn from pipeline configuration entries named
     <prefix>_pg_host / <prefix>_pg_user / <prefix>_pg_database, plus the
     OAuth token read directly from the `secret_scope` Databricks secret
-    scope (key "<prefix>_pg_token").
+    scope (key "<prefix>_pg_token", or the value of the optional configuration entry
+    <prefix>_pg_token_key -- dev and prod use different keys so that one target's
+    refresh_credentials task can never overwrite the other's token).
 
     NOTE: the token is fetched via dbutils.secrets.get(), not
     spark.conf.get() -- Lakeflow pipeline `configuration` values do not
@@ -94,7 +96,9 @@ def pg_conn_from_conf(spark, dbutils, prefix: str, secret_scope: str = "netsuite
     return PgConn(
         host=spark.conf.get(f"{prefix}_pg_host"),
         user=spark.conf.get(f"{prefix}_pg_user"),
-        token=dbutils.secrets.get(scope=secret_scope, key=f"{prefix}_pg_token"),
+        token=dbutils.secrets.get(
+            scope=secret_scope, key=spark.conf.get(f"{prefix}_pg_token_key", f"{prefix}_pg_token")
+        ),
         database=spark.conf.get(f"{prefix}_pg_database", "databricks_postgres"),
     )
 
@@ -132,9 +136,19 @@ def read_source_columns(spark, meta_conn: PgConn) -> dict[int, list[dict]]:
 
 
 def read_dq_rules(spark, meta_conn: PgConn) -> dict[int, list[dict]]:
-    """table_id -> list of data_quality_rules rows for that table."""
+    """table_id -> list of ACTIVE data_quality_rules rows for that table."""
     df = read_jdbc_table(spark, meta_conn, "aidq_metadata", "data_quality_rules")
-    return _group_by_table_id([row.asDict() for row in df.collect()])
+    return _group_by_table_id(filter_active_rules([row.asDict() for row in df.collect()]))
+
+
+def filter_active_rules(rules: list[dict]) -> list[dict]:
+    """Drop rules with is_active = false (migration 001 adds the column, default true).
+
+    A row without the key, or with NULL, counts as active, so this is a no-op on a
+    metadata database that has not had migration 001 applied yet -- the code can be
+    deployed before or after the migration. Same rule as build_column_list.
+    """
+    return [r for r in rules if r.get("is_active") is None or bool(r.get("is_active"))]
 
 
 # --------------------------------------------------------------------------
