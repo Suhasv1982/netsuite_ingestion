@@ -21,8 +21,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 
 CATALOG = "poc_netsuite"  # v1 (prod) layout; --catalog overrides (v2 dev runs in `workspace`)
-PIPELINE_ID = "d002bb31-38f5-4980-b6bb-5902c04c9098"  # prod netsuite_ingestion_poc; --pipeline-id overrides
-WAREHOUSE_ID = "2c9afb562fcca499"
+PIPELINE_ID = os.environ.get("COLLECT_PIPELINE_ID")  # or --pipeline-id (pipeline of the netsuite_ingestion_poc resource)
+WAREHOUSE_ID = os.environ.get("COLLECT_WAREHOUSE_ID")  # or --warehouse-id (a SQL warehouse to run the queries on)
 META_ENDPOINT = "projects/aidq-metadata/branches/production/endpoints/primary"
 SILVER_KEYS = {
     "netsuite_memberships": "membership_internal_id",
@@ -40,6 +40,8 @@ def cli(profile, *args, parse=True):
 
 
 def sql(profile, statement):
+    if not WAREHOUSE_ID:
+        raise RuntimeError("no SQL warehouse: pass --warehouse-id or set COLLECT_WAREHOUSE_ID")
     body = {"warehouse_id": WAREHOUSE_ID, "statement": statement, "wait_timeout": "50s", "format": "JSON_ARRAY"}
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
         json.dump(body, fh)
@@ -266,10 +268,14 @@ def main():
     p.add_argument("--layout", choices=["v1", "v2"], default="v1")
     p.add_argument("--catalog")
     p.add_argument("--pipeline-id")
+    p.add_argument("--warehouse-id")
     args = p.parse_args()
-    global CATALOG, PIPELINE_ID
+    global CATALOG, PIPELINE_ID, WAREHOUSE_ID
     CATALOG = args.catalog or CATALOG
     PIPELINE_ID = args.pipeline_id or PIPELINE_ID
+    WAREHOUSE_ID = args.warehouse_id or WAREHOUSE_ID
+    if not PIPELINE_ID:
+        p.error("no pipeline: pass --pipeline-id or set COLLECT_PIPELINE_ID")
 
     snap = {"label": args.label, "job_run_id": args.job_run_id}
     for name, fn in [

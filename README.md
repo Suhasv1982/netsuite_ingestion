@@ -164,9 +164,15 @@ The v2 baseline (`baseline/before_agents_report_v2.md`) was produced in dev.
 
 ```bash
 cd netsuite_ingestion
-pip install -e ".[dev,tools]"
-pytest
+python -m venv .venv
+.venv/Scripts/python -m pip install ".[dev,tools]"     # .venv/bin/python on Linux/macOS
+.venv/Scripts/python -m pytest
+git config core.hooksPath .githooks                     # pre-push: gitleaks + pytest
 ```
+
+Contribution rules (branches and pull requests, no force-push, what must never be committed, no prod
+deploy without approval) are in `CLAUDE.md`. The same gitleaks and pytest checks run on every pull request
+(`.github/workflows/pr-checks.yml`).
 
 ## Deploying and running
 

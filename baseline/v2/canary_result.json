@@ -1,0 +1,1 @@
+{"state": "SUCCESS", "job_run_id": 398952524607008, "detail": "normal_1: COMPLETED rows=1  | full_refresh: FAILED rows=1 Traceback (most recent call last): | selective_refresh: FAILED rows=1 Traceback (most recent call last): | normal_2: COMPLETED rows=1  | guard canary OK: normal updates run, full and selective refreshes are blocked, data untouched"}

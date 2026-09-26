@@ -1,0 +1,55 @@
+#!/bin/sh
+# pre-push: scan the commits being pushed with gitleaks, then run the test suite.
+# Blocks the push if either fails (fails closed: a missing gitleaks or pytest also blocks).
+# Enable once per clone:  git config core.hooksPath .githooks     (see CLAUDE.md)
+
+ROOT=$(git rev-parse --show-toplevel) || exit 1
+cd "$ROOT" || exit 1
+ZERO=0000000000000000000000000000000000000000
+
+# ---- locate gitleaks
+GITLEAKS=$(command -v gitleaks || command -v gitleaks.exe || true)
+if [ -z "$GITLEAKS" ] && [ -n "${LOCALAPPDATA:-}" ]; then
+  LAD=$(cygpath -u "$LOCALAPPDATA" 2>/dev/null || echo "$LOCALAPPDATA")
+  GITLEAKS=$(ls "$LAD"/Microsoft/WinGet/Packages/Gitleaks.Gitleaks_*/gitleaks.exe 2>/dev/null | head -1)
+fi
+if [ -z "$GITLEAKS" ]; then
+  echo "pre-push: gitleaks not found. Install it (winget install --id Gitleaks.Gitleaks) and retry." >&2
+  exit 1
+fi
+
+# ---- 1. gitleaks over exactly the commits that are about to be pushed
+scanned=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$ZERO" ] && continue                    # deleting a ref: nothing to scan
+  if [ "$remote_sha" = "$ZERO" ]; then
+    range="$local_sha --not --remotes"                       # new branch: everything not on any remote yet
+  else
+    range="$remote_sha..$local_sha"
+  fi
+  n=$(git rev-list $range 2>/dev/null | wc -l | tr -d ' ')
+  [ "$n" = "0" ] && continue
+  scanned=$((scanned + n))
+  echo "pre-push: gitleaks scanning $n commit(s) for $local_ref ..."
+  if ! "$GITLEAKS" git --redact=100 --no-banner --log-opts="$range" . ; then
+    echo "pre-push: BLOCKED - gitleaks reported findings (values redacted above). Do not push; tell the owner." >&2
+    exit 1
+  fi
+done
+echo "pre-push: gitleaks OK ($scanned commit(s) scanned, 0 findings)"
+
+# ---- 2. tests (project venv preferred)
+if [ -x ".venv/Scripts/python.exe" ]; then PY=".venv/Scripts/python.exe"
+elif [ -x ".venv/bin/python" ]; then PY=".venv/bin/python"
+else PY=python; fi
+if ! "$PY" -m pytest --version >/dev/null 2>&1; then
+  echo "pre-push: pytest not available for '$PY'. Run: python -m venv .venv && .venv/Scripts/python -m pip install \".[dev,tools]\"" >&2
+  exit 1
+fi
+echo "pre-push: running pytest ..."
+if ! "$PY" -m pytest -q -p no:cacheprovider; then
+  echo "pre-push: BLOCKED - tests failed." >&2
+  exit 1
+fi
+echo "pre-push: all checks passed"
+exit 0

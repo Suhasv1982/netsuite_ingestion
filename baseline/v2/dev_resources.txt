@@ -1,4 +1,0 @@
-pipeline netsuite_ingestion_poc 98d66f50-6117-41f6-b26c-8f1a3708a563
-job netsuite_ingestion_daily 239543267945265
-pipeline guard_canary 4a1defb6-b2a4-4535-913a-7cbe9ec623cf
-job guard_canary_check 177612658713072

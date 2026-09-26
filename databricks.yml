@@ -16,7 +16,7 @@ variables:
     default: ep-withered-pond-d8augt33.database.us-east-2.cloud.databricks.com
   pg_user:
     description: Postgres user for both Lakebase endpoints (OAuth database credential subject)
-    default: suhasv@gmail.com
+    default: ${workspace.current_user.userName}
   bronze_rebuild:
     description: >
       "true" ONLY for the one full refresh that rebuilds bronze from the source (e.g. the migration
@@ -49,9 +49,9 @@ targets:
   prod:
     mode: production
     workspace:
-      root_path: /Workspace/Users/suhasv@gmail.com/.bundle/${bundle.name}/${bundle.target}
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
     variables:
       schedule_pause_status: "UNPAUSED"
     permissions:
-      - user_name: suhasv@gmail.com
+      - user_name: ${workspace.current_user.userName}
         level: CAN_MANAGE

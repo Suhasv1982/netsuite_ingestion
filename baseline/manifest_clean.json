@@ -1,0 +1,88 @@
+{
+  "tool_version": "1.0.0",
+  "mode": "init",
+  "seed": 42,
+  "batch_date": "2026-07-11",
+  "config_hash": "df97b6d0dc928021",
+  "config": {
+    "allow_overlap": false,
+    "rates": {
+      "null_business_key": 0.0,
+      "duplicate_business_key": 0.0,
+      "negative_amount": 0.0,
+      "amount_mismatch": 0.0,
+      "invalid_enum": 0.0,
+      "end_before_start": 0.0,
+      "orphan_lines": 0.0,
+      "customer_null_company_name": 0.0,
+      "customer_malformed_email": 0.0,
+      "customer_updated_before_created": 0.0,
+      "late_arriving": 0.0
+    }
+  },
+  "scale": {
+    "customers": 2000,
+    "memberships": 2500,
+    "certifications": 2000,
+    "transactions": 10000,
+    "lines": 30000
+  },
+  "rows_emitted": {
+    "netsuite_customers": 2000,
+    "netsuite_memberships": 2500,
+    "netsuite_certifications": 2000,
+    "netsuite_transactions": 10000,
+    "netsuite_transaction_lines": 30000
+  },
+  "rows_upserted": {},
+  "defects": [],
+  "schema_drift": null,
+  "pre_existing": {
+    "customers_dates_not_in_source_columns": {
+      "columns": [
+        "created_date",
+        "updated_date"
+      ],
+      "note": "live netsuite_customers has these columns; aidq_metadata.source_columns does not list them, so bronze drops them. Left as-is on purpose."
+    }
+  },
+  "backup": {
+    "performed": true,
+    "taken_at": "202609242053",
+    "branch": {
+      "name": "projects/netsuite-sample/branches/pre-synthetic-backup-202609242053",
+      "status": "created"
+    },
+    "schema": "netsuite_backup_202609242053",
+    "row_counts": {
+      "netsuite_customers": {
+        "source": 24,
+        "backup": 24
+      },
+      "netsuite_memberships": {
+        "source": 27,
+        "backup": 27
+      },
+      "netsuite_certifications": {
+        "source": 21,
+        "backup": 21
+      },
+      "netsuite_transactions": {
+        "source": 56,
+        "backup": 56
+      },
+      "netsuite_transaction_lines": {
+        "source": 104,
+        "backup": 104
+      }
+    },
+    "verified": true,
+    "pre_existing": {
+      "membership_status_invalid_rows": 1,
+      "certification_type_invalid_rows": 1,
+      "customers_rows_with_null_created_and_updated_date": 24
+    }
+  },
+  "dry_run": false,
+  "generated_at": "2026-09-24T20:53:44+00:00"
+}

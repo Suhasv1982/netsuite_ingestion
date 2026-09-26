@@ -1,0 +1,610 @@
+{
+  "label": "incremental",
+  "job_run_id": 346077225702715,
+  "job": {
+    "state": "SUCCESS_WITH_FAILURES",
+    "message": "The job run succeeded with 1 failed task",
+    "tasks": {
+      "log_run_audit": "SUCCESS",
+      "refresh_credentials": "SUCCESS",
+      "run_pipeline": "FAILED"
+    }
+  },
+  "pipeline": {
+    "update_id": "342850e9-3647-438d-8430-12c45e5de2b0",
+    "state": "FAILED",
+    "creation_time": "2026-09-25T15:46:00.764Z",
+    "error_events": [
+      {
+        "timestamp": "2026-09-25T15:53:01.746Z",
+        "message": "Update 342850 is FAILED since flow 'poc_netsuite.poc_silver.netsuite_transaction_lines' has failed more than 2 times.",
+        "exception": "[STREAM_FAILED] Query [id = c2b6959f-d041-4338-b0e7-7f5c56e5a8a9, runId = ef8c9594-5dc9-48e0-9cf4-bd6d98d22bd9] terminated with exception: assertion failed: There are [1] sources in the checkpoint offsets and now there are [3] sources requested by the query. Cannot continue. SQLSTATE: XXKST\n=== Streaming Query ===\nIdentifier: poc_netsuite.poc_silver.netsuite_transaction_lines [id = c2b6959f-d041-4"
+      },
+      {
+        "timestamp": "2026-09-25T15:53:00.732Z",
+        "message": "\nFlow 'poc_netsuite.poc_silver.netsuite_memberships' had streaming sources added or removed. Please perform a\nfull refresh in order to rebuild 'poc_netsuite.poc_silver.netsuite_memberships' against the current set of\nsources.\n",
+        "exception": "[STREAM_FAILED] Query [id = 9012d833-8776-4050-ab2f-5d3ec7296351, runId = 73e50830-a990-4256-b936-ad3c2acef8ec] terminated with exception: assertion failed: There are [1] sources in the checkpoint offsets and now there are [3] sources requested by the query. Cannot continue. SQLSTATE: XXKST\n=== Streaming Query ===\nIdentifier: poc_netsuite.poc_silver.netsuite_memberships [id = 9012d833-8776-4050-ab"
+      },
+      {
+        "timestamp": "2026-09-25T15:52:58.156Z",
+        "message": "\nFlow 'poc_netsuite.poc_silver.netsuite_certifications' had streaming sources added or removed. Please perform a\nfull refresh in order to rebuild 'poc_netsuite.poc_silver.netsuite_certifications' against the current set of\nsources.\n",
+        "exception": "[STREAM_FAILED] Query [id = 834fce4a-e41c-40f6-8d5d-9be86eccbb5c, runId = ca86398c-09e9-4e5e-b6ef-05bf7be2a582] terminated with exception: assertion failed: There are [1] sources in the checkpoint offsets and now there are [3] sources requested by the query. Cannot continue. SQLSTATE: XXKST\n=== Streaming Query ===\nIdentifier: poc_netsuite.poc_silver.netsuite_certifications [id = 834fce4a-e41c-40f6"
+      },
+      {
+        "timestamp": "2026-09-25T15:52:58.136Z",
+        "message": "\nFlow 'poc_netsuite.poc_silver.netsuite_transactions' had streaming sources added or removed. Please perform a\nfull refresh in order to rebuild 'poc_netsuite.poc_silver.netsuite_transactions' against the current set of\nsources.\n",
+        "exception": "[STREAM_FAILED] Query [id = 3428dc62-34fc-4eb8-afa8-a70c19c1487f, runId = 8bb506a6-9af8-46bd-ad09-8c2a59c7eb17] terminated with exception: assertion failed: There are [1] sources in the checkpoint offsets and now there are [3] sources requested by the query. Cannot continue. SQLSTATE: XXKST\n=== Streaming Query ===\nIdentifier: poc_netsuite.poc_silver.netsuite_transactions [id = 3428dc62-34fc-4eb8-a"
+      },
+      {
+        "timestamp": "2026-09-25T15:52:58.129Z",
+        "message": "\nFlow 'poc_netsuite.poc_silver.netsuite_transaction_lines' had streaming sources added or removed. Please perform a\nfull refresh in order to rebuild 'poc_netsuite.poc_silver.netsuite_transaction_lines' against the current set of\nsources.\n",
+        "exception": "[STREAM_FAILED] Query [id = c2b6959f-d041-4338-b0e7-7f5c56e5a8a9, runId = ef8c9594-5dc9-48e0-9cf4-bd6d98d22bd9] terminated with exception: assertion failed: There are [1] sources in the checkpoint offsets and now there are [3] sources requested by the query. Cannot continue. SQLSTATE: XXKST\n=== Streaming Query ===\nIdentifier: poc_netsuite.poc_silver.netsuite_transaction_lines [id = c2b6959f-d041-4"
+      },
+      {
+        "timestamp": "2026-09-25T15:52:48.407Z",
+        "message": "\nFlow 'poc_netsuite.poc_silver.netsuite_memberships' had streaming sources added or removed. Please perform a\nfull refresh in order to rebuild 'poc_netsuite.poc_silver.netsuite_memberships' against the current set of\nsources.\n",
+        "exception": "[STREAM_FAILED] Query [id = 9012d833-8776-4050-ab2f-5d3ec7296351, runId = 26375da3-afe9-47cb-8256-b9d41390fb7b] terminated with exception: assertion failed: There are [1] sources in the checkpoint offsets and now there are [3] sources requested by the query. Cannot continue. SQLSTATE: XXKST\n=== Streaming Query ===\nIdentifier: poc_netsuite.poc_silver.netsuite_memberships [id = 9012d833-8776-4050-ab"
+      },
+      {
+        "timestamp": "2026-09-25T15:52:44.929Z",
+        "message": "\nFlow 'poc_netsuite.poc_silver.netsuite_certifications' had streaming sources added or removed. Please perform a\nfull refresh in order to rebuild 'poc_netsuite.poc_silver.netsuite_certifications' against the current set of\nsources.\n",
+        "exception": "[STREAM_FAILED] Query [id = 834fce4a-e41c-40f6-8d5d-9be86eccbb5c, runId = b38fed63-171e-4cd2-84c5-b5360a681372] terminated with exception: assertion failed: There are [1] sources in the checkpoint offsets and now there are [3] sources requested by the query. Cannot continue. SQLSTATE: XXKST\n=== Streaming Query ===\nIdentifier: poc_netsuite.poc_silver.netsuite_certifications [id = 834fce4a-e41c-40f6"
+      },
+      {
+        "timestamp": "2026-09-25T15:52:44.922Z",
+        "message": "\nFlow 'poc_netsuite.poc_silver.netsuite_transactions' had streaming sources added or removed. Please perform a\nfull refresh in order to rebuild 'poc_netsuite.poc_silver.netsuite_transactions' against the current set of\nsources.\n",
+        "exception": "[STREAM_FAILED] Query [id = 3428dc62-34fc-4eb8-afa8-a70c19c1487f, runId = 8a1c413c-f221-4623-8e83-2b0871f800d7] terminated with exception: assertion failed: There are [1] sources in the checkpoint offsets and now there are [3] sources requested by the query. Cannot continue. SQLSTATE: XXKST\n=== Streaming Query ===\nIdentifier: poc_netsuite.poc_silver.netsuite_transactions [id = 3428dc62-34fc-4eb8-a"
+      },
+      {
+        "timestamp": "2026-09-25T15:52:44.914Z",
+        "message": "\nFlow 'poc_netsuite.poc_silver.netsuite_transaction_lines' had streaming sources added or removed. Please perform a\nfull refresh in order to rebuild 'poc_netsuite.poc_silver.netsuite_transaction_lines' against the current set of\nsources.\n",
+        "exception": "[STREAM_FAILED] Query [id = c2b6959f-d041-4338-b0e7-7f5c56e5a8a9, runId = a88018e9-53a3-4b09-84e4-c9e7a01543c6] terminated with exception: assertion failed: There are [1] sources in the checkpoint offsets and now there are [3] sources requested by the query. Cannot continue. SQLSTATE: XXKST\n=== Streaming Query ===\nIdentifier: poc_netsuite.poc_silver.netsuite_transaction_lines [id = c2b6959f-d041-4"
+      },
+      {
+        "timestamp": "2026-09-25T15:52:41.921Z",
+        "message": "\nFlow 'poc_netsuite.poc_silver.netsuite_memberships' had streaming sources added or removed. Please perform a\nfull refresh in order to rebuild 'poc_netsuite.poc_silver.netsuite_memberships' against the current set of\nsources.\n",
+        "exception": "[STREAM_FAILED] Query [id = 9012d833-8776-4050-ab2f-5d3ec7296351, runId = c6a2873c-d162-4cce-8f09-d323e30ee903] terminated with exception: assertion failed: There are [1] sources in the checkpoint offsets and now there are [3] sources requested by the query. Cannot continue. SQLSTATE: XXKST\n=== Streaming Query ===\nIdentifier: poc_netsuite.poc_silver.netsuite_memberships [id = 9012d833-8776-4050-ab"
+      },
+      {
+        "timestamp": "2026-09-25T15:52:26.498Z",
+        "message": "\nFlow 'poc_netsuite.poc_silver.netsuite_certifications' had streaming sources added or removed. Please perform a\nfull refresh in order to rebuild 'poc_netsuite.poc_silver.netsuite_certifications' against the current set of\nsources.\n",
+        "exception": "[STREAM_FAILED] Query [id = 834fce4a-e41c-40f6-8d5d-9be86eccbb5c, runId = d59a7387-1183-4911-8f97-e09df72852f6] terminated with exception: assertion failed: There are [1] sources in the checkpoint offsets and now there are [3] sources requested by the query. Cannot continue. SQLSTATE: XXKST\n=== Streaming Query ===\nIdentifier: poc_netsuite.poc_silver.netsuite_certifications [id = 834fce4a-e41c-40f6"
+      },
+      {
+        "timestamp": "2026-09-25T15:52:26.481Z",
+        "message": "\nFlow 'poc_netsuite.poc_silver.netsuite_transactions' had streaming sources added or removed. Please perform a\nfull refresh in order to rebuild 'poc_netsuite.poc_silver.netsuite_transactions' against the current set of\nsources.\n",
+        "exception": "[STREAM_FAILED] Query [id = 3428dc62-34fc-4eb8-afa8-a70c19c1487f, runId = 4d80aab4-43e2-4bac-b3c1-7e6d38b2962d] terminated with exception: assertion failed: There are [1] sources in the checkpoint offsets and now there are [3] sources requested by the query. Cannot continue. SQLSTATE: XXKST\n=== Streaming Query ===\nIdentifier: poc_netsuite.poc_silver.netsuite_transactions [id = 3428dc62-34fc-4eb8-a"
+      },
+      {
+        "timestamp": "2026-09-25T15:52:26.472Z",
+        "message": "\nFlow 'poc_netsuite.poc_silver.netsuite_transaction_lines' had streaming sources added or removed. Please perform a\nfull refresh in order to rebuild 'poc_netsuite.poc_silver.netsuite_transaction_lines' against the current set of\nsources.\n",
+        "exception": "[STREAM_FAILED] Query [id = c2b6959f-d041-4338-b0e7-7f5c56e5a8a9, runId = 572ba916-8ae6-4e94-9acc-b29124b7d469] terminated with exception: assertion failed: There are [1] sources in the checkpoint offsets and now there are [3] sources requested by the query. Cannot continue. SQLSTATE: XXKST\n=== Streaming Query ===\nIdentifier: poc_netsuite.poc_silver.netsuite_transaction_lines [id = c2b6959f-d041-4"
+      }
+    ]
+  },
+  "source_row_counts": {
+    "netsuite_customers": 2100,
+    "netsuite_memberships": 2896,
+    "netsuite_certifications": 2317,
+    "netsuite_transactions": 11588,
+    "netsuite_transaction_lines": 34758
+  },
+  "uc_row_counts": {
+    "poc_bronze": {
+      "netsuite_certifications__2026_06_20": 10,
+      "netsuite_certifications__2026_07_11": 2019,
+      "netsuite_certifications__2026_08_01": 2,
+      "netsuite_certifications__2026_08_22": 288,
+      "netsuite_customers": 2100,
+      "netsuite_memberships__2026_06_20": 13,
+      "netsuite_memberships__2026_07_11": 2524,
+      "netsuite_memberships__2026_08_01": 3,
+      "netsuite_memberships__2026_08_22": 359,
+      "netsuite_transaction_lines__2026_06_20": 150,
+      "netsuite_transaction_lines__2026_07_11": 30288,
+      "netsuite_transaction_lines__2026_08_01": 3,
+      "netsuite_transaction_lines__2026_08_22": 4320,
+      "netsuite_transactions__2026_06_20": 50,
+      "netsuite_transactions__2026_07_11": 10098,
+      "netsuite_transactions__2026_08_01": 2,
+      "netsuite_transactions__2026_08_22": 1440
+    },
+    "poc_silver": {
+      "netsuite_certifications": 1952,
+      "netsuite_memberships": 2451,
+      "netsuite_transaction_lines": 29710,
+      "netsuite_transactions": 9902
+    },
+    "poc_reject": {
+      "rejected_rows": 57
+    }
+  },
+  "reject_breakdown": [
+    {
+      "source_table": "netsuite_certifications",
+      "reason": "Date Range",
+      "rows": 9
+    },
+    {
+      "source_table": "netsuite_certifications",
+      "reason": "Not in List",
+      "rows": 23
+    },
+    {
+      "source_table": "netsuite_memberships",
+      "reason": "Not in List",
+      "rows": 25
+    }
+  ],
+  "silver_key_quality": {
+    "netsuite_memberships": {
+      "total": 2451,
+      "distinct_keys": 2450,
+      "null_keys": 1
+    },
+    "netsuite_certifications": {
+      "total": 1952,
+      "distinct_keys": 1951,
+      "null_keys": 1
+    },
+    "netsuite_transactions": {
+      "total": 9902,
+      "distinct_keys": 9901,
+      "null_keys": 1
+    },
+    "netsuite_transaction_lines": {
+      "total": 29710,
+      "distinct_keys": 29709,
+      "null_keys": 1
+    }
+  },
+  "run_audit": [
+    {
+      "run_id": "346077225702715",
+      "table_id": 1,
+      "layer": "bronze",
+      "status": "FAILED",
+      "rows_read": null,
+      "rows_written": null,
+      "rows_rejected": null,
+      "started_at": "2026-09-25T15:31:10.245000+00:00",
+      "ended_at": "2026-09-25T15:53:09.461000+00:00",
+      "error": "Workload failed, see run output for details"
+    },
+    {
+      "run_id": "346077225702715",
+      "table_id": 1,
+      "layer": "dq",
+      "status": "FAILED",
+      "rows_read": null,
+      "rows_written": null,
+      "rows_rejected": null,
+      "started_at": "2026-09-25T15:31:10.245000+00:00",
+      "ended_at": "2026-09-25T15:53:09.461000+00:00",
+      "error": "Workload failed, see run output for details"
+    },
+    {
+      "run_id": "346077225702715",
+      "table_id": 2,
+      "layer": "bronze",
+      "status": "FAILED",
+      "rows_read": null,
+      "rows_written": null,
+      "rows_rejected": null,
+      "started_at": "2026-09-25T15:31:10.245000+00:00",
+      "ended_at": "2026-09-25T15:53:09.461000+00:00",
+      "error": "Workload failed, see run output for details"
+    },
+    {
+      "run_id": "346077225702715",
+      "table_id": 2,
+      "layer": "dq",
+      "status": "FAILED",
+      "rows_read": null,
+      "rows_written": null,
+      "rows_rejected": null,
+      "started_at": "2026-09-25T15:31:10.245000+00:00",
+      "ended_at": "2026-09-25T15:53:09.461000+00:00",
+      "error": "Workload failed, see run output for details"
+    },
+    {
+      "run_id": "346077225702715",
+      "table_id": 2,
+      "layer": "silver",
+      "status": "FAILED",
+      "rows_read": null,
+      "rows_written": null,
+      "rows_rejected": null,
+      "started_at": "2026-09-25T15:31:10.245000+00:00",
+      "ended_at": "2026-09-25T15:53:09.461000+00:00",
+      "error": "Workload failed, see run output for details"
+    },
+    {
+      "run_id": "346077225702715",
+      "table_id": 3,
+      "layer": "bronze",
+      "status": "FAILED",
+      "rows_read": null,
+      "rows_written": null,
+      "rows_rejected": null,
+      "started_at": "2026-09-25T15:31:10.245000+00:00",
+      "ended_at": "2026-09-25T15:53:09.461000+00:00",
+      "error": "Workload failed, see run output for details"
+    },
+    {
+      "run_id": "346077225702715",
+      "table_id": 3,
+      "layer": "dq",
+      "status": "FAILED",
+      "rows_read": null,
+      "rows_written": null,
+      "rows_rejected": null,
+      "started_at": "2026-09-25T15:31:10.245000+00:00",
+      "ended_at": "2026-09-25T15:53:09.461000+00:00",
+      "error": "Workload failed, see run output for details"
+    },
+    {
+      "run_id": "346077225702715",
+      "table_id": 3,
+      "layer": "silver",
+      "status": "FAILED",
+      "rows_read": null,
+      "rows_written": null,
+      "rows_rejected": null,
+      "started_at": "2026-09-25T15:31:10.245000+00:00",
+      "ended_at": "2026-09-25T15:53:09.461000+00:00",
+      "error": "Workload failed, see run output for details"
+    },
+    {
+      "run_id": "346077225702715",
+      "table_id": 4,
+      "layer": "bronze",
+      "status": "FAILED",
+      "rows_read": null,
+      "rows_written": null,
+      "rows_rejected": null,
+      "started_at": "2026-09-25T15:31:10.245000+00:00",
+      "ended_at": "2026-09-25T15:53:09.461000+00:00",
+      "error": "Workload failed, see run output for details"
+    },
+    {
+      "run_id": "346077225702715",
+      "table_id": 4,
+      "layer": "dq",
+      "status": "FAILED",
+      "rows_read": null,
+      "rows_written": null,
+      "rows_rejected": null,
+      "started_at": "2026-09-25T15:31:10.245000+00:00",
+      "ended_at": "2026-09-25T15:53:09.461000+00:00",
+      "error": "Workload failed, see run output for details"
+    },
+    {
+      "run_id": "346077225702715",
+      "table_id": 4,
+      "layer": "silver",
+      "status": "FAILED",
+      "rows_read": null,
+      "rows_written": null,
+      "rows_rejected": null,
+      "started_at": "2026-09-25T15:31:10.245000+00:00",
+      "ended_at": "2026-09-25T15:53:09.461000+00:00",
+      "error": "Workload failed, see run output for details"
+    },
+    {
+      "run_id": "346077225702715",
+      "table_id": 5,
+      "layer": "bronze",
+      "status": "FAILED",
+      "rows_read": null,
+      "rows_written": null,
+      "rows_rejected": null,
+      "started_at": "2026-09-25T15:31:10.245000+00:00",
+      "ended_at": "2026-09-25T15:53:09.461000+00:00",
+      "error": "Workload failed, see run output for details"
+    },
+    {
+      "run_id": "346077225702715",
+      "table_id": 5,
+      "layer": "dq",
+      "status": "FAILED",
+      "rows_read": null,
+      "rows_written": null,
+      "rows_rejected": null,
+      "started_at": "2026-09-25T15:31:10.245000+00:00",
+      "ended_at": "2026-09-25T15:53:09.461000+00:00",
+      "error": "Workload failed, see run output for details"
+    },
+    {
+      "run_id": "346077225702715",
+      "table_id": 5,
+      "layer": "silver",
+      "status": "FAILED",
+      "rows_read": null,
+      "rows_written": null,
+      "rows_rejected": null,
+      "started_at": "2026-09-25T15:31:10.245000+00:00",
+      "ended_at": "2026-09-25T15:53:09.461000+00:00",
+      "error": "Workload failed, see run output for details"
+    }
+  ],
+  "table_columns": {
+    "poc_bronze.netsuite_certifications__2026_06_20": [
+      "certification_internal_id",
+      "customer_internal_id",
+      "certification_type",
+      "certification_start_date",
+      "certification_end_date",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_bronze.netsuite_certifications__2026_07_11": [
+      "certification_internal_id",
+      "customer_internal_id",
+      "certification_type",
+      "certification_start_date",
+      "certification_end_date",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_bronze.netsuite_certifications__2026_08_01": [
+      "certification_internal_id",
+      "customer_internal_id",
+      "certification_type",
+      "certification_start_date",
+      "certification_end_date",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_bronze.netsuite_certifications__2026_08_22": [
+      "certification_internal_id",
+      "customer_internal_id",
+      "certification_type",
+      "certification_start_date",
+      "certification_end_date",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_bronze.netsuite_customers": [
+      "customer_internal_id",
+      "company_name",
+      "email"
+    ],
+    "poc_bronze.netsuite_memberships__2026_06_20": [
+      "membership_internal_id",
+      "customer_internal_id",
+      "membership_type",
+      "start_date",
+      "end_date",
+      "membership_status",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_bronze.netsuite_memberships__2026_07_11": [
+      "membership_internal_id",
+      "customer_internal_id",
+      "membership_type",
+      "start_date",
+      "end_date",
+      "membership_status",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_bronze.netsuite_memberships__2026_08_01": [
+      "membership_internal_id",
+      "customer_internal_id",
+      "membership_type",
+      "start_date",
+      "end_date",
+      "membership_status",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_bronze.netsuite_memberships__2026_08_22": [
+      "membership_internal_id",
+      "customer_internal_id",
+      "membership_type",
+      "start_date",
+      "end_date",
+      "membership_status",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_bronze.netsuite_transaction_lines__2026_06_20": [
+      "transaction_line_id",
+      "transaction_internal_id",
+      "line_number",
+      "item_id",
+      "item_name",
+      "quantity",
+      "rate",
+      "amount",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_bronze.netsuite_transaction_lines__2026_07_11": [
+      "transaction_line_id",
+      "transaction_internal_id",
+      "line_number",
+      "item_id",
+      "item_name",
+      "quantity",
+      "rate",
+      "amount",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_bronze.netsuite_transaction_lines__2026_08_01": [
+      "transaction_line_id",
+      "transaction_internal_id",
+      "line_number",
+      "item_id",
+      "item_name",
+      "quantity",
+      "rate",
+      "amount",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_bronze.netsuite_transaction_lines__2026_08_22": [
+      "transaction_line_id",
+      "transaction_internal_id",
+      "line_number",
+      "item_id",
+      "item_name",
+      "quantity",
+      "rate",
+      "amount",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_bronze.netsuite_transactions__2026_06_20": [
+      "transaction_internal_id",
+      "tranid",
+      "customer_internal_id",
+      "type",
+      "date",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_bronze.netsuite_transactions__2026_07_11": [
+      "transaction_internal_id",
+      "tranid",
+      "customer_internal_id",
+      "type",
+      "date",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_bronze.netsuite_transactions__2026_08_01": [
+      "transaction_internal_id",
+      "tranid",
+      "customer_internal_id",
+      "type",
+      "date",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_bronze.netsuite_transactions__2026_08_22": [
+      "transaction_internal_id",
+      "tranid",
+      "customer_internal_id",
+      "type",
+      "date",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_silver.netsuite_certifications": [
+      "certification_internal_id",
+      "customer_internal_id",
+      "certification_type",
+      "certification_start_date",
+      "certification_end_date",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_silver.netsuite_memberships": [
+      "membership_internal_id",
+      "customer_internal_id",
+      "membership_type",
+      "start_date",
+      "end_date",
+      "membership_status",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_silver.netsuite_transaction_lines": [
+      "transaction_line_id",
+      "transaction_internal_id",
+      "line_number",
+      "item_id",
+      "item_name",
+      "quantity",
+      "rate",
+      "amount",
+      "created_date",
+      "updated_date"
+    ],
+    "poc_silver.netsuite_transactions": [
+      "transaction_internal_id",
+      "tranid",
+      "customer_internal_id",
+      "type",
+      "date",
+      "created_date",
+      "updated_date"
+    ]
+  },
+  "bronze_expected_vs_actual": {
+    "expected_by_dq": {
+      "netsuite_customers": [
+        "netsuite_customers"
+      ],
+      "netsuite_memberships": [
+        "netsuite_memberships__2026_06_20",
+        "netsuite_memberships__2026_07_11",
+        "netsuite_memberships__2026_08_22"
+      ],
+      "netsuite_certifications": [
+        "netsuite_certifications__2026_06_20",
+        "netsuite_certifications__2026_07_11",
+        "netsuite_certifications__2026_08_22"
+      ],
+      "netsuite_transactions": [
+        "netsuite_transactions__2026_06_20",
+        "netsuite_transactions__2026_07_11",
+        "netsuite_transactions__2026_08_22"
+      ],
+      "netsuite_transaction_lines": [
+        "netsuite_transaction_lines__2026_06_20",
+        "netsuite_transaction_lines__2026_07_11",
+        "netsuite_transaction_lines__2026_08_22"
+      ]
+    },
+    "matched_by_log_run_audit": {
+      "netsuite_customers": [
+        "netsuite_customers"
+      ],
+      "netsuite_memberships": [
+        "netsuite_memberships__2026_06_20",
+        "netsuite_memberships__2026_07_11",
+        "netsuite_memberships__2026_08_01",
+        "netsuite_memberships__2026_08_22"
+      ],
+      "netsuite_certifications": [
+        "netsuite_certifications__2026_06_20",
+        "netsuite_certifications__2026_07_11",
+        "netsuite_certifications__2026_08_01",
+        "netsuite_certifications__2026_08_22"
+      ],
+      "netsuite_transactions": [
+        "netsuite_transactions__2026_06_20",
+        "netsuite_transactions__2026_07_11",
+        "netsuite_transactions__2026_08_01",
+        "netsuite_transactions__2026_08_22"
+      ],
+      "netsuite_transaction_lines": [
+        "netsuite_transaction_lines__2026_06_20",
+        "netsuite_transaction_lines__2026_07_11",
+        "netsuite_transaction_lines__2026_08_01",
+        "netsuite_transaction_lines__2026_08_22"
+      ]
+    },
+    "leftover_bronze_tables": [
+      "netsuite_certifications__2026_08_01",
+      "netsuite_memberships__2026_08_01",
+      "netsuite_transaction_lines__2026_08_01",
+      "netsuite_transactions__2026_08_01"
+    ],
+    "source_transactions_columns": [
+      "transaction_internal_id",
+      "tranid",
+      "customer_internal_id",
+      "type",
+      "date",
+      "created_date",
+      "updated_date",
+      "custbody_region"
+    ]
+  }
+}
