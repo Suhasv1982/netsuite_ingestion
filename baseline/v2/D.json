@@ -1,0 +1,942 @@
+{
+  "label": "v2_D",
+  "job_run_id": 793341885130688,
+  "job": {
+    "state": "SUCCESS",
+    "message": "",
+    "tasks": {
+      "run_pipeline": "SUCCESS",
+      "refresh_credentials": "SUCCESS",
+      "sync_ledger": "SUCCESS",
+      "ledger_check": "SUCCESS",
+      "log_run_audit": "SUCCESS"
+    }
+  },
+  "pipeline": {
+    "update_id": "6dde0151-9895-4ea7-8c3c-89271a5e9b86",
+    "state": "COMPLETED",
+    "creation_time": "2026-09-26T01:11:35.939Z",
+    "error_events": []
+  },
+  "source_row_counts": {
+    "netsuite_customers": 2200,
+    "netsuite_memberships": 3281,
+    "netsuite_certifications": 2625,
+    "netsuite_transactions": 13128,
+    "netsuite_transaction_lines": 39378
+  },
+  "uc_row_counts": {
+    "poc_bronze": {
+      "netsuite_certifications": 2625,
+      "netsuite_customers": 2200,
+      "netsuite_memberships": 3281,
+      "netsuite_transaction_lines": 39378,
+      "netsuite_transactions": 13128
+    },
+    "poc_silver": {
+      "netsuite_certifications": 2152,
+      "netsuite_memberships": 2704,
+      "netsuite_transaction_lines": 32710,
+      "netsuite_transactions": 10902
+    },
+    "poc_reject": {
+      "rejected_rows": 57
+    }
+  },
+  "reject_breakdown": [
+    {
+      "source_table": "netsuite_certifications",
+      "reason": "Date Range",
+      "rows": 9
+    },
+    {
+      "source_table": "netsuite_certifications",
+      "reason": "Not in List",
+      "rows": 23
+    },
+    {
+      "source_table": "netsuite_memberships",
+      "reason": "Not in List",
+      "rows": 25
+    }
+  ],
+  "silver_key_quality": {
+    "netsuite_memberships": {
+      "total": 2704,
+      "distinct_keys": 2703,
+      "null_keys": 1
+    },
+    "netsuite_certifications": {
+      "total": 2152,
+      "distinct_keys": 2151,
+      "null_keys": 1
+    },
+    "netsuite_transactions": {
+      "total": 10902,
+      "distinct_keys": 10901,
+      "null_keys": 1
+    },
+    "netsuite_transaction_lines": {
+      "total": 32710,
+      "distinct_keys": 32709,
+      "null_keys": 1
+    }
+  },
+  "run_audit": [
+    {
+      "run_id": "793341885130688",
+      "table_id": 1,
+      "layer": "bronze",
+      "status": "SUCCESS",
+      "rows_read": 2200,
+      "rows_written": 2200,
+      "rows_rejected": null,
+      "started_at": "2026-09-26T01:10:31.154000+00:00",
+      "ended_at": "2026-09-26T01:14:23.799000+00:00",
+      "error": null
+    },
+    {
+      "run_id": "793341885130688",
+      "table_id": 1,
+      "layer": "dq",
+      "status": "SUCCESS",
+      "rows_read": 2200,
+      "rows_written": 2200,
+      "rows_rejected": 0,
+      "started_at": "2026-09-26T01:10:31.154000+00:00",
+      "ended_at": "2026-09-26T01:14:23.799000+00:00",
+      "error": null
+    },
+    {
+      "run_id": "793341885130688",
+      "table_id": 2,
+      "layer": "bronze",
+      "status": "SUCCESS",
+      "rows_read": 3281,
+      "rows_written": 3281,
+      "rows_rejected": null,
+      "started_at": "2026-09-26T01:10:31.154000+00:00",
+      "ended_at": "2026-09-26T01:14:23.799000+00:00",
+      "error": null
+    },
+    {
+      "run_id": "793341885130688",
+      "table_id": 2,
+      "layer": "dq",
+      "status": "SUCCESS",
+      "rows_read": 3281,
+      "rows_written": 3256,
+      "rows_rejected": 25,
+      "started_at": "2026-09-26T01:10:31.154000+00:00",
+      "ended_at": "2026-09-26T01:14:23.799000+00:00",
+      "error": null
+    },
+    {
+      "run_id": "793341885130688",
+      "table_id": 2,
+      "layer": "ledger",
+      "status": "OK",
+      "rows_read": 3233,
+      "rows_written": 3233,
+      "rows_rejected": 0,
+      "started_at": "2026-09-26T01:16:02.127984+00:00",
+      "ended_at": "2026-09-26T01:16:18.743254+00:00",
+      "error": null
+    },
+    {
+      "run_id": "793341885130688",
+      "table_id": 2,
+      "layer": "silver",
+      "status": "SUCCESS",
+      "rows_read": 3256,
+      "rows_written": 2704,
+      "rows_rejected": null,
+      "started_at": "2026-09-26T01:10:31.154000+00:00",
+      "ended_at": "2026-09-26T01:14:23.799000+00:00",
+      "error": null
+    },
+    {
+      "run_id": "793341885130688",
+      "table_id": 3,
+      "layer": "bronze",
+      "status": "SUCCESS",
+      "rows_read": 2625,
+      "rows_written": 2625,
+      "rows_rejected": null,
+      "started_at": "2026-09-26T01:10:31.154000+00:00",
+      "ended_at": "2026-09-26T01:14:23.799000+00:00",
+      "error": null
+    },
+    {
+      "run_id": "793341885130688",
+      "table_id": 3,
+      "layer": "dq",
+      "status": "SUCCESS",
+      "rows_read": 2625,
+      "rows_written": 2593,
+      "rows_rejected": 32,
+      "started_at": "2026-09-26T01:10:31.154000+00:00",
+      "ended_at": "2026-09-26T01:14:23.799000+00:00",
+      "error": null
+    },
+    {
+      "run_id": "793341885130688",
+      "table_id": 3,
+      "layer": "ledger",
+      "status": "OK",
+      "rows_read": 2587,
+      "rows_written": 2587,
+      "rows_rejected": 0,
+      "started_at": "2026-09-26T01:16:02.127984+00:00",
+      "ended_at": "2026-09-26T01:16:14.228397+00:00",
+      "error": null
+    },
+    {
+      "run_id": "793341885130688",
+      "table_id": 3,
+      "layer": "silver",
+      "status": "SUCCESS",
+      "rows_read": 2593,
+      "rows_written": 2152,
+      "rows_rejected": null,
+      "started_at": "2026-09-26T01:10:31.154000+00:00",
+      "ended_at": "2026-09-26T01:14:23.799000+00:00",
+      "error": null
+    },
+    {
+      "run_id": "793341885130688",
+      "table_id": 4,
+      "layer": "bronze",
+      "status": "SUCCESS",
+      "rows_read": 13128,
+      "rows_written": 13128,
+      "rows_rejected": null,
+      "started_at": "2026-09-26T01:10:31.154000+00:00",
+      "ended_at": "2026-09-26T01:14:23.799000+00:00",
+      "error": null
+    },
+    {
+      "run_id": "793341885130688",
+      "table_id": 4,
+      "layer": "dq",
+      "status": "SUCCESS",
+      "rows_read": 13128,
+      "rows_written": 13128,
+      "rows_rejected": 0,
+      "started_at": "2026-09-26T01:10:31.154000+00:00",
+      "ended_at": "2026-09-26T01:14:23.799000+00:00",
+      "error": null
+    },
+    {
+      "run_id": "793341885130688",
+      "table_id": 4,
+      "layer": "ledger",
+      "status": "OK",
+      "rows_read": 12932,
+      "rows_written": 12932,
+      "rows_rejected": 0,
+      "started_at": "2026-09-26T01:16:02.127984+00:00",
+      "ended_at": "2026-09-26T01:16:23.643130+00:00",
+      "error": null
+    },
+    {
+      "run_id": "793341885130688",
+      "table_id": 4,
+      "layer": "silver",
+      "status": "SUCCESS",
+      "rows_read": 13128,
+      "rows_written": 10902,
+      "rows_rejected": null,
+      "started_at": "2026-09-26T01:10:31.154000+00:00",
+      "ended_at": "2026-09-26T01:14:23.799000+00:00",
+      "error": null
+    },
+    {
+      "run_id": "793341885130688",
+      "table_id": 5,
+      "layer": "bronze",
+      "status": "SUCCESS",
+      "rows_read": 39378,
+      "rows_written": 39378,
+      "rows_rejected": null,
+      "started_at": "2026-09-26T01:10:31.154000+00:00",
+      "ended_at": "2026-09-26T01:14:23.799000+00:00",
+      "error": null
+    },
+    {
+      "run_id": "793341885130688",
+      "table_id": 5,
+      "layer": "dq",
+      "status": "SUCCESS",
+      "rows_read": 39378,
+      "rows_written": 39378,
+      "rows_rejected": 0,
+      "started_at": "2026-09-26T01:10:31.154000+00:00",
+      "ended_at": "2026-09-26T01:14:23.799000+00:00",
+      "error": null
+    },
+    {
+      "run_id": "793341885130688",
+      "table_id": 5,
+      "layer": "ledger",
+      "status": "OK",
+      "rows_read": 38800,
+      "rows_written": 38800,
+      "rows_rejected": 0,
+      "started_at": "2026-09-26T01:16:02.127984+00:00",
+      "ended_at": "2026-09-26T01:16:09.095912+00:00",
+      "error": null
+    },
+    {
+      "run_id": "793341885130688",
+      "table_id": 5,
+      "layer": "silver",
+      "status": "SUCCESS",
+      "rows_read": 39378,
+      "rows_written": 32710,
+      "rows_rejected": null,
+      "started_at": "2026-09-26T01:10:31.154000+00:00",
+      "ended_at": "2026-09-26T01:14:23.799000+00:00",
+      "error": null
+    }
+  ],
+  "table_columns": {
+    "poc_bronze.netsuite_certifications": [
+      "certification_internal_id",
+      "customer_internal_id",
+      "certification_type",
+      "certification_start_date",
+      "certification_end_date",
+      "created_date",
+      "updated_date",
+      "_snapshot_date",
+      "_loaded_at"
+    ],
+    "poc_bronze.netsuite_customers": [
+      "customer_internal_id",
+      "company_name",
+      "email"
+    ],
+    "poc_bronze.netsuite_memberships": [
+      "membership_internal_id",
+      "customer_internal_id",
+      "membership_type",
+      "start_date",
+      "end_date",
+      "membership_status",
+      "created_date",
+      "updated_date",
+      "_snapshot_date",
+      "_loaded_at"
+    ],
+    "poc_bronze.netsuite_transaction_lines": [
+      "transaction_line_id",
+      "transaction_internal_id",
+      "line_number",
+      "item_id",
+      "item_name",
+      "quantity",
+      "rate",
+      "amount",
+      "created_date",
+      "updated_date",
+      "_snapshot_date",
+      "_loaded_at"
+    ],
+    "poc_bronze.netsuite_transactions": [
+      "transaction_internal_id",
+      "tranid",
+      "customer_internal_id",
+      "type",
+      "date",
+      "created_date",
+      "updated_date",
+      "_snapshot_date",
+      "_loaded_at"
+    ],
+    "poc_silver.netsuite_certifications": [
+      "certification_internal_id",
+      "customer_internal_id",
+      "certification_type",
+      "certification_start_date",
+      "certification_end_date",
+      "created_date",
+      "updated_date",
+      "_snapshot_date",
+      "_loaded_at"
+    ],
+    "poc_silver.netsuite_memberships": [
+      "membership_internal_id",
+      "customer_internal_id",
+      "membership_type",
+      "start_date",
+      "end_date",
+      "membership_status",
+      "created_date",
+      "updated_date",
+      "_snapshot_date",
+      "_loaded_at"
+    ],
+    "poc_silver.netsuite_transaction_lines": [
+      "transaction_line_id",
+      "transaction_internal_id",
+      "line_number",
+      "item_id",
+      "item_name",
+      "quantity",
+      "rate",
+      "amount",
+      "created_date",
+      "updated_date",
+      "_snapshot_date",
+      "_loaded_at"
+    ],
+    "poc_silver.netsuite_transactions": [
+      "transaction_internal_id",
+      "tranid",
+      "customer_internal_id",
+      "type",
+      "date",
+      "created_date",
+      "updated_date",
+      "_snapshot_date",
+      "_loaded_at"
+    ]
+  },
+  "bronze_expected_vs_actual": {},
+  "v2": {
+    "bronze": {
+      "netsuite_memberships": [
+        {
+          "snapshot_date": "2026-06-20",
+          "rows": 5,
+          "distinct_keys": 5
+        },
+        {
+          "snapshot_date": "2026-06-21",
+          "rows": 7,
+          "distinct_keys": 7
+        },
+        {
+          "snapshot_date": "2026-06-22",
+          "rows": 7,
+          "distinct_keys": 7
+        },
+        {
+          "snapshot_date": "2026-06-23",
+          "rows": 1,
+          "distinct_keys": 1
+        },
+        {
+          "snapshot_date": "2026-06-24",
+          "rows": 1,
+          "distinct_keys": 1
+        },
+        {
+          "snapshot_date": "2026-07-11",
+          "rows": 2524,
+          "distinct_keys": 2475
+        },
+        {
+          "snapshot_date": "2026-07-13",
+          "rows": 1,
+          "distinct_keys": 1
+        },
+        {
+          "snapshot_date": "2026-08-22",
+          "rows": 195,
+          "distinct_keys": 195
+        },
+        {
+          "snapshot_date": "2026-08-23",
+          "rows": 80,
+          "distinct_keys": 80
+        },
+        {
+          "snapshot_date": "2026-08-24",
+          "rows": 88,
+          "distinct_keys": 88
+        },
+        {
+          "snapshot_date": "2026-09-14",
+          "rows": 191,
+          "distinct_keys": 191
+        },
+        {
+          "snapshot_date": "2026-09-15",
+          "rows": 88,
+          "distinct_keys": 88
+        },
+        {
+          "snapshot_date": "2026-09-16",
+          "rows": 93,
+          "distinct_keys": 93
+        }
+      ],
+      "netsuite_certifications": [
+        {
+          "snapshot_date": "2026-06-20",
+          "rows": 3,
+          "distinct_keys": 3
+        },
+        {
+          "snapshot_date": "2026-06-21",
+          "rows": 5,
+          "distinct_keys": 5
+        },
+        {
+          "snapshot_date": "2026-06-22",
+          "rows": 5,
+          "distinct_keys": 5
+        },
+        {
+          "snapshot_date": "2026-06-24",
+          "rows": 1,
+          "distinct_keys": 1
+        },
+        {
+          "snapshot_date": "2026-07-11",
+          "rows": 2020,
+          "distinct_keys": 1981
+        },
+        {
+          "snapshot_date": "2026-07-13",
+          "rows": 1,
+          "distinct_keys": 1
+        },
+        {
+          "snapshot_date": "2026-08-22",
+          "rows": 155,
+          "distinct_keys": 155
+        },
+        {
+          "snapshot_date": "2026-08-23",
+          "rows": 66,
+          "distinct_keys": 66
+        },
+        {
+          "snapshot_date": "2026-08-24",
+          "rows": 71,
+          "distinct_keys": 71
+        },
+        {
+          "snapshot_date": "2026-09-14",
+          "rows": 149,
+          "distinct_keys": 149
+        },
+        {
+          "snapshot_date": "2026-09-15",
+          "rows": 67,
+          "distinct_keys": 67
+        },
+        {
+          "snapshot_date": "2026-09-16",
+          "rows": 82,
+          "distinct_keys": 82
+        }
+      ],
+      "netsuite_transactions": [
+        {
+          "snapshot_date": "2026-06-20",
+          "rows": 14,
+          "distinct_keys": 14
+        },
+        {
+          "snapshot_date": "2026-06-21",
+          "rows": 22,
+          "distinct_keys": 22
+        },
+        {
+          "snapshot_date": "2026-06-22",
+          "rows": 32,
+          "distinct_keys": 32
+        },
+        {
+          "snapshot_date": "2026-06-23",
+          "rows": 5,
+          "distinct_keys": 5
+        },
+        {
+          "snapshot_date": "2026-06-24",
+          "rows": 3,
+          "distinct_keys": 3
+        },
+        {
+          "snapshot_date": "2026-07-11",
+          "rows": 10099,
+          "distinct_keys": 9902
+        },
+        {
+          "snapshot_date": "2026-07-12",
+          "rows": 3,
+          "distinct_keys": 3
+        },
+        {
+          "snapshot_date": "2026-07-13",
+          "rows": 3,
+          "distinct_keys": 3
+        },
+        {
+          "snapshot_date": "2026-08-22",
+          "rows": 780,
+          "distinct_keys": 780
+        },
+        {
+          "snapshot_date": "2026-08-23",
+          "rows": 361,
+          "distinct_keys": 361
+        },
+        {
+          "snapshot_date": "2026-08-24",
+          "rows": 316,
+          "distinct_keys": 316
+        },
+        {
+          "snapshot_date": "2026-09-14",
+          "rows": 801,
+          "distinct_keys": 801
+        },
+        {
+          "snapshot_date": "2026-09-15",
+          "rows": 330,
+          "distinct_keys": 330
+        },
+        {
+          "snapshot_date": "2026-09-16",
+          "rows": 359,
+          "distinct_keys": 359
+        }
+      ],
+      "netsuite_transaction_lines": [
+        {
+          "snapshot_date": "2026-06-20",
+          "rows": 53,
+          "distinct_keys": 53
+        },
+        {
+          "snapshot_date": "2026-06-21",
+          "rows": 74,
+          "distinct_keys": 74
+        },
+        {
+          "snapshot_date": "2026-06-22",
+          "rows": 80,
+          "distinct_keys": 80
+        },
+        {
+          "snapshot_date": "2026-06-23",
+          "rows": 12,
+          "distinct_keys": 12
+        },
+        {
+          "snapshot_date": "2026-06-24",
+          "rows": 5,
+          "distinct_keys": 5
+        },
+        {
+          "snapshot_date": "2026-07-11",
+          "rows": 30294,
+          "distinct_keys": 29715
+        },
+        {
+          "snapshot_date": "2026-07-12",
+          "rows": 3,
+          "distinct_keys": 3
+        },
+        {
+          "snapshot_date": "2026-07-13",
+          "rows": 5,
+          "distinct_keys": 5
+        },
+        {
+          "snapshot_date": "2026-08-22",
+          "rows": 2360,
+          "distinct_keys": 2360
+        },
+        {
+          "snapshot_date": "2026-08-23",
+          "rows": 1011,
+          "distinct_keys": 1011
+        },
+        {
+          "snapshot_date": "2026-08-24",
+          "rows": 1011,
+          "distinct_keys": 1011
+        },
+        {
+          "snapshot_date": "2026-09-14",
+          "rows": 2359,
+          "distinct_keys": 2359
+        },
+        {
+          "snapshot_date": "2026-09-15",
+          "rows": 1046,
+          "distinct_keys": 1046
+        },
+        {
+          "snapshot_date": "2026-09-16",
+          "rows": 1065,
+          "distinct_keys": 1065
+        }
+      ]
+    },
+    "ledger": {
+      "netsuite_memberships": {
+        "pairs": 3233,
+        "dates": 13
+      },
+      "netsuite_certifications": {
+        "pairs": 2587,
+        "dates": 12
+      },
+      "netsuite_transactions": {
+        "pairs": 12932,
+        "dates": 14
+      },
+      "netsuite_transaction_lines": {
+        "pairs": 38800,
+        "dates": 14
+      }
+    },
+    "fingerprints": {
+      "netsuite_memberships": 13,
+      "netsuite_certifications": 12,
+      "netsuite_transactions": 14,
+      "netsuite_transaction_lines": 14
+    },
+    "source_dates": {
+      "netsuite_memberships": [
+        {
+          "snapshot_date": "2026-06-20",
+          "rows": 5
+        },
+        {
+          "snapshot_date": "2026-06-21",
+          "rows": 7
+        },
+        {
+          "snapshot_date": "2026-06-22",
+          "rows": 7
+        },
+        {
+          "snapshot_date": "2026-06-23",
+          "rows": 1
+        },
+        {
+          "snapshot_date": "2026-06-24",
+          "rows": 1
+        },
+        {
+          "snapshot_date": "2026-07-11",
+          "rows": 2524
+        },
+        {
+          "snapshot_date": "2026-07-13",
+          "rows": 1
+        },
+        {
+          "snapshot_date": "2026-08-22",
+          "rows": 195
+        },
+        {
+          "snapshot_date": "2026-08-23",
+          "rows": 80
+        },
+        {
+          "snapshot_date": "2026-08-24",
+          "rows": 88
+        },
+        {
+          "snapshot_date": "2026-09-14",
+          "rows": 191
+        },
+        {
+          "snapshot_date": "2026-09-15",
+          "rows": 88
+        },
+        {
+          "snapshot_date": "2026-09-16",
+          "rows": 93
+        }
+      ],
+      "netsuite_certifications": [
+        {
+          "snapshot_date": "2026-06-20",
+          "rows": 3
+        },
+        {
+          "snapshot_date": "2026-06-21",
+          "rows": 5
+        },
+        {
+          "snapshot_date": "2026-06-22",
+          "rows": 5
+        },
+        {
+          "snapshot_date": "2026-06-24",
+          "rows": 1
+        },
+        {
+          "snapshot_date": "2026-07-11",
+          "rows": 2020
+        },
+        {
+          "snapshot_date": "2026-07-13",
+          "rows": 1
+        },
+        {
+          "snapshot_date": "2026-08-22",
+          "rows": 155
+        },
+        {
+          "snapshot_date": "2026-08-23",
+          "rows": 66
+        },
+        {
+          "snapshot_date": "2026-08-24",
+          "rows": 71
+        },
+        {
+          "snapshot_date": "2026-09-14",
+          "rows": 149
+        },
+        {
+          "snapshot_date": "2026-09-15",
+          "rows": 67
+        },
+        {
+          "snapshot_date": "2026-09-16",
+          "rows": 82
+        }
+      ],
+      "netsuite_transactions": [
+        {
+          "snapshot_date": "2026-06-20",
+          "rows": 14
+        },
+        {
+          "snapshot_date": "2026-06-21",
+          "rows": 22
+        },
+        {
+          "snapshot_date": "2026-06-22",
+          "rows": 32
+        },
+        {
+          "snapshot_date": "2026-06-23",
+          "rows": 5
+        },
+        {
+          "snapshot_date": "2026-06-24",
+          "rows": 3
+        },
+        {
+          "snapshot_date": "2026-07-11",
+          "rows": 10099
+        },
+        {
+          "snapshot_date": "2026-07-12",
+          "rows": 3
+        },
+        {
+          "snapshot_date": "2026-07-13",
+          "rows": 3
+        },
+        {
+          "snapshot_date": "2026-08-22",
+          "rows": 780
+        },
+        {
+          "snapshot_date": "2026-08-23",
+          "rows": 361
+        },
+        {
+          "snapshot_date": "2026-08-24",
+          "rows": 316
+        },
+        {
+          "snapshot_date": "2026-09-14",
+          "rows": 801
+        },
+        {
+          "snapshot_date": "2026-09-15",
+          "rows": 330
+        },
+        {
+          "snapshot_date": "2026-09-16",
+          "rows": 359
+        }
+      ],
+      "netsuite_transaction_lines": [
+        {
+          "snapshot_date": "2026-06-20",
+          "rows": 53
+        },
+        {
+          "snapshot_date": "2026-06-21",
+          "rows": 74
+        },
+        {
+          "snapshot_date": "2026-06-22",
+          "rows": 80
+        },
+        {
+          "snapshot_date": "2026-06-23",
+          "rows": 12
+        },
+        {
+          "snapshot_date": "2026-06-24",
+          "rows": 5
+        },
+        {
+          "snapshot_date": "2026-07-11",
+          "rows": 30294
+        },
+        {
+          "snapshot_date": "2026-07-12",
+          "rows": 3
+        },
+        {
+          "snapshot_date": "2026-07-13",
+          "rows": 5
+        },
+        {
+          "snapshot_date": "2026-08-22",
+          "rows": 2360
+        },
+        {
+          "snapshot_date": "2026-08-23",
+          "rows": 1011
+        },
+        {
+          "snapshot_date": "2026-08-24",
+          "rows": 1011
+        },
+        {
+          "snapshot_date": "2026-09-14",
+          "rows": 2359
+        },
+        {
+          "snapshot_date": "2026-09-15",
+          "rows": 1046
+        },
+        {
+          "snapshot_date": "2026-09-16",
+          "rows": 1065
+        }
+      ]
+    },
+    "source_columns": {
+      "netsuite_transactions": [
+        "transaction_internal_id",
+        "tranid",
+        "customer_internal_id",
+        "type",
+        "date",
+        "created_date",
+        "updated_date",
+        "custbody_region"
+      ]
+    }
+  }
+}

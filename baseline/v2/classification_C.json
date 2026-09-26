@@ -1,0 +1,68 @@
+{
+  "rows": [
+    {
+      "defect": "late_arriving",
+      "table": "netsuite_memberships",
+      "column": null,
+      "rows": 13,
+      "outcomes": {
+        "passed_to_silver": 13
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "late_arriving",
+      "table": "netsuite_certifications",
+      "column": null,
+      "rows": 10,
+      "outcomes": {
+        "passed_to_silver": 10
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "late_arriving",
+      "table": "netsuite_transactions",
+      "column": null,
+      "rows": 50,
+      "outcomes": {
+        "passed_to_silver": 50
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "late_arriving",
+      "table": "netsuite_transaction_lines",
+      "column": null,
+      "rows": 150,
+      "outcomes": {
+        "passed_to_silver": 150
+      },
+      "observable_in_bronze": true
+    }
+  ],
+  "by_defect": {
+    "late_arriving": {
+      "passed_to_silver": 223,
+      "rows": 223
+    }
+  },
+  "by_table": {
+    "netsuite_memberships": {
+      "passed_to_silver": 13,
+      "rows": 13
+    },
+    "netsuite_certifications": {
+      "passed_to_silver": 10,
+      "rows": 10
+    },
+    "netsuite_transactions": {
+      "passed_to_silver": 50,
+      "rows": 50
+    },
+    "netsuite_transaction_lines": {
+      "passed_to_silver": 150,
+      "rows": 150
+    }
+  }
+}

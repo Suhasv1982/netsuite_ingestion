@@ -1,0 +1,68 @@
+{
+  "rows": [
+    {
+      "defect": "late_arriving",
+      "table": "netsuite_memberships",
+      "column": null,
+      "rows": 13,
+      "outcomes": {
+        "caused_failure": 13
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "late_arriving",
+      "table": "netsuite_certifications",
+      "column": null,
+      "rows": 10,
+      "outcomes": {
+        "caused_failure": 10
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "late_arriving",
+      "table": "netsuite_transactions",
+      "column": null,
+      "rows": 50,
+      "outcomes": {
+        "caused_failure": 50
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "late_arriving",
+      "table": "netsuite_transaction_lines",
+      "column": null,
+      "rows": 150,
+      "outcomes": {
+        "caused_failure": 150
+      },
+      "observable_in_bronze": true
+    }
+  ],
+  "by_defect": {
+    "late_arriving": {
+      "caused_failure": 223,
+      "rows": 223
+    }
+  },
+  "by_table": {
+    "netsuite_memberships": {
+      "caused_failure": 13,
+      "rows": 13
+    },
+    "netsuite_certifications": {
+      "caused_failure": 10,
+      "rows": 10
+    },
+    "netsuite_transactions": {
+      "caused_failure": 50,
+      "rows": 50
+    },
+    "netsuite_transaction_lines": {
+      "caused_failure": 150,
+      "rows": 150
+    }
+  }
+}

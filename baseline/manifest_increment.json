@@ -1,0 +1,1497 @@
+{
+  "tool_version": "1.0.0",
+  "mode": "increment",
+  "seed": 43,
+  "batch_date": "2026-08-22",
+  "config_hash": "0fd686a91d0ad8dd",
+  "config": {
+    "allow_overlap": false,
+    "rates": {
+      "null_business_key": 0.0,
+      "duplicate_business_key": 0.0,
+      "negative_amount": 0.0,
+      "amount_mismatch": 0.0,
+      "invalid_enum": 0.0,
+      "end_before_start": 0.0,
+      "orphan_lines": 0.0,
+      "customer_null_company_name": 0.0,
+      "customer_malformed_email": 0.0,
+      "customer_updated_before_created": 0.0,
+      "late_arriving": 0.1
+    }
+  },
+  "scale": {
+    "customers": 2000,
+    "memberships": 2500,
+    "certifications": 2000,
+    "transactions": 10000,
+    "lines": 30000
+  },
+  "rows_emitted": {
+    "netsuite_customers": 100,
+    "netsuite_memberships": 372,
+    "netsuite_certifications": 298,
+    "netsuite_transactions": 1490,
+    "netsuite_transaction_lines": 4470
+  },
+  "rows_upserted": {
+    "netsuite_customers": 200
+  },
+  "defects": [
+    {
+      "defect": "late_arriving",
+      "table": "netsuite_memberships",
+      "row_count": 13,
+      "business_keys": [
+        7517,
+        7599,
+        7538,
+        7514,
+        7576,
+        7614,
+        7505,
+        7569,
+        7501,
+        7521,
+        7584,
+        7610,
+        7609
+      ],
+      "observable_in_bronze": true,
+      "current_watermark": "2026-07-11",
+      "rows": [
+        {
+          "key": 7517,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 7599,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 7538,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 7514,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 7576,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 7614,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 7505,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 7569,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 7501,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 7521,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 7584,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 7610,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 7609,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        }
+      ],
+      "note": "created_date older than the current watermark; new keys, so only a high-watermark load misses them"
+    },
+    {
+      "defect": "late_arriving",
+      "table": "netsuite_certifications",
+      "row_count": 10,
+      "business_keys": [
+        10014,
+        10060,
+        10016,
+        10063,
+        10094,
+        10064,
+        10024,
+        10038,
+        10021,
+        10009
+      ],
+      "observable_in_bronze": true,
+      "current_watermark": "2026-07-11",
+      "rows": [
+        {
+          "key": 10014,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 10060,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 10016,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 10063,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 10094,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 10064,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 10024,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 10038,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 10021,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 10009,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        }
+      ],
+      "note": "created_date older than the current watermark; new keys, so only a high-watermark load misses them"
+    },
+    {
+      "defect": "late_arriving",
+      "table": "netsuite_transactions",
+      "row_count": 50,
+      "business_keys": [
+        100384,
+        100116,
+        100159,
+        100302,
+        100177,
+        100094,
+        100157,
+        100403,
+        100433,
+        100022,
+        100006,
+        100215,
+        100062,
+        100103,
+        100419,
+        100081,
+        100131,
+        100203,
+        100066,
+        100105,
+        100476,
+        100322,
+        100448,
+        100377,
+        100174,
+        100014,
+        100018,
+        100149,
+        100196,
+        100140,
+        100070,
+        100199,
+        100229,
+        100109,
+        100363,
+        100380,
+        100396,
+        100473,
+        100453,
+        100218,
+        100254,
+        100500,
+        100447,
+        100042,
+        100002,
+        100309,
+        100317,
+        100399,
+        100408,
+        100232
+      ],
+      "observable_in_bronze": true,
+      "current_watermark": "2026-07-11",
+      "rows": [
+        {
+          "key": 100384,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100116,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100159,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 100302,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 100177,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 100094,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 100157,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100403,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 100433,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100022,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 100006,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100215,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100062,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100103,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100419,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100081,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100131,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 100203,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100066,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 100105,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100476,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100322,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 100448,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100377,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100174,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 100014,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 100018,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 100149,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100196,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 100140,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 100070,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 100199,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 100229,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 100109,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 100363,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 100380,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 100396,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 100473,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100453,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100218,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 100254,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 100500,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 100447,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 100042,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100002,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": 100309,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 100317,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 100399,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": 100408,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": 100232,
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        }
+      ],
+      "note": "created_date older than the current watermark; new keys, so only a high-watermark load misses them"
+    },
+    {
+      "defect": "late_arriving",
+      "table": "netsuite_transaction_lines",
+      "row_count": 150,
+      "business_keys": [
+        "100303_4",
+        "100371_3",
+        "100316_5",
+        "100132_3",
+        "100020_1",
+        "100345_2",
+        "100359_3",
+        "100149_4",
+        "100013_5",
+        "100333_1",
+        "100068_1",
+        "100343_2",
+        "100265_2",
+        "100418_1",
+        "100346_3",
+        "100355_3",
+        "100472_3",
+        "100161_4",
+        "100222_1",
+        "100018_3",
+        "100122_4",
+        "100473_1",
+        "100458_2",
+        "100203_2",
+        "100039_3",
+        "100299_3",
+        "100171_3",
+        "100203_1",
+        "100274_4",
+        "100313_4",
+        "100446_3",
+        "100498_1",
+        "100170_1",
+        "100490_1",
+        "100268_3",
+        "100332_1",
+        "100069_3",
+        "100079_3",
+        "100136_3",
+        "100456_5",
+        "100183_2",
+        "100270_2",
+        "100370_3",
+        "100178_2",
+        "100037_2",
+        "100428_3",
+        "100401_1",
+        "100264_1",
+        "100204_3",
+        "100267_1",
+        "100006_1",
+        "100459_3",
+        "100119_4",
+        "100369_2",
+        "100304_5",
+        "100161_5",
+        "100496_1",
+        "100127_2",
+        "100428_1",
+        "100422_3",
+        "100312_2",
+        "100226_2",
+        "100085_1",
+        "100397_4",
+        "100141_2",
+        "100211_2",
+        "100050_3",
+        "100133_1",
+        "100155_4",
+        "100078_1",
+        "100354_2",
+        "100478_3",
+        "100268_2",
+        "100357_2",
+        "100062_5",
+        "100269_3",
+        "100388_2",
+        "100136_2",
+        "100366_2",
+        "100071_2",
+        "100331_3",
+        "100090_3",
+        "100202_1",
+        "100017_1",
+        "100062_2",
+        "100419_1",
+        "100489_4",
+        "100424_3",
+        "100252_1",
+        "100184_1",
+        "100224_1",
+        "100268_4",
+        "100481_3",
+        "100113_5",
+        "100358_5",
+        "100084_3",
+        "100154_6",
+        "100023_2",
+        "100330_1",
+        "100445_3",
+        "100285_2",
+        "100396_1",
+        "100134_2",
+        "100171_1",
+        "100144_3",
+        "100403_2",
+        "100283_2",
+        "100150_2",
+        "100320_3",
+        "100051_3",
+        "100165_3",
+        "100367_1",
+        "100189_4",
+        "100442_1",
+        "100464_3",
+        "100408_1",
+        "100073_2",
+        "100085_2",
+        "100247_3",
+        "100009_2",
+        "100041_4",
+        "100223_2",
+        "100294_4",
+        "100257_3",
+        "100086_4",
+        "100131_6",
+        "100345_4",
+        "100413_2",
+        "100002_1",
+        "100079_1",
+        "100491_4",
+        "100412_1",
+        "100391_2",
+        "100422_1",
+        "100370_1",
+        "100149_3",
+        "100257_1",
+        "100353_2",
+        "100212_1",
+        "100106_3",
+        "100363_3",
+        "100070_4",
+        "100053_1",
+        "100450_2",
+        "100494_1",
+        "100217_1",
+        "100196_1",
+        "100453_1",
+        "100201_1",
+        "100163_4"
+      ],
+      "observable_in_bronze": true,
+      "current_watermark": "2026-07-11",
+      "rows": [
+        {
+          "key": "100303_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100371_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100316_5",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100132_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100020_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100345_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100359_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100149_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100013_5",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100333_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100068_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100343_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100265_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100418_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100346_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100355_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100472_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100161_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100222_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100018_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100122_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100473_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100458_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100203_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100039_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100299_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100171_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100203_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100274_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100313_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100446_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100498_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100170_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100490_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100268_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100332_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100069_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100079_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100136_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100456_5",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100183_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100270_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100370_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100178_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100037_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100428_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100401_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100264_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100204_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100267_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100006_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100459_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100119_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100369_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100304_5",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100161_5",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100496_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100127_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100428_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100422_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100312_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100226_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100085_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100397_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100141_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100211_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100050_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100133_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100155_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100078_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100354_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100478_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100268_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100357_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100062_5",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100269_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100388_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100136_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100366_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100071_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100331_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100090_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100202_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100017_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100062_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100419_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100489_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100424_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100252_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100184_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100224_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100268_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100481_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100113_5",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100358_5",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100084_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100154_6",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100023_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100330_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100445_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100285_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100396_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100134_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100171_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100144_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100403_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100283_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100150_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100320_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100051_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100165_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100367_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100189_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100442_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100464_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100408_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100073_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100085_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100247_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100009_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100041_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100223_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100294_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100257_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100086_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100131_6",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100345_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100413_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100002_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100079_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100491_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100412_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100391_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100422_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100370_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100149_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100257_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100353_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100212_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100106_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100363_3",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100070_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100053_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-20"
+        },
+        {
+          "key": "100450_2",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100494_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100217_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100196_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-22"
+        },
+        {
+          "key": "100453_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100201_1",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        },
+        {
+          "key": "100163_4",
+          "created_date": "2026-06-20",
+          "updated_date": "2026-06-21"
+        }
+      ],
+      "note": "created_date older than the current watermark; new keys, so only a high-watermark load misses them"
+    }
+  ],
+  "schema_drift": {
+    "table": "netsuite_transactions",
+    "column": "custbody_region",
+    "type": "text",
+    "sql": "ALTER TABLE netsuite.netsuite_transactions ADD COLUMN IF NOT EXISTS custbody_region text",
+    "note": "bronze should ignore it: the column list comes from aidq_metadata.source_columns"
+  },
+  "pre_existing": {
+    "customers_dates_not_in_source_columns": {
+      "columns": [
+        "created_date",
+        "updated_date"
+      ],
+      "note": "live netsuite_customers has these columns; aidq_metadata.source_columns does not list them, so bronze drops them. Left as-is on purpose."
+    }
+  },
+  "increment": {
+    "current_watermarks": {
+      "netsuite_memberships": "2026-07-11",
+      "netsuite_certifications": "2026-07-11",
+      "netsuite_transactions": "2026-07-11",
+      "netsuite_transaction_lines": "2026-07-11"
+    },
+    "updated_versions": {
+      "netsuite_memberships": 247,
+      "netsuite_certifications": 198,
+      "netsuite_transactions": 990,
+      "netsuite_transaction_lines": 2970
+    }
+  },
+  "backup": {
+    "performed": true,
+    "taken_at": "202609251530",
+    "branch": {
+      "name": "projects/netsuite-sample/branches/pre-synthetic-backup-202609251530",
+      "status": "created"
+    },
+    "schema": "netsuite_backup_202609251530",
+    "row_counts": {
+      "netsuite_customers": {
+        "source": 2000,
+        "backup": 2000
+      },
+      "netsuite_memberships": {
+        "source": 2524,
+        "backup": 2524
+      },
+      "netsuite_certifications": {
+        "source": 2019,
+        "backup": 2019
+      },
+      "netsuite_transactions": {
+        "source": 10098,
+        "backup": 10098
+      },
+      "netsuite_transaction_lines": {
+        "source": 30288,
+        "backup": 30288
+      }
+    },
+    "verified": true,
+    "pre_existing": {
+      "membership_status_invalid_rows": 25,
+      "certification_type_invalid_rows": 20,
+      "customers_rows_with_null_created_and_updated_date": 0
+    }
+  },
+  "dry_run": false,
+  "generated_at": "2026-09-25T15:30:34+00:00"
+}

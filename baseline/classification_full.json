@@ -1,0 +1,279 @@
+{
+  "rows": [
+    {
+      "defect": "customer_null_company_name",
+      "table": "netsuite_customers",
+      "column": "company_name",
+      "rows": 20,
+      "outcomes": {
+        "bronze_only": 20
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "customer_malformed_email",
+      "table": "netsuite_customers",
+      "column": "email",
+      "rows": 20,
+      "outcomes": {
+        "bronze_only": 20
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "customer_updated_before_created",
+      "table": "netsuite_customers",
+      "column": "updated_date",
+      "rows": 20,
+      "outcomes": {
+        "bronze_only": 20
+      },
+      "observable_in_bronze": false
+    },
+    {
+      "defect": "invalid_enum",
+      "table": "netsuite_memberships",
+      "column": "membership_status",
+      "rows": 25,
+      "outcomes": {
+        "rejected": 25
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "invalid_enum",
+      "table": "netsuite_transactions",
+      "column": "type",
+      "rows": 100,
+      "outcomes": {
+        "passed_to_silver": 100
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "invalid_enum",
+      "table": "netsuite_certifications",
+      "column": "certification_type",
+      "rows": 20,
+      "outcomes": {
+        "rejected": 20
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "end_before_start",
+      "table": "netsuite_memberships",
+      "column": "start_date/end_date",
+      "rows": 25,
+      "outcomes": {
+        "passed_to_silver": 25
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "end_before_start",
+      "table": "netsuite_certifications",
+      "column": "certification_start_date/certification_end_date",
+      "rows": 20,
+      "outcomes": {
+        "rejected": 9,
+        "passed_to_silver": 11
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "negative_amount",
+      "table": "netsuite_transaction_lines",
+      "column": "amount",
+      "rows": 300,
+      "outcomes": {
+        "passed_to_silver": 300
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "amount_mismatch",
+      "table": "netsuite_transaction_lines",
+      "column": "amount",
+      "rows": 297,
+      "outcomes": {
+        "passed_to_silver": 297
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "orphan_lines",
+      "table": "netsuite_transaction_lines",
+      "column": "transaction_internal_id",
+      "rows": 294,
+      "outcomes": {
+        "passed_to_silver": 294
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "null_business_key",
+      "table": "netsuite_memberships",
+      "column": "membership_internal_id",
+      "rows": 25,
+      "outcomes": {
+        "passed_to_silver": 1,
+        "rejected": 0,
+        "silently_absorbed": 24
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "duplicate_business_key",
+      "table": "netsuite_memberships",
+      "column": "membership_internal_id",
+      "rows": 24,
+      "outcomes": {
+        "silently_absorbed": 24
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "null_business_key",
+      "table": "netsuite_certifications",
+      "column": "certification_internal_id",
+      "rows": 20,
+      "outcomes": {
+        "passed_to_silver": 1,
+        "rejected": 0,
+        "silently_absorbed": 19
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "duplicate_business_key",
+      "table": "netsuite_certifications",
+      "column": "certification_internal_id",
+      "rows": 19,
+      "outcomes": {
+        "silently_absorbed": 19
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "null_business_key",
+      "table": "netsuite_transactions",
+      "column": "transaction_internal_id",
+      "rows": 99,
+      "outcomes": {
+        "passed_to_silver": 1,
+        "rejected": 0,
+        "silently_absorbed": 98
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "duplicate_business_key",
+      "table": "netsuite_transactions",
+      "column": "transaction_internal_id",
+      "rows": 98,
+      "outcomes": {
+        "silently_absorbed": 98
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "null_business_key",
+      "table": "netsuite_transaction_lines",
+      "column": "transaction_line_id",
+      "rows": 291,
+      "outcomes": {
+        "passed_to_silver": 1,
+        "rejected": 0,
+        "silently_absorbed": 290
+      },
+      "observable_in_bronze": true
+    },
+    {
+      "defect": "duplicate_business_key",
+      "table": "netsuite_transaction_lines",
+      "column": "transaction_line_id",
+      "rows": 288,
+      "outcomes": {
+        "silently_absorbed": 288
+      },
+      "observable_in_bronze": true
+    }
+  ],
+  "by_defect": {
+    "customer_null_company_name": {
+      "bronze_only": 20,
+      "rows": 20
+    },
+    "customer_malformed_email": {
+      "bronze_only": 20,
+      "rows": 20
+    },
+    "customer_updated_before_created": {
+      "bronze_only": 20,
+      "rows": 20
+    },
+    "invalid_enum": {
+      "rejected": 45,
+      "rows": 145,
+      "passed_to_silver": 100
+    },
+    "end_before_start": {
+      "passed_to_silver": 36,
+      "rows": 45,
+      "rejected": 9
+    },
+    "negative_amount": {
+      "passed_to_silver": 300,
+      "rows": 300
+    },
+    "amount_mismatch": {
+      "passed_to_silver": 297,
+      "rows": 297
+    },
+    "orphan_lines": {
+      "passed_to_silver": 294,
+      "rows": 294
+    },
+    "null_business_key": {
+      "passed_to_silver": 4,
+      "rejected": 0,
+      "silently_absorbed": 431,
+      "rows": 435
+    },
+    "duplicate_business_key": {
+      "silently_absorbed": 429,
+      "rows": 429
+    }
+  },
+  "by_table": {
+    "netsuite_customers": {
+      "bronze_only": 60,
+      "rows": 60
+    },
+    "netsuite_memberships": {
+      "rejected": 25,
+      "rows": 99,
+      "passed_to_silver": 26,
+      "silently_absorbed": 48
+    },
+    "netsuite_transactions": {
+      "passed_to_silver": 101,
+      "rows": 297,
+      "rejected": 0,
+      "silently_absorbed": 196
+    },
+    "netsuite_certifications": {
+      "rejected": 29,
+      "rows": 79,
+      "passed_to_silver": 12,
+      "silently_absorbed": 38
+    },
+    "netsuite_transaction_lines": {
+      "passed_to_silver": 892,
+      "rows": 1470,
+      "rejected": 0,
+      "silently_absorbed": 578
+    }
+  }
+}

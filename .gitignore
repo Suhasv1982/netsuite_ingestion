@@ -1,21 +1,34 @@
-# Databricks bundle state and local caches
+# Databricks bundle state, local environments, caches, build output
 .databricks/
 .venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+build/
+*.egg-info/
+
+# Secrets and local config: never commit
+.env
+.env.*
+*.tfstate
+*.tfstate.*
+.terraform/
+gitleaks*.json
 
 # Session transcripts (contain prompts and notes; not reviewed for publishing)
 SESSION_LOG*.md
 SESSION_LOG*.docx
 prompts.pdf
 
-# Baseline run artifacts: row-level pipeline snapshots and logs (~33 MB). Regenerate with
-#   python baseline/collect_metrics.py ...   and   python baseline/build_report*.py
-# The reports (before_agents_report*.md), configs (*.yaml) and scripts stay in the repo.
-baseline/*.json
-baseline/*.jsonl
-baseline/v2/*.json
-baseline/v2/*.log
-baseline/*.log
-baseline/*.err
+# Baseline artifacts (see baseline/README.md).
+# Committed: reports, configs, scripts, manifests, classifications and the metric snapshots
+# WITHOUT row_state (synthetic data).
+# Ignored: raw row dumps, and files that carry environment identifiers (workspace host,
+# emails, run-page URLs, object ids).
+baseline/raw/
+baseline/run_*_job.json
+baseline/run_*_job.err
+baseline/**/*.log
+baseline/**/*.err
+baseline/**/*.jsonl
+baseline/v2/dev_resources.txt
