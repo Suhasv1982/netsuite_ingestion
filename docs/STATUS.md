@@ -118,6 +118,16 @@ projects' tables in `workspace.default`. Data lost: only dev copies that the nex
 (the v2 baseline numbers are in `baseline/v2/`). Method: `bundle destroy -t dev` as the owner from the working
 copy that holds the owner's bundle state.
 
+## 2e. Guard canary workflow (Phase 2, step E)
+
+* `.github/workflows/canary.yml`: `workflow_dispatch` only (no GitHub schedule until the owner decides), as
+  ci-dev, job-level concurrency `databricks-workspace`. Stops every running SQL warehouse first and waits until
+  all are stopped, then `bundle run guard_canary_check -t dev`; URLs stripped from the public log.
+* **Blocked: ci-dev cannot stop the warehouse.** Granting it CAN_MANAGE on the SQL warehouse was refused by the
+  tool's permission classifier (owner action). Until then the workflow fails at the stop step on purpose instead
+  of running the canary with a warehouse up. The `[dev ci_dev] guard_canary` pipeline also needs
+  `workspace.canary.canary_bronze`, which the `[dev suhasv] guard_canary` pipeline owns (section 2d).
+
 ## 3. Decisions waiting for the owner
 
 1. Every prod step (plan section 5), including re-enabling the prod metadata endpoint.

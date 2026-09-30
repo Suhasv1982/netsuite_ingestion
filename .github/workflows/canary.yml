@@ -1,0 +1,78 @@
+name: Guard canary
+
+# On demand: checks that the full-refresh guard in bronze.py still works on the current platform
+# (guard_canary_check job in the dev target, see README "Guard canary"). Runs as the ci-dev service principal.
+# Free Edition: a running SQL warehouse plus the canary's pipeline updates exhausts the serverless quota
+# (RESOURCE_EXHAUSTED), so every SQL warehouse is stopped first; the canary does not start without that.
+# No schedule: a GitHub `schedule:` trigger is added only when the owner decides to (scheduled workflows are
+# disabled after 60 days without repository activity; see CLAUDE.md).
+# Never switch the trigger to pull_request_target (CLAUDE.md). Third-party actions are pinned to commit SHAs.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    name: guard canary (dev)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # Shared with every job that calls the workspace; never cancels a running deploy or canary.
+    concurrency:
+      group: databricks-workspace
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/databricks-cli   # pinned CLI, checksum verified
+
+      - name: Stop every SQL warehouse (Free Edition quota)
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID_DEV }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET_DEV }}
+          DATABRICKS_AUTH_TYPE: oauth-m2m
+        run: |
+          set -euo pipefail
+          databricks warehouses list -o json > warehouses.json
+          python3 - <<'PY'
+          import json, subprocess, sys, time
+          whs = json.load(open("warehouses.json")) or []
+          busy = [w for w in whs if w.get("state") in ("STARTING", "RUNNING")]
+          for w in busy:
+              r = subprocess.run(["databricks", "warehouses", "stop", w["id"]], capture_output=True, text=True)
+              if r.returncode != 0:
+                  print(f"::error title=canary::cannot stop SQL warehouse {w['name']!r}: {r.stderr.strip()[:200]}"
+                        " (ci-dev needs CAN_MANAGE on it). Not starting the canary with a warehouse running.")
+                  sys.exit(1)
+              print(f"stopping {w['name']!r}")
+          for _ in range(60):
+              whs = json.loads(subprocess.run(["databricks", "warehouses", "list", "-o", "json"],
+                                              capture_output=True, text=True, check=True).stdout) or []
+              if not [w for w in whs if w.get("state") in ("STARTING", "RUNNING", "STOPPING")]:
+                  print(f"all {len(whs)} SQL warehouse(s) stopped")
+                  break
+              time.sleep(10)
+          else:
+              print("::error title=canary::SQL warehouses still running after 10 minutes")
+              sys.exit(1)
+          PY
+
+      # Run-page URLs carry the workspace id and this repo's logs are public, so URLs are stripped.
+      - name: bundle run guard_canary_check -t dev
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID_DEV }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET_DEV }}
+          DATABRICKS_AUTH_TYPE: oauth-m2m
+        run: |
+          set +e -o pipefail
+          databricks bundle run guard_canary_check -t dev > canary.log 2>&1
+          status=$?
+          sed -E 's#https?://[^ ]+#<url>#g' canary.log | tail -40
+          { echo '### Guard canary (dev)'; echo '```'; sed -E 's#https?://[^ ]+#<url>#g' canary.log | tail -15; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
