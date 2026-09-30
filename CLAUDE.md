@@ -17,6 +17,17 @@ At the start of every session, read docs/STATUS.md and check git status and open
 * Never bypass the pre-push hook (`git push --no-verify`). If the hook fails, fix the cause.
 * Commits made with Claude end with the `Co-Authored-By` line the tool provides.
 
+## GitHub Actions
+
+* **Never use `pull_request_target`.** It runs with the base repository's secrets and a write token on pull requests
+  from forks. Use `pull_request`, which gets no secrets on fork PRs.
+* Every job that calls the Databricks workspace uses the job-level concurrency group `databricks-workspace` with
+  `cancel-in-progress: false` (see `docs/phase2_cicd_plan.md`, section 1).
+* `CODEOWNERS` is **advisory only**. Do not enable "Require review from Code Owners": with a solo owner and 0
+  required approvals it would block every PR that touches the owned paths.
+* GitHub disables scheduled workflows after 60 days without repository activity. A disabled canary is a silent gap,
+  not a pass: re-enable it when that happens.
+
 ## What must not be committed
 
 * Credentials of any kind: tokens, keys, passwords, connection strings with secrets, `.env` files.
