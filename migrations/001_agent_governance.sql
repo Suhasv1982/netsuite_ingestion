@@ -9,7 +9,6 @@
 -- or renamed; the pipeline's current reads and writes keep working.
 -- Run on a Lakebase BRANCH first, then on production.
 -- =============================================================================
-BEGIN;
 SET LOCAL search_path = aidq_metadata;
 
 -- -----------------------------------------------------------------------------
@@ -282,7 +281,6 @@ SELECT d.table_id, d.source_table, l.layer, l.run_id, l.status, l.error,
   FROM source_table_def d
   JOIN latest l USING (table_id);
 
-COMMIT;
 
 -- =============================================================================
 -- OPTIONAL (run separately): least-privilege roles.
