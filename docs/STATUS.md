@@ -124,6 +124,10 @@ verified (the audit-log query needs the warehouse).
   prod still `netsuite_ingestion_poc` until the prod scope exists), passed to every job task and to the pipeline
   configuration (`metadata.pg_conn_from_conf`). Tests: the scope differs per target and no resource file names
   a scope literally.
+* Bronze rebuild mode: when `workspace.poc_bronze` holds no streaming table (fresh dev, e.g. after the
+  `[dev suhasv]` set is removed) or on `workflow_dispatch` with `bronze_rebuild`, deploy-dev deploys with
+  `bronze_rebuild=true`, runs (full refresh only if bronze exists), `sync_ledger` rebuilds `workspace.ledger.*`,
+  and it always redeploys with `bronze_rebuild=false`. So the first CI dev run is a rebuild (owner decision).
 * No `run_as` in the dev target: CI deploys dev as ci-dev, which is then also the run identity; `run_as` (proven
   in step A) is for prod, where a human deploy must still run as ci-prod (step F).
 * **First deploy-dev run will fail until:** (1) ci-dev has migration rights on dev metadata (owner SQL);
