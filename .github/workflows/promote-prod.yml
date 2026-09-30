@@ -1,0 +1,153 @@
+name: Promote to prod
+
+# Manual, gated release of one commit of main to the prod target (docs/phase2_cicd_plan.md, sections 2 and 5).
+#
+#   1. release-gate (no secrets): fails unless release_sha is on main (an ancestor of origin/main) AND has a
+#      successful deploy-dev run, AND the `prod` environment exists with required reviewers. The last check
+#      matters: GitHub creates a missing environment on first use WITHOUT protection rules, which would skip the
+#      approval.
+#   2. prod (environment `prod`: waits for the required reviewer, main only): backup branch of the prod metadata,
+#      migrate --plan / --apply on prod metadata, bundle deploy -t prod with the schedule PAUSED, and, only if
+#      asked for, one run. Unpausing the schedule is never done here.
+#
+# Runs as the ci-prod service principal (environment secrets DATABRICKS_*_PROD). ci-prod, its secrets and the
+# `prod` environment do not exist yet: they are created only with the owner's approval.
+# The first prod release (bronze rebuild, dev-vs-prod comparison) follows plan section 5 step by step.
+# Never switch the trigger to pull_request_target (CLAUDE.md). Third-party actions are pinned to commit SHAs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Full 40-character commit SHA on main to release (must have a green deploy-dev run)
+        required: true
+      run_after_deploy:
+        description: Start one run of netsuite_ingestion_daily after the deploy
+        type: boolean
+        default: false
+      bronze_rebuild:
+        description: Deploy with bronze_rebuild=true (first release / recovery only; see plan section 5)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  release-gate:
+    name: release gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read   # gh run list: deploy-dev runs for the commit
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0   # the ancestry check needs the history
+          persist-credentials: false
+
+      - name: release_sha is on main and has a green deploy-dev run; prod environment is protected
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::release_sha must be a full 40-character lowercase SHA"; exit 1; }
+          git fetch --no-tags origin main
+          git cat-file -e "${RELEASE_SHA}^{commit}" 2>/dev/null || { echo "::error::$RELEASE_SHA is not a commit of this repository"; exit 1; }
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/main \
+            || { echo "::error::$RELEASE_SHA is not on main (not an ancestor of origin/main)"; exit 1; }
+          green=$(gh run list --workflow deploy-dev.yml --commit "$RELEASE_SHA" --status success --json databaseId --jq length) \
+            || { echo "::error::cannot list deploy-dev runs (is deploy-dev.yml on main?)"; exit 1; }
+          [ "$green" -gt 0 ] || { echo "::error::no successful deploy-dev run for $RELEASE_SHA"; exit 1; }
+          reviewers=$(gh api "repos/$GITHUB_REPOSITORY/environments/prod" \
+                        --jq '[.protection_rules[]? | select(.type == "required_reviewers")] | length' 2>/dev/null || echo missing)
+          [ "$reviewers" != "missing" ] && [ "$reviewers" -gt 0 ] \
+            || { echo "::error::environment 'prod' is missing or has no required reviewers; the owner sets it up first"; exit 1; }
+          {
+            echo "### Release gate: passed"
+            echo "- \`$RELEASE_SHA\` is on main"
+            echo "- deploy-dev succeeded for it ($green run(s))"
+            echo "- environment \`prod\` requires a reviewer"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  prod:
+    name: promote to prod
+    needs: release-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: prod   # the required reviewer approves here; deployment branches: main only
+    concurrency:
+      group: databricks-workspace
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.release_sha }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/databricks-cli   # pinned CLI, checksum verified
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Install migration runner dependency
+        run: python -m pip install -q "psycopg[binary]>=3.1"
+
+      - name: Backup branch of the prod metadata
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_PROD }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID_PROD }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET_PROD }}
+          DATABRICKS_AUTH_TYPE: oauth-m2m
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -euo pipefail
+          branch="pre-release-${RELEASE_SHA:0:12}-$(date -u +%Y%m%d%H%M)"
+          databricks postgres create-branch projects/aidq-metadata "$branch" \
+            --json '{"spec":{"source_branch":"projects/aidq-metadata/branches/production","no_expiry":true}}' > /dev/null
+          echo "- backup branch: \`$branch\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Migrations (prod metadata)
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_PROD }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID_PROD }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET_PROD }}
+          DATABRICKS_AUTH_TYPE: oauth-m2m
+        run: |
+          set -euo pipefail
+          { echo '### Migrations (prod)'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          python tools/migrate.py --env prod --plan | tee -a "$GITHUB_STEP_SUMMARY"
+          python tools/migrate.py --env prod --apply | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: bundle deploy -t prod (schedule PAUSED)
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_PROD }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID_PROD }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET_PROD }}
+          DATABRICKS_AUTH_TYPE: oauth-m2m
+          BRONZE_REBUILD: ${{ inputs.bronze_rebuild }}
+        run: |
+          set -euo pipefail
+          databricks bundle deploy -t prod --var="schedule_pause_status=PAUSED" --var="bronze_rebuild=${BRONZE_REBUILD}" \
+            2>&1 | grep -v '^Uploading' | tee deploy.log
+          { echo '### bundle deploy -t prod'; echo '```'; grep -E '^(Resources|Files|Deployment)' deploy.log || true; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      # Only when asked for, and never together with bronze_rebuild: the rebuild's full refresh (plan section 5,
+      # step 4) is started by hand with --pipeline-params full_refresh=true. Run URLs are stripped from the log.
+      - name: One run of netsuite_ingestion_daily (optional)
+        if: inputs.run_after_deploy && !inputs.bronze_rebuild
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_PROD }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID_PROD }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET_PROD }}
+          DATABRICKS_AUTH_TYPE: oauth-m2m
+        run: |
+          set +e -o pipefail
+          databricks bundle run netsuite_ingestion_daily -t prod > run.log 2>&1
+          status=$?
+          sed -E 's#https?://[^ ]+#<url>#g' run.log | tail -40
+          exit $status

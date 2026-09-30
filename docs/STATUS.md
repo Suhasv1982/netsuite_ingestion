@@ -8,9 +8,8 @@ Read this first, then run `git status` and check open PRs. Updated after every P
 required checks `gitleaks (full history)`, `pytest` and `bundle validate` (added 2026-09-30), administrators
 included, no force push or deletion. Secret scanning and push protection on. Local pre-push hook: gitleaks + pytest.
 
-**Pull requests.** Merged: #1-#5, #7 (Part 1), #6 (step C, migrate.py), #8 (step D, deploy-dev), #11 (fix: dev
-`run_as`; the first deploy-dev run failed because the pipelines API cannot unset a `run_as` set in step A). Open: #9 (step E,
-canary), #10 (step F, promote-prod; contains #9). Merge #9 after the first deploy-dev run on main is green.
+**Pull requests.** Merged: #1-#9 and #11 (fix: dev `run_as`; the first deploy-dev run failed because the pipelines
+API cannot unset a `run_as` set in step A). Open: #10 (step F, promote-prod).
 
 **Work in progress** (owner's instructions of 2026-09-30):
 * Part 1, close out Phase 1 in one dev-only PR: gold layer, SOFT-rule expectation check, guard read-retry count,
@@ -50,8 +49,8 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
 * Dev metadata: `schema_migrations` 001, 002 (backfill), 003 (`applied_by` aidq_owner); `netsuite_customers` has
   `watermark_col` NULL. Deployed dev: `bronze_rebuild=false`, scope `netsuite_ingestion_dev`, schedules PAUSED.
 * **The owner cannot read the dev tables any more**: they are owned by ci-dev (the pipeline's identity). Fix
-  (owner runs it; the tool's classifier refuses grants): `GRANT SELECT ON SCHEMA workspace.<s> TO
-  \`suhasv@gmail.com\`` for `poc_bronze`, `poc_silver`, `poc_reject`, `poc_gold`, `canary`.
+  (owner runs it; the tool's classifier refuses grants): `GRANT SELECT ON SCHEMA workspace.<schema> TO <owner>`
+  for `poc_bronze`, `poc_silver`, `poc_reject`, `poc_gold` and `canary`.
 
 ## 1b. Phase 1 close-out (Part 1, 2026-09-30)
 
@@ -173,6 +172,22 @@ copy that holds the owner's bundle state.
   tool's permission classifier (owner action). Until then the workflow fails at the stop step on purpose instead
   of running the canary with a warehouse up. The `[dev ci_dev] guard_canary` pipeline also needs
   `workspace.canary.canary_bronze`, which the `[dev suhasv] guard_canary` pipeline owns (section 2d).
+
+## 2f. promote-prod (Phase 2, step F)
+
+* `.github/workflows/promote-prod.yml`, `workflow_dispatch` with `release_sha` (full SHA), `run_after_deploy`,
+  `bronze_rebuild` (both default false).
+  * Job `release gate` (no secrets) fails unless `release_sha` is on main (`git merge-base --is-ancestor` against
+    `origin/main`), has a successful deploy-dev run (`gh run list --status success`), and the `prod` environment
+    exists **with required reviewers** (GitHub would otherwise create it on first use without protection).
+    Dry-run locally: a malformed SHA, a SHA not on main, and a missing deploy-dev workflow all fail closed.
+  * Job `promote to prod` (environment `prod`, concurrency `databricks-workspace`): backup branch of prod
+    metadata, `migrate --plan`/`--apply` (prod), `bundle deploy -t prod` with the schedule PAUSED, optionally one
+    run (never with `bronze_rebuild`; the rebuild's full refresh is started by hand, plan section 5).
+* **Not created (ask first):** ci-prod, its OAuth secret and Lakebase role, scope `netsuite_ingestion_prod`, the
+  `prod` environment and the `DATABRICKS_*_PROD` environment secrets. Also needed then: `run_as` ci-prod and
+  ci-prod in the prod target's `permissions`, and `poc_netsuite.poc_gold` (the prod metadata endpoint is
+  enabled again since 2026-09-30).
 
 ## 3. Decisions waiting for the owner
 
