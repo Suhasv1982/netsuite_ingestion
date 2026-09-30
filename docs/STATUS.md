@@ -40,6 +40,31 @@ prod cannot run until it is re-enabled (ask).
 **Source database (`netsuite-sample`):** production plus backups `pre-synthetic-backup-202609242053`,
 `...202609252235`, `...202609260101`, `...202609260109` (5 of 10 branches).
 
+## 1b. Phase 1 close-out (Part 1, 2026-09-30)
+
+* Gold: `poc_gold.gold_customer_revenue` and `poc_gold.gold_customer_status` (materialized views over silver;
+  SQL in `gold_sql.py`, tested on DuckDB). Schema `workspace.poc_gold` created for dev; **prod needs
+  `poc_netsuite.poc_gold` before the first prod deploy with gold** (ask).
+* Dev run (job run 888453864069675, `[dev suhasv]`, source unchanged since 2026-09-26): bronze = source
+  (certifications 2,625, customers 2,200, memberships 3,281, transaction_lines 39,378, transactions 13,128);
+  silver 2,152 / 2,704 / 32,710 / 10,902 (same as v2 step D); rejects 32 certifications + 25 memberships;
+  ledger OK for all four; gold_customer_revenue 5,280 rows (2,039 customers, months 2026-05 to 2026-09, revenue
+  68,527,268); gold_customer_status 1,861 customers, 408 with an active membership.
+* Guard read count: first real run needed **2** event-log reads (`guard` row WARN in `run_audit`).
+* SOFT rules: two added to **dev** metadata (rules 4 and 5: `Amount Equals Qty x Rate` on transaction_lines,
+  `End Not Before Start` on memberships). A normal run with no new source data emits no expectation metrics
+  (nothing flows). After a selective refresh of the two silver tables (update 9ab9415e), the transaction_lines
+  rule is in the event log (38,781 passed, 597 failed = the 297 amount mismatches + 300 negative amounts of the
+  baseline). **The memberships rule is not**: that flow emitted no metrics event at all in that update, although
+  silver memberships holds 24 rows with end_date < start_date. A memberships-only refresh (update acc79388)
+  completed but could not be checked: compute became unavailable (see below). Open.
+* Proposed daily dev schedule: `docs/dev_daily_schedule.md` (not deployed; 4 blockers listed).
+
+**Compute unavailable since about 20:13 UTC 2026-09-30.** Both re-enabled Lakebase endpoints were disabled
+again (dev metadata 20:13, source 20:16, about 3.5 h after their last activity) and the SQL warehouse refuses to
+start (`Cannot create the resource, please try again later`). Most likely a Free Edition compute quota; not
+verified (the audit-log query needs the warehouse).
+
 ## 2. ci-dev (Phase 2, step A: done 2026-09-30)
 
 * Service principal `ci-dev`, OAuth M2M. Two OAuth secrets are active (90 days, both expire 2026-12-29): the first

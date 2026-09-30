@@ -157,6 +157,14 @@ class TestBuildSoftExpectations:
         rules = [{"severity": "SOFT", "rule_name": "Blank", "rule_expr": "  "}]
         assert build_soft_expectations(rules) == {}
 
+    def test_duplicate_names_are_kept_apart_by_rule_id(self):
+        rules = [
+            {"rule_id": 7, "severity": "SOFT", "rule_name": "Range", "rule_expr": "a > 0"},
+            {"rule_id": 9, "severity": "SOFT", "rule_name": "Range", "rule_expr": "b > 0"},
+            {"rule_id": 11, "severity": "SOFT", "rule_name": "Other", "rule_expr": "c > 0"},
+        ]
+        assert build_soft_expectations(rules) == {"Range (rule 7)": "a > 0", "Range (rule 9)": "b > 0", "Other": "c > 0"}
+
 
 class TestBlankToNone:
     def test_none_becomes_none(self):
