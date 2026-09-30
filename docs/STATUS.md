@@ -5,11 +5,12 @@ Read this first, then run `git status` and check open PRs. Updated after every P
 ## 1. Current state
 
 **Repo.** `Suhasv1982/netsuite_ingestion`, public. `main` is protected: pull request required (0 approvals),
-required checks `gitleaks (full history)` and `pytest`, administrators included, no force push or deletion. Secret
-scanning and push protection on. Local pre-push hook runs gitleaks and pytest.
+required checks `gitleaks (full history)`, `pytest` and `bundle validate` (added 2026-09-30), administrators
+included, no force push or deletion. Secret scanning and push protection on. Local pre-push hook: gitleaks + pytest.
 
-**Pull requests.** Merged: #1 repo hygiene, #2 dev metadata branch + migrations, #3 Phase 2 plan revisions.
-Open: see `gh pr list`.
+**Pull requests.** Merged: #1-#5, #7 (Part 1), #6 (step C, migrate.py), #8 (step D, deploy-dev), #11 (fix: dev
+`run_as`; the first deploy-dev run failed because the pipelines API cannot unset a `run_as` set in step A). Open: #9 (step E,
+canary), #10 (step F, promote-prod; contains #9). Merge #9 after the first deploy-dev run on main is green.
 
 **Work in progress** (owner's instructions of 2026-09-30):
 * Part 1, close out Phase 1 in one dev-only PR: gold layer, SOFT-rule expectation check, guard read-retry count,
@@ -25,20 +26,32 @@ branches and PRs; merging a PR once all checks are green and it touches no prod 
 **Schedules.** prod `netsuite_ingestion_daily`, dev `netsuite_ingestion_daily` and dev `guard_canary_check` are
 all PAUSED (both the `[dev suhasv]` and the `[dev ci_dev]` sets).
 
-**Lakebase endpoints.** All three were found **disabled** on 2026-09-30 (disabled around 2026-09-27 01:10-01:50
-UTC, cause unknown, likely a Free Edition inactivity policy). Re-enabled with the owner's OK:
-`aidq-metadata/dev` and `netsuite-sample/production`. `aidq-metadata/production` (prod metadata) **stays disabled**:
-prod cannot run until it is re-enabled (ask).
+**Lakebase endpoints.** Found disabled on 2026-09-30 (since 2026-09-27) and again at about 20:15 UTC the same day,
+about 3.5 h after last use; most likely the Free Edition compute quota (not verified). Re-enabled: dev metadata and
+source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on prod: its schedule is PAUSED.
 
 **Metadata databases (Lakebase project `aidq-metadata`).**
 
-| | Branch | Migrations 001 / 002 | Secret key |
+| | Branch | Migrations | Owner of `aidq_metadata` |
 |---|---|---|---|
-| dev | `dev` | 001, 002 applied and recorded (backfill, schema verified 2026-09-30); 003 pending | `meta_pg_token_dev` in `netsuite_ingestion_poc` |
-| prod | `production` | **not applied** | `meta_pg_token` in `netsuite_ingestion_poc` |
+| dev | `dev` | 001, 002 recorded (backfill, schema verified); 003 applied by the first deploy-dev run | `aidq_owner` (no-login; members: owner, ci-dev) |
+| prod | `production` | **none applied**, no `schema_migrations` | the owner (no `aidq_owner`, no ci-dev role yet) |
 
 **Source database (`netsuite-sample`):** production plus backups `pre-synthetic-backup-202609242053`,
 `...202609252235`, `...202609260101`, `...202609260109` (5 of 10 branches).
+
+## 1a. First CI dev run (2026-09-30, deploy-dev run on the #11 merge: green)
+
+* Rebuild mode (poc_bronze was empty after `[dev suhasv]` was removed): migrations (003 applied by the previous,
+  failed run, as `aidq_owner`), deploy with `bronze_rebuild=true`, one run, redeploy with `bronze_rebuild=false`.
+* Job run 449191401642789 (`[dev ci_dev]`, as ci-dev): bronze = source in all five tables, silver 2,152 / 2,704 /
+  32,710 / 10,902, rejects 32 + 25, ledger rebuilt and `ledger_check` OK for all four, guard OK in 1 read. Same
+  numbers as the hand-deployed run earlier that day.
+* Dev metadata: `schema_migrations` 001, 002 (backfill), 003 (`applied_by` aidq_owner); `netsuite_customers` has
+  `watermark_col` NULL. Deployed dev: `bronze_rebuild=false`, scope `netsuite_ingestion_dev`, schedules PAUSED.
+* **The owner cannot read the dev tables any more**: they are owned by ci-dev (the pipeline's identity). Fix
+  (owner runs it; the tool's classifier refuses grants): `GRANT SELECT ON SCHEMA workspace.<s> TO
+  \`suhasv@gmail.com\`` for `poc_bronze`, `poc_silver`, `poc_reject`, `poc_gold`, `canary`.
 
 ## 1b. Phase 1 close-out (Part 1, 2026-09-30)
 
@@ -55,21 +68,19 @@ prod cannot run until it is re-enabled (ask).
   `End Not Before Start` on memberships). A normal run with no new source data emits no expectation metrics
   (nothing flows). After a selective refresh of the two silver tables (update 9ab9415e), the transaction_lines
   rule is in the event log (38,781 passed, 597 failed = the 297 amount mismatches + 300 negative amounts of the
-  baseline). **The memberships rule is not**: that flow emitted no metrics event at all in that update, although
-  silver memberships holds 24 rows with end_date < start_date. A memberships-only refresh (update acc79388)
-  completed but could not be checked: compute became unavailable (see below). Open.
+  baseline). The memberships rule was missing from that update (its flow wrote no
+  metrics event), but a memberships-only refresh (update acc79388) shows it: 3,227 passed, 29 failed (= the 3,256
+  valid rows). **Both SOFT rules confirmed.** A single update can lack a flow's metrics event, so one MISSING
+  from `tools/check_soft_expectations.py` is a reason to re-check another update, not proof the rule is unwired.
 * Proposed daily dev schedule: `docs/dev_daily_schedule.md` (not deployed; 4 blockers listed).
 
-**Compute unavailable since about 20:13 UTC 2026-09-30.** Both re-enabled Lakebase endpoints were disabled
-again (dev metadata 20:13, source 20:16, about 3.5 h after their last activity) and the SQL warehouse refuses to
-start (`Cannot create the resource, please try again later`). Most likely a Free Edition compute quota; not
-verified (the audit-log query needs the warehouse).
+**Compute outage 2026-09-30, about 20:13 to 20:55 UTC:** Lakebase endpoints disabled again and the SQL warehouse
+refused to start (`Cannot create the resource`). Both worked again after the endpoints were re-enabled.
 
 ## 2. ci-dev (Phase 2, step A: done 2026-09-30)
 
-* Service principal `ci-dev`, OAuth M2M. Two OAuth secrets are active (90 days, both expire 2026-12-29): the first
-  one's local copy was deleted before it was needed again, so a second one was created and is the one in GitHub.
-  **Deleting the first secret needs the owner's OK.**
+* Service principal `ci-dev`, OAuth M2M. One OAuth secret (90 days, expires 2026-12-29), the one in GitHub; the
+  first secret was deleted on 2026-09-30 with the owner's OK.
 * GitHub secrets `DATABRICKS_HOST_DEV`, `DATABRICKS_CLIENT_ID_DEV`, `DATABRICKS_CLIENT_SECRET_DEV`.
 * Lakebase roles `ci-dev` (no admin membership) on `aidq-metadata/dev` and `netsuite-sample/production`.
   Grants: dev metadata USAGE on `aidq_metadata`, SELECT on `source_table_def`, `source_columns`,
@@ -77,7 +88,10 @@ verified (the audit-log query needs the warehouse).
   privileges for new tables), nothing on the backup schemas. Migration (DDL) rights: step C/D.
 * UC: USE CATALOG `workspace`; USE SCHEMA, CREATE TABLE, CREATE MATERIALIZED VIEW, SELECT, MODIFY on
   `workspace.poc_bronze`, `poc_silver`, `poc_reject`, `poc_gold` (new, created 2026-09-30), `ledger`, `canary`,
-  `default`. **`default` is too broad** (it holds other projects' tables): reduce to USE SCHEMA (owner SQL).
+  `default` (USE SCHEMA only since 2026-09-30: it holds other projects' tables). SQL warehouse: CAN_MANAGE (canary).
+* Grant inventory 2026-09-30: nothing beyond the plan. BROWSE on other catalogs comes from `account users` (all
+  users), not from a ci-dev grant. Not ci-dev: another user (`sid.v@...`) holds ALL_PRIVILEGES on `poc_netsuite`
+  (flagged to the owner).
 * Scope `netsuite_ingestion_dev`, ci-dev WRITE (owner MANAGE). ci-dev has no access to `netsuite_ingestion_poc`.
 * Verified as ci-dev: Lakebase login and the grants (allowed and denied cases), scope WRITE, `bundle validate`
   dev + prod, and `run_as` (accepted with `mode: development`; job and both pipelines run as ci-dev).
@@ -162,19 +176,26 @@ copy that holds the owner's bundle state.
 
 ## 3. Decisions waiting for the owner
 
-1. Every prod step (plan section 5), including re-enabling the prod metadata endpoint.
-2. Deleting the first ci-dev OAuth secret.
-3. After step D: removing the hand-deployed `[dev suhasv]` set (a list will be shown).
-4. After step B: adding `bundle validate` to the required checks.
-5. Unpausing the proposed daily dev schedule (Part 1).
+1. Step F prod setup, asked for in one batch once #9 and #10 are merged and a CI dev run is green: ci-prod (OAuth
+   secret, Lakebase role and `aidq_owner` on prod metadata, grants), scope `netsuite_ingestion_prod` (ci-prod
+   WRITE), GitHub environment `prod` (required reviewer, main only) and its `DATABRICKS_*_PROD` secrets, `run_as`
+   and permissions for ci-prod in the prod target, `poc_netsuite.poc_gold`.
+2. Every prod step (plan section 5).
+3. Add `migrate plan (dev)` to the required checks too (green since 2026-09-30).
+4. The daily dev schedule (`docs/dev_daily_schedule.md`): settle its 4 blockers, then unpause.
+5. The ALL_PRIVILEGES grant on `poc_netsuite` for another user.
+
+Done 2026-09-30 (owner decisions): `[dev suhasv]` removed (`bundle destroy -t dev`: 2 jobs, 2 pipelines with their
+tables, the owner's dev bundle folder; `workspace.ledger.*` kept for the rebuild); `bundle validate` required; first
+ci-dev secret deleted; owner grants (dev `aidq_owner`, warehouse CAN_MANAGE, `workspace.default` USE SCHEMA only).
 
 ## 4. Gotchas
 
 * **Deploy identity and local state.** A bundle deploy reads the local `.databricks/` state cache. Deploying as
   another identity from a working copy that has the owner's cache tries to update the owner's resources (ci-dev
   gets 403). Deploy as ci-dev only from a clean checkout (CI always is).
-* **Dev-mode prefix is the deployer.** `[dev suhasv]` vs `[dev ci_dev]`. Both sets write the same
-  `workspace.poc_*` tables; a pipeline owns the tables it created, so only one set can run.
+* **Dev-mode prefix is the deployer.** Only the CI-deployed `[dev ci_dev]` set exists now. Do not deploy dev by
+  hand: a second set would write the same `workspace.poc_*` tables, which the CI pipeline owns.
 * **Per-target secret keys.** Scope `netsuite_ingestion_poc` holds `meta_pg_token` (prod) and `meta_pg_token_dev`
   (dev); the per-environment scopes of plan section 3a replace this in step D. Do not point dev at the prod key.
 * **Migrations before code.** Migration files stay byte-stable once recorded; add a new migration instead.
