@@ -108,3 +108,49 @@ class TestSnapshotDiff:
         after = {"columns": ["t.a int", "t.b int"], "constraints": ["c1 CHECK (a > 1)"]}
         assert snapshot_diff(before, after) == [
             "columns: + t.b int", "constraints: - c1 CHECK (a > 0)", "constraints: + c1 CHECK (a > 1)"]
+
+
+class _FakeConn:
+    """Records statements; `fail_on` makes the statement containing it raise."""
+
+    def __init__(self, fail_on=None):
+        self.log, self.fail_on = [], fail_on
+
+    def execute(self, sql, params=None):
+        self.log.append(sql.strip().split("\n")[0][:60])
+        if self.fail_on and self.fail_on in sql:
+            raise RuntimeError("boom")
+        return self
+
+    def commit(self):
+        self.log.append("COMMIT")
+
+    def rollback(self):
+        self.log.append("ROLLBACK")
+
+
+class TestOwnerRole:
+    def test_apply_runs_as_the_owner_role_first_then_file_row_commit(self):
+        from migrate import SET_OWNER_ROLE, apply_one
+
+        conn = _FakeConn()
+        apply_one(conn, _m("003", "ALTER TABLE t ADD COLUMN c int;"), "dev")
+        assert conn.log[0] == SET_OWNER_ROLE
+        assert conn.log[2].startswith("ALTER TABLE t") and conn.log[3].startswith("INSERT INTO aidq_metadata.schema_migrations")
+        assert conn.log[-1] == "COMMIT"
+
+    def test_a_failing_file_rolls_back_file_and_row_together(self):
+        from migrate import apply_one
+
+        conn = _FakeConn(fail_on="bad")
+        with pytest.raises(RuntimeError):
+            apply_one(conn, _m("003", "bad sql;"), "dev")
+        assert conn.log[-1] == "ROLLBACK" and "COMMIT" not in conn.log
+        assert not any(s.startswith("INSERT INTO aidq_metadata.schema_migrations") for s in conn.log)
+
+    def test_dry_run_uses_the_same_role_and_always_rolls_back(self):
+        from migrate import SET_OWNER_ROLE, dry_run
+
+        conn = _FakeConn()
+        assert dry_run(conn, _m("003")) is None
+        assert conn.log == [SET_OWNER_ROLE, "SELECT 1;", "ROLLBACK"]
