@@ -8,8 +8,10 @@ Read this first, then run `git status` and check open PRs. Updated after every P
 required checks `gitleaks (full history)` and `pytest`, administrators included, no force push or deletion. Secret
 scanning and push protection on. Local pre-push hook runs gitleaks and pytest.
 
-**Pull requests.** Merged: #1 repo hygiene, #2 dev metadata branch + migrations, #3 Phase 2 plan revisions.
-Open: see `gh pr list`.
+**Pull requests.** Merged: #1 repo hygiene, #2 dev metadata + migrations, #3 plan revisions, #4 bundle validate
+(step B), #5 STATUS handoff, #7 Part 1 (Phase 1 close-out). Open, stacked, each containing the previous: #6 step C
+(migrate.py) <- #8 step D (deploy-dev) <- #9 step E (canary) <- #10 step F (promote-prod). All four are red only on
+`migrate plan (dev)` (ci-dev lacks migration rights), so none is merged. Merge in order: #6, #8, #9, #10.
 
 **Work in progress** (owner's instructions of 2026-09-30):
 * Part 1, close out Phase 1 in one dev-only PR: gold layer, SOFT-rule expectation check, guard read-retry count,
@@ -170,11 +172,23 @@ copy that holds the owner's bundle state.
 
 ## 3. Decisions waiting for the owner
 
-1. Every prod step (plan section 5), including re-enabling the prod metadata endpoint.
-2. Deleting the first ci-dev OAuth secret.
-3. After step D: removing the hand-deployed `[dev suhasv]` set (a list will be shown).
-4. After step B: adding `bundle validate` to the required checks.
-5. Unpausing the proposed daily dev schedule (Part 1).
+Owner actions (the tool's permission classifier refused these grants; SQL / commands in the Phase 2 report):
+1. ci-dev migration rights on dev metadata (no-login owner role for `aidq_metadata`, ci-dev a member). Unblocks
+   `migrate plan (dev)` in every PR and deploy-dev's `--apply`.
+2. ci-dev CAN_MANAGE on the SQL warehouse (the canary stops it first).
+3. Reduce ci-dev on `workspace.default` to USE SCHEMA (the schema holds other projects' tables).
+
+Decisions:
+4. Remove the hand-deployed `[dev suhasv]` set (inventory in section 2d). Needed before the first CI dev run.
+5. Add `bundle validate` (and later `migrate plan (dev)`) to the required status checks of `main`.
+6. Delete the first ci-dev OAuth secret (the second one is in GitHub).
+7. Step F prerequisites: create ci-prod (secret, Lakebase role on `aidq-metadata/production`, grants), scope
+   `netsuite_ingestion_prod` (ci-prod WRITE), GitHub environment `prod` (required reviewer, main only) and its
+   `DATABRICKS_*_PROD` secrets; `run_as` + permissions for ci-prod in the prod target; `poc_netsuite.poc_gold`.
+8. Every prod step (plan section 5), including re-enabling the prod metadata endpoint.
+9. The daily dev schedule (`docs/dev_daily_schedule.md`): settle its 4 blockers, then unpause.
+10. Compute: endpoints re-disabled and the warehouse refused to start at about 20:15 UTC 2026-09-30; re-enable
+    the dev metadata and source endpoints once compute is back (the memberships SOFT re-test is still open).
 
 ## 4. Gotchas
 
