@@ -1,7 +1,8 @@
 name: PR checks
 
-# Runs gitleaks (full git history) and pytest on every pull request into main.
-# No deploy, no secrets, read-only token. Third-party actions are pinned to commit SHAs;
+# Runs gitleaks (full git history), pytest and `databricks bundle validate` on every pull request into main.
+# No deploy. Only bundle-validate reads secrets (the low-privilege dev identity); the GitHub token is read-only.
+# Never switch the trigger to pull_request_target (CLAUDE.md). Third-party actions are pinned to commit SHAs;
 # gitleaks is downloaded at a pinned version and verified against its published checksums.
 
 on:
@@ -70,3 +71,80 @@ jobs:
 
       - name: Run tests (integration tests skip themselves without NETSUITE_INTEGRATION=1)
         run: python -m pytest -q
+
+  bundle-validate:
+    name: bundle validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Every job that calls the Databricks workspace shares this group and never cancels a running one
+    # (docs/phase2_cicd_plan.md, section 1).
+    concurrency:
+      group: databricks-workspace
+      cancel-in-progress: false
+    steps:
+      # Fork PRs get no secrets: skip with a visible notice. A same-repo PR without the credential fails,
+      # so a missing secret is never mistaken for a pass.
+      - name: Check for the dev credential
+        id: cred
+        env:
+          HAVE_CRED: ${{ secrets.DATABRICKS_CLIENT_SECRET_DEV != '' }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+        run: |
+          if [ "$HAVE_CRED" = "true" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif [ "$IS_FORK" = "true" ]; then
+            echo "::notice title=bundle validate skipped::fork PR, no Databricks credential available"
+            echo "### bundle validate: skipped (fork PR, no credential)" >> "$GITHUB_STEP_SUMMARY"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error title=bundle validate::secret DATABRICKS_CLIENT_SECRET_DEV is not configured"
+            exit 1
+          fi
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: steps.cred.outputs.run == 'true'
+        with:
+          persist-credentials: false
+
+      # Same pattern as gitleaks: pinned version (matches the local CLI), verified against the published checksums.
+      - name: Install Databricks CLI (pinned, checksum verified)
+        if: steps.cred.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/dbcli" && cd "$RUNNER_TEMP/dbcli"   # outside the bundle root
+          V=1.16.0
+          BASE="https://github.com/databricks/cli/releases/download/v${V}"
+          ARCHIVE="databricks_cli_${V}_linux_amd64.tar.gz"   # keep the published name: sha256sum -c looks it up by it
+          curl -sSfL -o "${ARCHIVE}" "${BASE}/${ARCHIVE}"
+          curl -sSfL -o SHA256SUMS "${BASE}/databricks_cli_${V}_SHA256SUMS"
+          grep " ${ARCHIVE}\$" SHA256SUMS | sha256sum -c -
+          tar -xzf "${ARCHIVE}" databricks
+          echo "$PWD" >> "$GITHUB_PATH"
+
+      # Low-privilege dev identity only (ci-dev service principal, OAuth M2M). Host and client id are secrets,
+      # not variables, so GitHub masks them: validate prints the identity and workspace path, and this repo's
+      # Actions logs are public. Full output is printed only on failure.
+      - name: Validate dev and prod targets
+        if: steps.cred.outputs.run == 'true'
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID_DEV }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET_DEV }}
+          DATABRICKS_AUTH_TYPE: oauth-m2m
+        run: |
+          set -uo pipefail
+          status=0
+          validate() {
+            local target="$1"; shift
+            if databricks bundle validate -t "$target" "$@" > "validate-$target.log" 2>&1; then
+              echo "- \`$target\`: OK" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- \`$target\`: FAILED" >> "$GITHUB_STEP_SUMMARY"
+              echo "::group::bundle validate -t $target"; cat "validate-$target.log"; echo "::endgroup::"
+              status=1
+            fi
+          }
+          echo "### bundle validate" >> "$GITHUB_STEP_SUMMARY"
+          validate dev
+          validate prod --var="schedule_pause_status=PAUSED"
+          exit $status
