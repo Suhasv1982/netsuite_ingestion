@@ -55,6 +55,11 @@ targets:
   dev:
     mode: development
     default: true
+    # Dev is deployed by CI only (deploy-dev, as ci-dev), which then also runs it. run_as is explicit because the
+    # pipelines API cannot unset a run_as once it is set (the step A spike set it on the [dev ci_dev] pipelines).
+    # Do not deploy dev by hand: it would create a second dev set writing the tables the CI pipeline owns.
+    run_as:
+      service_principal_name: ${workspace.current_user.userName}
     variables:
       # dev writes to its own schemas in the `workspace` catalog: the prod pipeline owns the tables in poc_netsuite
       # (a catalog cannot be created through the API on Default Storage).
