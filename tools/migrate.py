@@ -22,6 +22,9 @@ nothing, so the schema matches them. Any difference is printed and nothing is re
 Environments: dev = branch `dev`, prod = branch `production`. Credentials: a short-lived database token for the
 current Databricks identity (the owner locally with --profile, the ci-dev service principal in CI through the
 DATABRICKS_* environment variables). Nothing is ever printed that contains the token.
+
+Every migration transaction starts with SET LOCAL ROLE aidq_owner, so objects created by a migration are owned
+by that no-login role (and stay alterable by later migrations run by any of its members), not by the caller.
 """
 
 from __future__ import annotations
@@ -39,6 +42,10 @@ PROJECT = "aidq-metadata"
 BRANCHES = {"dev": "dev", "prod": "production"}
 DATABASE = "databricks_postgres"
 SCHEMA = "aidq_metadata"
+# Every migration transaction runs as this no-login role (SET LOCAL ROLE), so objects a migration creates are owned
+# by it, not by whoever ran the migration (the owner locally, ci-dev in CI). Both are members of it.
+OWNER_ROLE = "aidq_owner"
+SET_OWNER_ROLE = f"SET LOCAL ROLE {OWNER_ROLE}"
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 FILE_RE = re.compile(r"^(\d{3})_([a-z0-9_]+)\.sql$")
 
@@ -188,6 +195,21 @@ def connect(env: str, profile: str | None):
                            sslmode="require", connect_timeout=60, autocommit=False)
 
 
+def check_owner_role(conn) -> str | None:
+    """None when the current user may SET ROLE to OWNER_ROLE, else why not."""
+    row = conn.execute(
+        "SELECT (SELECT count(*) FROM pg_roles WHERE rolname = %s), "
+        "CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = %s) THEN pg_has_role(current_user, %s, 'MEMBER') END",
+        (OWNER_ROLE, OWNER_ROLE, OWNER_ROLE),
+    ).fetchone()
+    conn.rollback()
+    if not row[0]:
+        return f"role {OWNER_ROLE} does not exist in this database (the owner creates it first)"
+    if not row[1]:
+        return f"the current user is not a member of {OWNER_ROLE}"
+    return None
+
+
 def read_applied(conn) -> dict[str, dict]:
     exists = conn.execute("SELECT to_regclass(%s)", (f"{SCHEMA}.schema_migrations",)).fetchone()[0]
     if not exists:
@@ -204,8 +226,9 @@ def catalog_snapshot(conn) -> dict[str, list[str]]:
 
 
 def dry_run(conn, m: Migration) -> str | None:
-    """Run the file in a transaction and roll back. None = clean, else the error."""
+    """Run the file in a transaction (as OWNER_ROLE, like --apply) and roll back. None = clean, else the error."""
     try:
+        conn.execute(SET_OWNER_ROLE)
         conn.execute(m.sql)
         return None
     except Exception as exc:
@@ -215,8 +238,9 @@ def dry_run(conn, m: Migration) -> str | None:
 
 
 def apply_one(conn, m: Migration, env: str) -> None:
-    """The file and its tracking row, in one transaction."""
+    """The file and its tracking row, in one transaction, as OWNER_ROLE."""
     try:
+        conn.execute(SET_OWNER_ROLE)
         conn.execute(TRACKING_DDL)
         conn.execute(m.sql)
         conn.execute(
@@ -277,6 +301,7 @@ def cmd_backfill(conn, files, env, upto: str) -> int:
         print("nothing to backfill")
         return 0
     try:
+        conn.execute(SET_OWNER_ROLE)
         before = catalog_snapshot(conn)
         for m in targets:
             conn.execute(m.sql)
@@ -294,6 +319,7 @@ def cmd_backfill(conn, files, env, upto: str) -> int:
             print(f"  {line}")
         return 1
     try:
+        conn.execute(SET_OWNER_ROLE)
         conn.execute(TRACKING_DDL)
         for m in targets:
             conn.execute(
@@ -322,6 +348,10 @@ def main(argv: list[str] | None = None) -> int:
     files = discover()
     conn = connect(args.env, args.profile)
     try:
+        problem = check_owner_role(conn)
+        if problem:
+            print(f"REFUSED: {problem}; migrations run as {OWNER_ROLE} so it owns what they create")
+            return 1
         if args.plan:
             return cmd_plan(conn, files, args.env)
         if args.apply:
