@@ -128,6 +128,21 @@ copy that holds the owner's bundle state.
   of running the canary with a warehouse up. The `[dev ci_dev] guard_canary` pipeline also needs
   `workspace.canary.canary_bronze`, which the `[dev suhasv] guard_canary` pipeline owns (section 2d).
 
+## 2f. promote-prod (Phase 2, step F)
+
+* `.github/workflows/promote-prod.yml`, `workflow_dispatch` with `release_sha` (full SHA), `run_after_deploy`,
+  `bronze_rebuild` (both default false).
+  * Job `release gate` (no secrets) fails unless `release_sha` is on main (`git merge-base --is-ancestor` against
+    `origin/main`), has a successful deploy-dev run (`gh run list --status success`), and the `prod` environment
+    exists **with required reviewers** (GitHub would otherwise create it on first use without protection).
+    Dry-run locally: a malformed SHA, a SHA not on main, and a missing deploy-dev workflow all fail closed.
+  * Job `promote to prod` (environment `prod`, concurrency `databricks-workspace`): backup branch of prod
+    metadata, `migrate --plan`/`--apply` (prod), `bundle deploy -t prod` with the schedule PAUSED, optionally one
+    run (never with `bronze_rebuild`; the rebuild's full refresh is started by hand, plan section 5).
+* **Not created (ask first):** ci-prod, its OAuth secret and Lakebase role, scope `netsuite_ingestion_prod`, the
+  `prod` environment and the `DATABRICKS_*_PROD` environment secrets. Also needed then: `run_as` ci-prod and
+  ci-prod in the prod target's `permissions`, `poc_netsuite.poc_gold`, and re-enabling the prod metadata endpoint.
+
 ## 3. Decisions waiting for the owner
 
 1. Every prod step (plan section 5), including re-enabling the prod metadata endpoint.
