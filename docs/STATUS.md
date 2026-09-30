@@ -59,6 +59,16 @@ prod cannot run until it is re-enabled (ask).
 * A test deploy as ci-dev created the `[dev ci_dev]` set (2 jobs, 2 pipelines, schedules PAUSED, never run).
   It becomes the canonical dev in step D.
 
+## 2b. bundle validate in PR checks (Phase 2, step B: PR #4)
+
+* New job `bundle validate` in `.github/workflows/pr-checks.yml`: validates dev and prod (schedule PAUSED) as
+  ci-dev, OAuth M2M; CLI 1.16.0 installed from the release with its checksum verified; job-level concurrency group
+  `databricks-workspace`, `cancel-in-progress: false`; fork PRs skip with a notice, a same-repo PR without the
+  secret fails. Public logs mask the host and client id (checked: no occurrence in the job log).
+* `tests/test_bundle_targets.py`: dev and prod never share catalog, metadata key, endpoint or host; the ledger
+  follows `${var.catalog}`.
+* Next (owner's OK): add `bundle validate` to the required status checks of `main`.
+
 ## 3. Decisions waiting for the owner
 
 1. Every prod step (plan section 5), including re-enabling the prod metadata endpoint.
