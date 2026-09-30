@@ -61,3 +61,7 @@ The same two checks run on every pull request (`.github/workflows/pr-checks.yml`
   `poc_netsuite`.
 * A full refresh of bronze is only allowed with `bronze_rebuild=true` (the guard in `bronze.py` enforces it).
 * Stop the SQL warehouse before running the guard canary on Free Edition.
+* Schema changes to `aidq_metadata` go through `migrations/NNN_name.sql` and `tools/migrate.py` only: no
+  `BEGIN`/`COMMIT` in the files (the runner owns the transaction), and never edit a file once it is recorded in
+  `schema_migrations` (add a new migration). Migrations are applied before the code that needs them is deployed.
+  Migrations run as the no-login role `aidq_owner` (`SET LOCAL ROLE`), which owns `aidq_metadata` and its objects.

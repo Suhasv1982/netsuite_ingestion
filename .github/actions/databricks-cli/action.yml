@@ -1,0 +1,25 @@
+name: Install Databricks CLI
+description: >
+  Pinned Databricks CLI from the GitHub release, verified against the published SHA256SUMS, added to PATH.
+  Same pattern as the gitleaks install. Keep the version in step with the local CLI.
+inputs:
+  version:
+    description: CLI version
+    default: "1.16.0"
+runs:
+  using: composite
+  steps:
+    - name: Install Databricks CLI (pinned, checksum verified)
+      shell: bash
+      env:
+        V: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$RUNNER_TEMP/dbcli" && cd "$RUNNER_TEMP/dbcli"   # outside the bundle root
+        BASE="https://github.com/databricks/cli/releases/download/v${V}"
+        ARCHIVE="databricks_cli_${V}_linux_amd64.tar.gz"   # keep the published name: sha256sum -c looks it up by it
+        curl -sSfL -o "${ARCHIVE}" "${BASE}/${ARCHIVE}"
+        curl -sSfL -o SHA256SUMS "${BASE}/databricks_cli_${V}_SHA256SUMS"
+        grep " ${ARCHIVE}\$" SHA256SUMS | sha256sum -c -
+        tar -xzf "${ARCHIVE}" databricks
+        echo "$PWD" >> "$GITHUB_PATH"

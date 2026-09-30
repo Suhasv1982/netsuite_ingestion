@@ -34,7 +34,7 @@ prod cannot run until it is re-enabled (ask).
 
 | | Branch | Migrations 001 / 002 | Secret key |
 |---|---|---|---|
-| dev | `dev` | applied (not yet recorded in `schema_migrations`) | `meta_pg_token_dev` in `netsuite_ingestion_poc` |
+| dev | `dev` | 001, 002 applied and recorded (backfill, schema verified 2026-09-30); 003 pending | `meta_pg_token_dev` in `netsuite_ingestion_poc` |
 | prod | `production` | **not applied** | `meta_pg_token` in `netsuite_ingestion_poc` |
 
 **Source database (`netsuite-sample`):** production plus backups `pre-synthetic-backup-202609242053`,
@@ -93,6 +93,26 @@ verified (the audit-log query needs the warehouse).
 * `tests/test_bundle_targets.py`: dev and prod never share catalog, metadata key, endpoint or host; the ledger
   follows `${var.catalog}`.
 * Next (owner's OK): add `bundle validate` to the required status checks of `main`.
+
+## 2c. Migration runner (Phase 2, step C)
+
+* `tools/migrate.py --env dev|prod --plan | --apply | --backfill UPTO`. `--apply`: each file plus its
+  `schema_migrations` row in one transaction; stops at the first failure; refuses if an applied file's checksum
+  changed. `--plan`: read-only, dry-runs pending files in a rolled-back transaction. Files contain no
+  `BEGIN`/`COMMIT` (removed from 001/002 in this step, the one permitted edit; the runner rejects such files).
+* Dev backfill done 2026-09-30: replaying 001+002 changed nothing in a catalog snapshot (columns, constraints,
+  indexes, views, functions, triggers), so both were recorded with the checksums of the edited files.
+* `003_blank_watermark_to_null`: blank `watermark_col` -> NULL plus a CHECK against blanks. Dry run OK on dev;
+  applied by deploy-dev (step D). The code already treats blank and NULL the same.
+* Every migration transaction starts with `SET LOCAL ROLE aidq_owner` (dry runs and backfill too), so what a
+  migration creates is owned by that no-login role; `migrate.py` refuses to run if the role is missing or the
+  caller is not a member.
+* `migrate plan (dev)` job in pr-checks (as ci-dev, concurrency `databricks-workspace`). The CLI install is now
+  the local composite action `.github/actions/databricks-cli`.
+* **Blocked: ci-dev has no migration rights on dev metadata.** Creating a no-login owner role and moving
+  ownership of `aidq_metadata` objects to it (so ci-dev can run DDL) was refused by the tool's permission
+  classifier; the owner runs it (SQL in the Phase 2 report). Until then `migrate plan (dev)` fails in CI with a
+  permission error, and deploy-dev cannot apply migrations.
 
 ## 3. Decisions waiting for the owner
 

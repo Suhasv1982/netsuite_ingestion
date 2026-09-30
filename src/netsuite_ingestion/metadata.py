@@ -112,8 +112,8 @@ def _blank_to_none(value) -> str | None:
 def read_table_defs(spark, meta_conn: PgConn) -> list[dict]:
     """One row per source table, from aidq_metadata.source_table_def.
 
-    watermark_col is NOT NULL in Postgres, so a table with no watermark
-    (e.g. a FullLoad) stores an empty string; that is normalized to None here.
+    A table with no watermark (a FullLoad) has watermark_col NULL, or an empty
+    string on a database without migration 003; both are normalized to None here.
     """
     df = read_jdbc_table(spark, meta_conn, "aidq_metadata", "source_table_def")
     rows = [row.asDict() for row in df.collect()]
