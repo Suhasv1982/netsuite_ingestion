@@ -400,19 +400,27 @@ _UUID = re.compile(r"[0-9a-fA-F-]{36}")
 
 
 def read_create_update_detail(spark, attempts: int = 5, wait_seconds: float = 10.0):
-    """(create_update event | None, note): the current update's `create_update` event, read from the
+    """(create_update event | None, note): see read_create_update_attempts, without the attempt count."""
+    event, note, _ = read_create_update_attempts(spark, attempts, wait_seconds)
+    return event, note
+
+
+def read_create_update_attempts(spark, attempts: int = 5, wait_seconds: float = 10.0):
+    """(create_update event | None, note, reads): the current update's `create_update` event, read from the
     pipeline's own event log at graph build (allowed: the event log is not a dataset of the pipeline).
 
     The event log is written asynchronously and one full-refresh update was seen to read back nothing at
     graph build although the event was there, so the read is retried a few times. When it still cannot be
     read, `note` says why (no row yet, or the query error) and is shown in the guard's message.
+    `reads` is how many event-log reads were made (1 = found at once; 0 = not attempted), so a platform
+    slowdown shows up in run_audit (layer `guard`) before it turns into blocked updates.
     """
     import time
 
     pipeline_id = spark.conf.get("pipelines.id", None)
     update_id = spark.conf.get("spark.pipelines.updateId", None)
     if not (pipeline_id and update_id and _UUID.fullmatch(pipeline_id) and _UUID.fullmatch(update_id)):
-        return None, "pipelines.id / spark.pipelines.updateId are not set as expected"
+        return None, "pipelines.id / spark.pipelines.updateId are not set as expected", 0
     note = ""
     for attempt in range(1, attempts + 1):
         try:
@@ -421,7 +429,7 @@ def read_create_update_detail(spark, attempts: int = 5, wait_seconds: float = 10
                 f"WHERE event_type = 'create_update' AND origin.update_id = '{update_id}' ORDER BY timestamp DESC LIMIT 1"
             ).collect()
             if rows:
-                return json.loads(rows[0]["details"]).get("create_update"), ""
+                return json.loads(rows[0]["details"]).get("create_update"), "", attempt
             note = f"no create_update event was visible for this update after {attempt} attempt(s)"
         except Exception as exc:
             note = f"event_log query failed on attempt {attempt}: {type(exc).__name__}: {str(exc)[:200]}"
@@ -435,11 +443,57 @@ def read_create_update_detail(spark, attempts: int = 5, wait_seconds: float = 10
         note += " | latest event_log rows (type, update, time): " + "; ".join(f"{r['event_type']}/{r['u']}/{r['t']}" for r in recent)
     except Exception as exc:
         note += f" | event_log listing failed: {type(exc).__name__}: {str(exc)[:120]}"
-    return None, note
+    return None, note, attempts
 
 
 def read_create_update(spark):
     return read_create_update_detail(spark)[0]
+
+
+# -- guard read audit ---------------------------------------------------------
+#
+# bronze.py records how many event-log reads the guard needed in a one-row
+# table (GUARD_READS_TABLE, rewritten by every update that gets past the guard);
+# log_run_audit copies it into run_audit as a `guard` layer row. A blocked
+# update fails before its tables are written, so its reads show up in the
+# pipeline error message instead (and the row still holds the previous update:
+# log_run_audit checks the update id).
+
+GUARD_READS_TABLE = "poc_bronze.guard_reads"
+GUARD_READS_COLUMNS = ("update_id", "reads", "event_found", "note")
+
+
+def guard_reads_row(update_id, reads: int, event_found: bool, note: str) -> tuple:
+    return (update_id or "", int(reads), bool(event_found), (note or "")[:1000])
+
+
+def pick_update_id(updates, start_ms, end_ms):
+    """The pipeline update a job run's pipeline task started: the latest update created within the task's
+    run window. `updates` = [(update_id, creation_time_ms)]. None when none falls in the window."""
+    if not start_ms:
+        return None
+    hits = [(ms, uid) for uid, ms in updates if ms and ms >= start_ms and (not end_ms or ms <= end_ms)]
+    return max(hits)[1] if hits else None
+
+
+def guard_audit_row(guard: dict | None, expected_update_id: str | None, run_id: str, started_at, ended_at) -> dict:
+    """run_audit row (layer `guard`, table_id NULL) for the guard read of this job run's pipeline update.
+
+    status OK: the event was found on the first read. WARN: it took retries, was not found (fail-closed or
+    all_dates pass-through), or no row for this update exists (the row is from an earlier update, or none).
+    rows_read = reads needed.
+    """
+    base = {"run_id": run_id, "table_id": None, "layer": "guard", "rows_written": None, "rows_rejected": None,
+            "started_at": started_at, "ended_at": ended_at}
+    if not guard or (expected_update_id and guard.get("update_id") != expected_update_id):
+        return {**base, "status": "WARN", "rows_read": None,
+                "error": f"no guard_reads row for update {expected_update_id or '<unknown>'}"}
+    reads, found = int(guard.get("reads") or 0), bool(guard.get("event_found"))
+    status = "OK" if found and reads == 1 else "WARN"
+    detail = f"update {guard.get('update_id')}: create_update event {'found' if found else 'NOT found'} after {reads} read(s)"
+    if guard.get("note"):
+        detail += f"; {guard['note']}"
+    return {**base, "status": status, "rows_read": reads, "error": None if status == "OK" else detail}
 
 
 def source_pairs_df(src_df, key_col: str, watermark_col: str, floor: datetime.date):
@@ -708,13 +762,17 @@ def build_soft_expectations(rules: list[dict]) -> dict[str, str]:
     """rule_name -> SQL boolean expression for every SOFT rule, ready for
     dp.expect_all(). SOFT rules only record a violation metric in the
     pipeline event log; they never drop or reject rows. Rows with a blank
-    rule_expr are skipped.
+    rule_expr are skipped. The name is the expectation name in the event log;
+    when two SOFT rules of the table share a name, each gets " (rule <rule_id>)"
+    appended, so neither silently replaces the other.
     """
-    return {
-        r["rule_name"]: r["rule_expr"].strip()
-        for r in rules
-        if r.get("severity") == "SOFT" and r.get("rule_expr") and r["rule_expr"].strip()
-    }
+    soft = [r for r in rules if r.get("severity") == "SOFT" and r.get("rule_expr") and r["rule_expr"].strip()]
+    names = [r["rule_name"] for r in soft]
+    return {soft_expectation_name(r, names.count(r["rule_name"]) > 1): r["rule_expr"].strip() for r in soft}
+
+
+def soft_expectation_name(rule: dict, duplicated: bool = False) -> str:
+    return f"{rule['rule_name']} (rule {rule.get('rule_id')})" if duplicated else rule["rule_name"]
 
 
 def build_dq_reason_expr(rules: list[dict]) -> str:

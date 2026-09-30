@@ -1,183 +1,245 @@
 # netsuite_ingestion (POC)
 
-Metadata-driven bronze/DQ/silver pipeline for the 5 NetSuite sample tables,
-driven entirely by the `aidq_metadata` control tables (`source_table_def`,
-`source_columns`, `data_quality_rules`).
+Metadata-driven bronze / DQ / silver / gold pipeline on Databricks (Lakeflow Spark Declarative Pipelines,
+serverless) for the five NetSuite sample tables. Which tables are loaded, which columns, how (full or
+incremental) and which data-quality rules apply all come from the `aidq_metadata` control tables in Lakebase
+Postgres; the code has no table list of its own.
 
-## Layout
+## Architecture
 
+```mermaid
+flowchart LR
+    subgraph LB["Lakebase Postgres"]
+        SRC[("netsuite-sample<br/>schema netsuite<br/>5 source tables")]
+        META[("aidq-metadata<br/>source_table_def, source_columns,<br/>data_quality_rules, run_audit")]
+    end
+
+    subgraph JOB["Job netsuite_ingestion_daily"]
+        RC["refresh_credentials<br/>(mints 1 h DB tokens<br/>into the secret scope)"]
+        subgraph PIPE["Pipeline netsuite_ingestion_poc"]
+            BR["poc_bronze.&lt;table&gt;<br/>once-flows per date<br/>+ top-ups, full-refresh guard"]
+            DQ["&lt;table&gt;_valid views<br/>HARD rules split, SOFT rules<br/>as expectations"]
+            REJ["poc_reject.rejected_rows"]
+            SV["poc_silver.&lt;table&gt;<br/>AUTO CDC, SCD1"]
+            GD["poc_gold.gold_customer_revenue<br/>poc_gold.gold_customer_status"]
+            BR --> DQ --> SV --> GD
+            DQ --> REJ
+        end
+        SL["sync_ledger"]
+        LC["ledger_check"]
+        LA["log_run_audit"]
+        RC --> PIPE --> SL --> LC
+        PIPE --> LA
+    end
+
+    LEDGER[("ledger.bronze_keys<br/>ledger.bronze_fingerprints<br/>(Delta, outside the pipeline)")]
+
+    META -. "table defs, columns, rules" .-> PIPE
+    SRC -- "JDBC, per-date slices,<br/>per-date fingerprints" --> BR
+    LEDGER -. "what is loaded" .-> BR
+    SL --> LEDGER
+    LC -. "run_audit rows" .-> META
+    LA -. "run_audit rows" .-> META
 ```
-databricks.yml                                      bundle config (catalog / pg hosts / bronze_rebuild / flow_scope vars)
-resources/netsuite_ingestion_poc.pipeline.yml       pipeline resource
-resources/netsuite_ingestion_job.job.yml            job: refresh_credentials -> run_pipeline -> sync_ledger -> ledger_check (+ log_run_audit)
-resources/guard_canary.{pipeline,job}.yml           weekly guard canary (schedule PAUSED)
-src/netsuite_ingestion/metadata.py                  JDBC readers, pure builders, incremental-bronze planning (flows, ledger)
-src/netsuite_ingestion/transformations/bronze.py    poc_bronze.<table>: streaming table + once-flows (incremental), batch table (FullLoad)
-src/netsuite_ingestion/transformations/dq.py        HARD-rule validity split -> poc_reject.rejected_rows; SOFT rules as expectations
-src/netsuite_ingestion/transformations/silver.py    poc_silver.<table>: AUTO CDC merge (business_key, watermark_col)
-src/netsuite_ingestion/sync_ledger.py               job task: keep the bronze key ledger in step with bronze
-src/netsuite_ingestion/ledger_check.py              job task: ledger + fingerprints vs bronze check, warns on mismatch
-src/netsuite_ingestion/canary/                      guard canary: tiny pipeline + task that asserts the full-refresh guard still works
-src/netsuite_ingestion/log_run_audit.py             job task: one aidq_metadata.run_audit row per (table, layer)
-tools/netsuite_gen.py, tools/pg_writer.py            synthetic data generator for the netsuite-sample source
-baseline/                                           before-agents baseline (v1) and once-flow experiment results
-tests/                                              pytest (no Spark, no database needed)
-```
 
-## Load types (source_table_def)
+## Metadata-driven design
 
-`watermark_col` decides the load type: **blank = FullLoad, non-blank = Incremental**
-(`load_mode` holds the matching label). Today: `netsuite_customers` is a
-FullLoad (batch table, overwritten each run); the other four are Incremental
-with `watermark_col = updated_date` and a start floor in `bronze_watermark`
-(ISO date, `1900-01-01` = load everything on the first run).
+| Control table | Drives |
+|---|---|
+| `source_table_def` | one row per source table: `dest_schema`, `business_key`, `watermark_col` (blank = FullLoad, set = Incremental), `bronze_watermark` (start floor), `load_mode` |
+| `source_columns` | the columns bronze reads, in `ordinal` order (`is_active` filters) |
+| `data_quality_rules` | per table: `rule_expr` (SQL boolean), `severity` HARD (reject) or SOFT (expectation metric only), `is_active` |
+| `run_audit` | written, not read: one row per (job run, table, layer) plus a `guard` row per run |
 
-## Incremental bronze (one streaming table per source)
+Adding a table, a column or a rule is a metadata change, not a code change. Code tolerates metadata that is one
+migration behind (for example a missing `is_active` counts as active), so migrations can go first and code second.
 
-`poc_bronze.<table>` is an append-only streaming table with two added columns,
-`_snapshot_date` (the `updated_date` value as a date) and `_loaded_at`. It is fed
-by `once=True` append flows planned at graph build (`metadata.plan_flows`):
+## Layers
 
-* **snapshot flow** per distinct source date at or above the floor, named
-  `<table>__<YYYYMMDD>`. A flow that already ran is not run again, so each
-  increment loads once. A new date, including one older than the current
-  maximum, loads on the next normal run.
-* **top-up flow** for late rows on an already-loaded date. Detection is by key,
-  never by row count (an update can move one row out of a date and a late row in
-  while the count stays the same), and it is cheap: Postgres computes one
-  **fingerprint per date** server-side (count of distinct `(business_key, date)`
-  pairs plus the sum of a 60-bit md5-derived bigint per pair) and returns one row
-  per date; the ledger stores the same numbers. Pairs are fetched only for dates whose
-  fingerprints differ, anti-joined with the ledger's pairs, and the missing pairs are
-  extracted by a flow named `<table>__<YYYYMMDD>__topup_<hash of the pending key set>`,
-  so a stale ledger reproduces the same name and does not load twice.
-  The fingerprint is defined once and computed three ways (Postgres SQL, Spark SQL,
-  a Python reference in `metadata.py`); `tests/test_fingerprint_integration.py`
-  (`NETSUITE_INTEGRATION=1`) proves the three agree and `tests/test_fingerprints.py`
-  pins known values offline.
+**Bronze** (`transformations/bronze.py`). FullLoad tables are batch tables overwritten on every run. Incremental
+tables are one append-only streaming table each, with `_snapshot_date` and `_loaded_at`, fed by `once=True`
+append flows planned at graph build (`metadata.plan_flows`):
 
-Silver reads that single table (`<table>_valid` view -> AUTO CDC keyed on
-`business_key`, sequenced by `updated_date`), so its streaming source never changes.
-Behavior of `once` flows on this runtime is documented in
-`baseline/once_flow_experiments.md`.
+* a **snapshot flow** per source date at or above the floor, named `<table>__<YYYYMMDD>`; a flow that already ran
+  is not run again, so each date loads once, including a new date older than the current maximum;
+* a **top-up flow** for late rows on an already-loaded date. Detection is by key, never by row count: Postgres
+  computes one **fingerprint per date** (count of distinct `(business_key, date)` pairs plus the sum of a 60-bit
+  md5-derived bigint per pair), the ledger stores the same numbers, and pairs are fetched only for dates whose
+  fingerprints differ. The flow is named after a hash of the pending key set
+  (`<table>__<YYYYMMDD>__topup_<hash>`), so a stale ledger reproduces the same name and does not load twice.
+  The fingerprint is computed three ways (Postgres SQL, Spark SQL, Python reference); `tests/test_fingerprints.py`
+  pins it and `tests/test_fingerprint_integration.py` (`NETSUITE_INTEGRATION=1`) proves the three agree.
 
-### The key ledger
+**The key ledger.** `<catalog>.ledger.bronze_keys (table_name, business_key, snapshot_date)` and
+`<catalog>.ledger.bronze_fingerprints` are plain Delta tables **outside** the pipeline, because a pipeline
+cannot read its own tables at graph build or inside a flow. `sync_ledger` appends what bronze holds after every
+run; `ledger_check` compares ledger and bronze both ways, prints `WARN` and writes a `ledger` row to `run_audit`
+on any mismatch (it never fails the job). Recovery: `sync_ledger --bronze-rebuild true`.
 
-`<catalog>.ledger.bronze_keys (table_name, business_key, snapshot_date)` plus
-`<catalog>.ledger.bronze_fingerprints (table_name, snapshot_date, row_count, fp_sum)` are plain
-Delta tables **outside** the pipeline: a pipeline cannot read its own tables at graph
-build or inside a flow. `sync_ledger` appends the pairs bronze holds after every run and refreshes the fingerprints of
-the dates that changed;
-`ledger_check` then compares pairs both ways and the stored fingerprints with fingerprints
-recomputed from bronze, prints `WARN` and logs a `ledger` row
-in `run_audit` on any mismatch (it never fails the job). Recovery: run
-`sync_ledger` with `--bronze-rebuild true`.
+**DQ** (`transformations/dq.py`). HARD rules build one validity predicate per table: passing rows form the
+streaming view `<table>_valid`, failing rows go to `poc_reject.rejected_rows` with the failed rule names. SOFT
+rules are attached to `<table>_valid` with `dp.expect_all`: rows are kept and violations appear as expectation
+metrics in the pipeline event log. `tools/check_soft_expectations.py` confirms every active SOFT rule is there
+and prints its passed / failed counts.
+
+**Silver** (`transformations/silver.py`). AUTO CDC (SCD Type 1) from `<table>_valid`, keyed on `business_key`
+and sequenced by `watermark_col`, for every table with both (all but `netsuite_customers`, a FullLoad).
+
+**Gold** (`transformations/gold.py`, SQL in `gold_sql.py`). Materialized views over silver, defined only when the
+silver tables they need exist:
+
+| Table | Grain | Columns |
+|---|---|---|
+| `poc_gold.gold_customer_revenue` | customer x calendar month of the transaction date | `transaction_count`, `line_count`, `revenue` (sum of line `amount`) |
+| `poc_gold.gold_customer_status` | customer with any membership or certification | `active_memberships`, `active_certifications`, `has_active_*`, `next_*_end`, `as_of_date` |
+
+A membership is active when its status is `Active` and today lies within `[start_date, end_date]`; a
+certification when today lies within its start and end dates (a NULL bound is open). The SQL is plain enough to
+run on DuckDB, where `tests/test_gold_sql.py` checks it.
+
+## The ingestion redesign and its experiments
+
+**v1** loaded bronze as one view per source date (`poc_bronze.<table>__<date>`) and silver as a streaming union of
+those views. It worked for full refreshes but a normal incremental run with a new date **failed every silver flow**
+("streaming sources added or removed"): the union changed shape.
+
+**v2** gives each incremental source one streaming table fed by `once` flows, so silver's streaming source never
+changes. Experiments on scratch pipelines (`baseline/once_flow_experiments.md`) established what this runtime
+does:
+
+* `once` flows accept JDBC batch reads, do not re-run on normal updates, and a new date loads only its slice;
+  a flow removed from code keeps its data; a full refresh re-runs every flow.
+* A pipeline cannot read its own tables at graph build or inside a flow, hence the external ledger. An anti-join
+  against that ledger works.
+* Defining flows is the cost, not running them: about 0.43 s per flow (1,600 flows = about 12 min per update
+  even when none run), so the default `flow_scope=pending_only` defines flows only for dates missing from the
+  ledger plus top-ups (13x faster than `all_dates`).
+* A streaming table with no flow fails the update, so an empty constant-named `<table>__anchor` flow is defined
+  when nothing else is.
+* A full refresh in `pending_only` left every bronze table empty (measured). No Spark conf reveals a full refresh,
+  but the pipeline's own event log does (`create_update.full_refresh` / `full_refresh_selection`), which made the
+  full-refresh guard possible.
+
+### Baseline results: v1 vs v2
+
+Same source data and defect configuration (seed 42, 2,005 injected defect rows), no agents running. v1 ran in
+prod, v2 in dev. Details: `baseline/before_agents_report.md` (v1) and `baseline/before_agents_report_v2.md` (v2).
+
+| | v1 (per-date views) | v2 (streaming bronze + ledger) |
+|---|---|---|
+| B: defects, full refresh | silver 2,451 / 1,952 / 9,902 / 29,710; 54 rejects | identical, and identical outcome for all 2,005 defect rows |
+| C: increment, normal run (223 late rows, drift column) | **failed**: all four silver flows stopped, silver unchanged | **succeeded**: all 223 late rows reached silver |
+| D: second increment, late rows onto loaded dates | not run | **succeeded** via top-up flows; bronze = source row-for-row in every table |
+| `run_audit` bronze counts | over-counted by 2 to 3 rows per table (leftover objects) | exact |
+| Full refresh without `bronze_rebuild=true` | would empty bronze | blocked by the guard, bronze unchanged |
+
+Silver counts are memberships / certifications / transactions / transaction_lines. What the DQ rules catch did not
+change: they only catch what they cover (invalid enums and a certification date cutoff are rejected; negative
+amounts, amount mismatches, orphan lines and invalid transaction types pass; duplicate and NULL keys are merged
+away by the key merge).
 
 ## Operating rules
 
 * **Normal runs are never a full refresh.**
-* **A full refresh must set `bronze_rebuild=true`, and this is enforced.** At graph build
-  `bronze.py` reads the update's `create_update` event from the pipeline's own event log and
-  raises if it is a full refresh (or a selective refresh naming a bronze table) without
-  `bronze_rebuild=true`. With the flag it ignores the ledger, defines a flow for every date and
-  no top-ups. Without the guard, a full refresh in `pending_only` scope left every bronze table
-  empty (measured), and one with top-ups enabled loaded late rows twice (bronze duplicates;
-  silver unaffected because AUTO CDC merges them).
-  Procedure: `databricks bundle deploy --var="bronze_rebuild=true"`, run the job with a full
-  refresh, then redeploy with the default `bronze_rebuild=false`.
-* `flow_scope` = `pending_only` (default: flows only for dates missing from the ledger, plus
-  top-ups) or `all_dates` (a flow for every source date each run). Planning costs about 0.45 s
-  per defined flow (1,600 flows = about 12 min per update, whether or not any flow runs), so
-  `pending_only` is the default (about 1 min for the same tables).
-* A streaming table with no flow fails the update, so `plan_flows` returns a constant-named
-  empty `<table>__anchor` flow when nothing else would be defined.
-* The guard fails closed: if the update's `create_update` event cannot be read it refuses to run in
-  `pending_only` scope. This was seen to happen intermittently (the event log is written
-  asynchronously and the event is sometimes not visible at graph build), so the read retries
-  5 times 10 s apart, the message says why the read failed and shows the latest event-log rows, and
-  the advice is to re-run the same update first.
-* When the guard blocks a refresh the update fails before any data changes. The message states what
-  was blocked, why, and the exact commands to re-run it:
+* **A full refresh must set `bronze_rebuild=true`, and this is enforced.** At graph build `bronze.py` reads the
+  update's `create_update` event from the pipeline's own event log and raises if it is a full refresh (or a
+  selective refresh naming a bronze table) without the flag. With the flag it ignores the ledger, defines a flow
+  for every date and no top-ups. The error message gives the exact commands:
   `bundle deploy --var bronze_rebuild=true`, `bundle run netsuite_ingestion_daily --pipeline-params
-  full_refresh=true`, `bundle deploy --var bronze_rebuild=false` (prod adds
-  `--var schedule_pause_status=PAUSED`).
+  full_refresh=true`, `bundle deploy --var bronze_rebuild=false` (prod adds `--var schedule_pause_status=PAUSED`).
+* The guard fails closed: if the event cannot be read it refuses to run in `pending_only` scope. The event log is
+  written asynchronously, so the read retries 5 times 10 s apart. **How many reads it needed is recorded**: the
+  pipeline writes `poc_bronze.guard_reads` on every update and `log_run_audit` copies it to `run_audit` as a
+  `guard` row (`rows_read` = reads; status `OK` on a first-read hit, `WARN` otherwise) and prints it in the task
+  output, so a platform slowdown shows before it blocks updates.
+* `flow_scope`: `pending_only` (default) or `all_dates` (a flow for every source date, slow; small date counts only).
+* Never `DROP` a `poc_bronze` table outside Lakeflow: silver's streaming checkpoint fails with
+  `DIFFERENT_DELTA_TABLE_READ_BY_STREAMING_SOURCE`; only a full refresh recovers.
+* No production deploy or run without the owner's approval (see `CLAUDE.md`).
 
-## Guard canary (check for platform changes)
+## Guard canary
 
-`guard_canary_check` (weekly, Mondays 07:00 UTC, **schedule PAUSED**: unpause deliberately) runs a tiny
-pipeline (`guard_canary`, same guard code as `bronze.py`) through four updates: normal, full refresh,
-selective refresh of its table, normal again. It fails unless normal updates complete, both refreshes are
-stopped by the guard and the canary table is untouched. Stopped by the fail-closed path (event not
-visible) counts as a warning, not a failure. A failure means the platform changed how a refresh is
-reported in the pipeline event log (`create_update.full_refresh` / `full_refresh_selection`) or `event_log()`
-access changed: fix the guard before the next full refresh. Run it by hand with
-`databricks bundle run guard_canary_check -t <target>`.
-Free Edition note: the task needs its own serverless compute plus one for each pipeline update; a running
-SQL warehouse counts too, so stop the warehouse first or the updates die with `RESOURCE_EXHAUSTED`.
-Serverless jobs retry a failed task, so a first-attempt failure can still end as a passing run.
-* Never `DROP` a `poc_bronze` table outside Lakeflow: silver's streaming checkpoint would fail
-  with `DIFFERENT_DELTA_TABLE_READ_BY_STREAMING_SOURCE`; only a full refresh recovers.
-* No production deploy or run without the owner's approval.
+`guard_canary_check` (weekly, Mondays 07:00 UTC, **schedule PAUSED**) runs a tiny pipeline with the same guard code
+through a normal update, a full refresh, a selective refresh and a normal update. It fails unless normal updates
+complete, both refreshes are blocked and the canary table is untouched (a fail-closed block counts as a warning).
+A failure means the platform changed how refreshes appear in the event log: fix the guard before the next full
+refresh. Run it with `databricks bundle run guard_canary_check -t <target>` after stopping the SQL warehouse.
 
 ## Known limitations
 
-* **Source deletes are not handled.** A row deleted (or moved to another date) in the source
-  stays in bronze, the ledger and silver; nothing removes it.
-* Two source rows with the same `(business_key, updated_date)` cannot be told apart: a late
-  duplicate of an already-loaded pair is never captured.
+**Data**
+
+* **Source deletes are not handled.** A row deleted (or moved to another date) in the source stays in bronze, the
+  ledger and silver; nothing removes it.
+* Two source rows with the same `(business_key, updated_date)` cannot be told apart: a late duplicate of an
+  already-loaded pair is never captured.
 * Rows whose watermark is NULL, or older than the floor, are never extracted.
-* Every normal run reads the distinct `(business_key, date)` pairs of each incremental source
-  once to find late rows; this scales with source size. Late pairs are capped (200,000 per table);
-  beyond that the run fails and asks for a `bronze_rebuild` full refresh.
-* The ledger lags by one run and depends on `sync_ledger`; a failed sync is what `ledger_check`
-  warns about.
-* `netsuite_customers` stays a FullLoad (blank watermark). `source_columns` still omits its
-  `created_date`/`updated_date`, which the source has; bronze therefore drops them.
-* Database tokens are ~1 hour OAuth credentials kept in the `netsuite_ingestion_poc` secret scope and
-  refreshed by the `refresh_credentials` task.
+* Every normal run reads the distinct `(business_key, date)` pairs of each incremental source to find late rows;
+  this scales with source size. Late pairs are capped (200,000 per table), beyond that the run fails and asks for
+  a `bronze_rebuild` full refresh.
+* The ledger lags by one run and depends on `sync_ledger`; a failed sync is what `ledger_check` warns about.
+* `netsuite_customers` is a FullLoad with no silver table, so gold is keyed by `customer_internal_id` only (no
+  company name). `source_columns` still omits its `created_date` / `updated_date`.
+* DQ rules catch only what they describe (see the baseline table above). SOFT rules never block anything.
+* `gold_customer_status` is recomputed on every update (it depends on today's date).
+* A blank `watermark_col` means FullLoad today; converting blanks to NULL is planned as migration 003.
 
-## Data access: direct JDBC, not Lakehouse Federation
+**Databricks Free Edition**
 
-Both source (`netsuite-sample`) and control (`aidq-metadata`) data live in Lakebase Postgres
-projects. Reads go straight over JDBC (`spark.read.format("jdbc")`, see `metadata.PgConn` /
-`read_jdbc_table`) rather than through a Unity Catalog foreign catalog: Postgres federation only
-supports username/password auth, and native Postgres login is disabled on both projects.
+* **One Lakebase project per account.** This account already has two (`netsuite-sample`, `aidq-metadata`), so no
+  further project can be added; dev and prod metadata are two branches of one project, and the source is shared by
+  dev and prod.
+* A Lakebase project holds at most 10 unarchived branches. The generator creates a backup branch before every data
+  change (`--init`, `--increment`), so branches must be cleaned up regularly.
+* All Lakebase endpoints were found **disabled** on 2026-09-30, a few days after the last activity (disabled
+  around 2026-09-27; cause not confirmed, most likely an inactivity policy). A job run fails until the endpoint is
+  re-enabled (`databricks postgres update-endpoint ... spec.disabled`).
+* At most 5 concurrent job tasks, and a small serverless quota: a running SQL warehouse plus a pipeline update plus
+  job tasks can fail with `RESOURCE_EXHAUSTED`. Stop the warehouse before the canary or back-to-back runs.
+* No account console or account-level APIs: no OIDC federation for CI (CI uses an OAuth M2M service principal).
+* A catalog cannot be created through the API on Default Storage, so dev uses schemas in catalog `workspace`.
+* Lakehouse Federation to Postgres supports only username/password, and native Postgres login is disabled on both
+  projects, so all reads go over JDBC with short-lived OAuth database tokens (about 1 hour, refreshed by
+  `refresh_credentials` at the start of every run).
 
-## Dev environment
+## Environments and CI/CD
 
-`dev` writes to schemas in the `workspace` catalog (`poc_bronze`, `poc_silver`, `poc_reject`, `canary`,
-`ledger`) because the prod pipeline owns the tables in `poc_netsuite` and a catalog cannot be created through
-the API on Default Storage. Dev and prod share the `netsuite-sample` source and the `aidq-metadata` tables.
-The v2 baseline (`baseline/before_agents_report_v2.md`) was produced in dev.
+`dev` writes to schemas in the `workspace` catalog (`poc_bronze`, `poc_silver`, `poc_reject`, `poc_gold`, `ledger`,
+`canary`) and reads the `dev` branch of `aidq-metadata`; `prod` writes to `poc_netsuite` and reads its
+`production` branch. Both read the same `netsuite-sample` source. CI/CD (pull request checks, deploy to dev on
+merge, canary, gated promotion to prod) is described in `docs/phase2_cicd_plan.md`; the current state of the
+work is in `docs/STATUS.md`.
 
-## Migration from the per-date bronze tables
+## Layout
 
-1. Metadata: `watermark_col = updated_date`, `bronze_watermark = 1900-01-01` (done, backup schema
-   `aidq_metadata_backup_202609251923`).
-2. Deploy with `bronze_rebuild=true`, run the job with a full refresh (silver's checkpoints move from
-   a multi-source union to the single bronze table), then redeploy with `bronze_rebuild=false`.
-   Rehearsed in dev: full refresh, then two normal increments, all green (`baseline/before_agents_report_v2.md`).
-3. Confirm the v2 baseline matches (`baseline/`), then, and only then, drop the old
-   `poc_bronze.<table>__<date>` views (including the four `__2026_08_01` leftovers).
+```
+databricks.yml                                   bundle config (targets dev / prod, variables)
+resources/                                       pipeline, job, guard canary
+src/netsuite_ingestion/metadata.py               JDBC readers, pure builders, bronze planning, guard
+src/netsuite_ingestion/gold_sql.py               gold SQL (engine-neutral, tested on DuckDB)
+src/netsuite_ingestion/transformations/          bronze.py, dq.py, silver.py, gold.py
+src/netsuite_ingestion/{refresh_credentials,sync_ledger,ledger_check,log_run_audit}.py   job tasks
+src/netsuite_ingestion/canary/                   guard canary pipeline and task
+tools/netsuite_gen.py, tools/pg_writer.py        synthetic data generator for the source
+tools/check_soft_expectations.py                 SOFT rules vs. pipeline event log
+migrations/                                      aidq_metadata schema migrations
+baseline/                                        v1 and v2 baselines, once-flow experiments
+tests/                                           pytest (no Spark or database needed)
+```
 
-## Running tests locally
+## Running tests, deploying, checking
 
 ```bash
-cd netsuite_ingestion
 python -m venv .venv
 .venv/Scripts/python -m pip install ".[dev,tools]"     # .venv/bin/python on Linux/macOS
 .venv/Scripts/python -m pytest
 git config core.hooksPath .githooks                     # pre-push: gitleaks + pytest
+
+databricks bundle validate -t dev --profile <PROFILE>
+databricks bundle deploy -t dev --profile <PROFILE>                         # prod needs the owner's approval
+databricks bundle run netsuite_ingestion_daily -t dev --profile <PROFILE>
+python tools/check_soft_expectations.py --pipeline-id <PIPELINE_ID> --meta-branch dev --profile <PROFILE>
 ```
 
-Contribution rules (branches and pull requests, no force-push, what must never be committed, no prod
-deploy without approval) are in `CLAUDE.md`. The same gitleaks and pytest checks run on every pull request
-(`.github/workflows/pr-checks.yml`).
-
-## Deploying and running
-
-```bash
-databricks bundle validate --profile <PROFILE>
-databricks bundle deploy -t <TARGET> --profile <PROFILE>          # prod needs the owner's approval
-databricks bundle run netsuite_ingestion_daily -t <TARGET> --profile <PROFILE>
-```
+Contribution rules (branches and pull requests, no force-push, what must never be committed, no prod deploy
+without approval) are in `CLAUDE.md`.
