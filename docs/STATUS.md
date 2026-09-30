@@ -8,8 +8,8 @@ Read this first, then run `git status` and check open PRs. Updated after every P
 required checks `gitleaks (full history)`, `pytest` and `bundle validate` (added 2026-09-30), administrators
 included, no force push or deletion. Secret scanning and push protection on. Local pre-push hook: gitleaks + pytest.
 
-**Pull requests.** Merged: #1-#9 and #11 (fix: dev `run_as`; the first deploy-dev run failed because the pipelines
-API cannot unset a `run_as` set in step A). Open: #10 (step F, promote-prod).
+**Pull requests.** Merged: #1-#11 (#11: dev `run_as` fix; the first deploy-dev run failed because the pipelines API
+cannot unset a `run_as` set in step A). Open: the prod-target PR (Step F setup, below).
 
 **Work in progress** (owner's instructions of 2026-09-30):
 * Part 1, close out Phase 1 in one dev-only PR: gold layer, SOFT-rule expectation check, guard read-retry count,
@@ -189,20 +189,35 @@ copy that holds the owner's bundle state.
   ci-prod in the prod target's `permissions`, and `poc_netsuite.poc_gold` (the prod metadata endpoint is
   enabled again since 2026-09-30).
 
+## 2g. Step F prod setup (approved and done 2026-09-30)
+
+* Service principal **ci-prod** with one OAuth secret (90 days, expires 2026-12-29), stored only as `prod`
+  environment secrets `DATABRICKS_HOST_PROD`, `DATABRICKS_CLIENT_ID_PROD`, `DATABRICKS_CLIENT_SECRET_PROD`.
+* GitHub environment **`prod`**: required reviewer = owner (self-review allowed: solo owner), deployment branches
+  `main` only. Repository-level secrets hold only the dev ones.
+* Lakebase roles `ci-prod` (no admin membership) on `aidq-metadata/production` and `netsuite-sample/production`.
+  Grants like dev: prod metadata USAGE on `aidq_metadata`, SELECT on the three config tables, SELECT + INSERT on
+  `run_audit`; source USAGE + SELECT on `netsuite` (default privileges for new tables).
+* Scope **`netsuite_ingestion_prod`**: ci-prod WRITE, owner MANAGE. ci-prod has no access to the dev or `poc` scope.
+* UC: USE CATALOG `poc_netsuite`; USE SCHEMA, CREATE TABLE, CREATE MATERIALIZED VIEW, SELECT, MODIFY on
+  `poc_bronze`, `poc_silver`, `poc_reject`, `poc_gold` (created); USE SCHEMA on `default`.
+* Verified as ci-prod: identity, Lakebase login and grants (allowed and denied), prod scope WRITE, no access to
+  other scopes, `bundle validate -t prod` from a clean checkout (no warnings).
+* PR (prod target): `run_as` and CAN_MANAGE = the deploying service principal (ci-prod via promote-prod),
+  `secret_scope: netsuite_ingestion_prod`; tests.
+* **Owner-run script pending:** `aidq_owner` on prod metadata with ci-prod as member (`grant_ci_prod.py`, same as
+  the dev script); promote-prod's `migrate --apply` needs it.
+
 ## 3. Decisions waiting for the owner
 
-1. Step F prod setup, asked for in one batch once #9 and #10 are merged and a CI dev run is green: ci-prod (OAuth
-   secret, Lakebase role and `aidq_owner` on prod metadata, grants), scope `netsuite_ingestion_prod` (ci-prod
-   WRITE), GitHub environment `prod` (required reviewer, main only) and its `DATABRICKS_*_PROD` secrets, `run_as`
-   and permissions for ci-prod in the prod target, `poc_netsuite.poc_gold`.
-2. Every prod step (plan section 5).
-3. Add `migrate plan (dev)` to the required checks too (green since 2026-09-30).
-4. The daily dev schedule (`docs/dev_daily_schedule.md`): settle its 4 blockers, then unpause.
-5. The ALL_PRIVILEGES grant on `poc_netsuite` for another user.
-
-Done 2026-09-30 (owner decisions): `[dev suhasv]` removed (`bundle destroy -t dev`: 2 jobs, 2 pipelines with their
-tables, the owner's dev bundle folder; `workspace.ledger.*` kept for the rebuild); `bundle validate` required; first
-ci-dev secret deleted; owner grants (dev `aidq_owner`, warehouse CAN_MANAGE, `workspace.default` USE SCHEMA only).
+1. Run `grant_ci_prod.py` (prod metadata ownership, above).
+2. First prod release, step by step (plan section 5, starting with the new step 0: take over the existing prod job
+   and pipeline with `bundle deployment bind`, ci-prod CAN_MANAGE on them, schemas `poc_netsuite.ledger` and
+   `poc_netsuite.canary`).
+3. Owner SELECT on the dev schemas (dev tables are owned by ci-dev now).
+4. Add `migrate plan (dev)` to the required checks.
+5. The daily dev schedule (`docs/dev_daily_schedule.md`): settle its 4 blockers, then unpause.
+6. The ALL_PRIVILEGES grant on `poc_netsuite` for another user.
 
 ## 4. Gotchas
 

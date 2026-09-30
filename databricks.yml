@@ -21,7 +21,8 @@ variables:
     description: >
       Secret scope holding the database credentials that refresh_credentials writes and every task reads.
       One scope per environment (docs/phase2_cicd_plan.md, section 3a), so each CI identity gets WRITE on
-      its own scope only. Prod stays on netsuite_ingestion_poc until netsuite_ingestion_prod exists.
+      its own scope only: dev netsuite_ingestion_dev, prod netsuite_ingestion_prod. The default is the old
+      shared scope, which stays until the first prod release on the new scope has run.
     default: netsuite_ingestion_poc
   meta_pg_token_key:
     description: >
@@ -72,10 +73,17 @@ targets:
 
   prod:
     mode: production
+    # Prod is deployed by the promote-prod workflow only, as the ci-prod service principal, which is then also the
+    # run identity (run_as) and the one principal with CAN_MANAGE (workspace admins keep theirs). Like dev, no id is
+    # hard-coded: the deploying service principal is ${workspace.current_user.userName}.
     workspace:
       root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    run_as:
+      service_principal_name: ${workspace.current_user.userName}
     variables:
       schedule_pause_status: "UNPAUSED"
+      # one scope per environment (plan section 3a); ci-prod has WRITE on it and nothing else
+      secret_scope: netsuite_ingestion_prod
     permissions:
-      - user_name: ${workspace.current_user.userName}
+      - service_principal_name: ${workspace.current_user.userName}
         level: CAN_MANAGE

@@ -82,3 +82,19 @@ class TestLedgerLocation:
 
         assert ledger_table_name("c") == "c.ledger.bronze_keys"
         assert fingerprint_table_name("c") == "c.ledger.bronze_fingerprints"
+
+
+class TestDeployIdentity:
+    """Dev and prod are deployed by CI service principals, which are also their run identities."""
+
+    @pytest.mark.parametrize("target", ["dev", "prod"])
+    def test_runs_as_the_deploying_service_principal(self, bundle, target):
+        assert bundle["targets"][target]["run_as"] == {"service_principal_name": "${workspace.current_user.userName}"}
+
+    def test_prod_manage_permission_is_the_service_principal(self, bundle):
+        assert bundle["targets"]["prod"]["permissions"] == [
+            {"service_principal_name": "${workspace.current_user.userName}", "level": "CAN_MANAGE"}
+        ]
+
+    def test_prod_uses_its_own_scope(self, bundle):
+        assert _resolved_var(bundle, "prod", "secret_scope") == "netsuite_ingestion_prod"

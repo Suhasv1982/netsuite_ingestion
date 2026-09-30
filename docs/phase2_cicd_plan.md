@@ -280,6 +280,14 @@ Sequence:
 Every step below runs behind the prod gate (including the release-gate step of section 2) and, apart from 1, only
 after your approval.
 
+0. **Take over the existing prod resources (owner's OK).** Today's prod job and pipeline were deployed by the owner and
+   their bundle state lives in the owner's workspace folder; ci-prod deploys from its own folder, so a plain deploy
+   would create a second job and pipeline that then fail on the `poc_netsuite` tables the existing pipeline owns.
+   Before the first ci-prod deploy: give ci-prod CAN_MANAGE on the existing `netsuite_ingestion_daily` job and
+   `netsuite_ingestion_poc` pipeline, then `databricks bundle deployment bind` both (as ci-prod) so its deploy
+   updates them in place (same pipeline id, tables kept, `run_as` becomes ci-prod). `guard_canary` has no prod
+   instance yet. Also needed then: schemas `poc_netsuite.ledger` and `poc_netsuite.canary` (or CREATE SCHEMA for
+   ci-prod on the catalog), and `aidq_owner` on prod metadata (owner-run script).
 1. Backups: Lakebase branch `pre-release-<version>` of `aidq-metadata` production, schema copy of `aidq_metadata`,
    and the current metadata state; confirm the branch quota is not exhausted.
 2. `migrate --plan` then `--apply` for the metadata migrations (`001_agent_governance`, `002_incident_compute_quota`)
