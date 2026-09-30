@@ -78,11 +78,12 @@ def write_pg_rows(spark, conn: PgConn, schema: str, table: str, rows_schema, row
     )
 
 
-def pg_conn_from_conf(spark, dbutils, prefix: str, secret_scope: str = "netsuite_ingestion_poc") -> PgConn:
+def pg_conn_from_conf(spark, dbutils, prefix: str, secret_scope: str | None = None) -> PgConn:
     """Build a PgConn from pipeline configuration entries named
     <prefix>_pg_host / <prefix>_pg_user / <prefix>_pg_database, plus the
-    OAuth token read directly from the `secret_scope` Databricks secret
-    scope (key "<prefix>_pg_token", or the value of the optional configuration entry
+    OAuth token read directly from a Databricks secret scope: `secret_scope`, else the
+    `secret_scope` configuration entry (per target: netsuite_ingestion_dev / the prod scope), else
+    "netsuite_ingestion_poc" (key "<prefix>_pg_token", or the value of the optional configuration entry
     <prefix>_pg_token_key -- dev and prod use different keys so that one target's
     refresh_credentials task can never overwrite the other's token).
 
@@ -97,7 +98,7 @@ def pg_conn_from_conf(spark, dbutils, prefix: str, secret_scope: str = "netsuite
         host=spark.conf.get(f"{prefix}_pg_host"),
         user=spark.conf.get(f"{prefix}_pg_user"),
         token=dbutils.secrets.get(
-            scope=secret_scope, key=spark.conf.get(f"{prefix}_pg_token_key", f"{prefix}_pg_token")
+            scope=secret_scope or spark.conf.get("secret_scope", "netsuite_ingestion_poc"), key=spark.conf.get(f"{prefix}_pg_token_key", f"{prefix}_pg_token")
         ),
         database=spark.conf.get(f"{prefix}_pg_database", "databricks_postgres"),
     )

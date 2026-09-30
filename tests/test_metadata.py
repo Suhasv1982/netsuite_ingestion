@@ -268,3 +268,18 @@ class TestPgConnFromConf:
         conf = {"meta_pg_host": "h", "meta_pg_user": "u", "meta_pg_token_key": "meta_pg_token_dev"}
         pg_conn_from_conf(self._Spark(conf), dbu, "meta")
         assert dbu.secrets.asked == ("netsuite_ingestion_poc", "meta_pg_token_dev")
+
+    def test_scope_comes_from_the_pipeline_configuration(self):
+        from metadata import pg_conn_from_conf
+
+        dbu = self._Dbutils()
+        conf = {"meta_pg_host": "h", "meta_pg_user": "u", "secret_scope": "netsuite_ingestion_dev"}
+        pg_conn_from_conf(self._Spark(conf), dbu, "meta")
+        assert dbu.secrets.asked == ("netsuite_ingestion_dev", "meta_pg_token")
+
+    def test_explicit_scope_wins(self):
+        from metadata import pg_conn_from_conf
+
+        dbu = self._Dbutils()
+        pg_conn_from_conf(self._Spark({"meta_pg_host": "h", "meta_pg_user": "u", "secret_scope": "x"}), dbu, "meta", "y")
+        assert dbu.secrets.asked == ("y", "meta_pg_token")

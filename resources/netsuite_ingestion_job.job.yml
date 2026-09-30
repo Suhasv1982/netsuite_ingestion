@@ -12,7 +12,7 @@ resources:
             python_file: ../src/netsuite_ingestion/refresh_credentials.py
             parameters:
               - "--secret-scope"
-              - "netsuite_ingestion_poc"
+              - "${var.secret_scope}"
               - "--source-endpoint"
               - "projects/netsuite-sample/branches/production/endpoints/primary"
               - "--source-key"
@@ -37,7 +37,7 @@ resources:
             python_file: ../src/netsuite_ingestion/log_run_audit.py
             parameters:
               - "--secret-scope"
-              - "netsuite_ingestion_poc"
+              - "${var.secret_scope}"
               - "--meta-pg-host"
               - "${var.meta_pg_host}"
               - "--meta-pg-user"
@@ -60,7 +60,7 @@ resources:
               - "--catalog"
               - "${var.catalog}"
               - "--secret-scope"
-              - "netsuite_ingestion_poc"
+              - "${var.secret_scope}"
               - "--meta-pg-host"
               - "${var.meta_pg_host}"
               - "--meta-pg-user"
@@ -81,7 +81,7 @@ resources:
               - "--catalog"
               - "${var.catalog}"
               - "--secret-scope"
-              - "netsuite_ingestion_poc"
+              - "${var.secret_scope}"
               - "--meta-pg-host"
               - "${var.meta_pg_host}"
               - "--meta-pg-user"
