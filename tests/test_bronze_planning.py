@@ -22,7 +22,11 @@ from metadata import (
     ledger_diff,
     ledger_key,
     pending_key_hash,
+    guard_audit_row,
+    guard_reads_row,
+    pick_update_id,
     plan_flows,
+    read_create_update_attempts,
     read_create_update_detail,
     refresh_guard_error,
     snapshot_flow_name,
@@ -394,3 +398,74 @@ class TestReadCreateUpdate:
         spark = FakeSpark([[], [], rows])
         event, note = read_create_update_detail(spark, attempts=2)
         assert event is None and "latest event_log rows" in note and "create_update/6ee304cd/01:31:07" in note
+
+
+class TestGuardReadCount:
+    """The number of event-log reads the guard needed reaches run_audit (layer `guard`)."""
+
+    @pytest.fixture(autouse=True)
+    def no_sleep(self, monkeypatch):
+        import time
+
+        monkeypatch.setattr(time, "sleep", lambda s: None)
+
+    def test_first_read_counts_one(self):
+        spark = FakeSpark([_row('{"create_update": {"full_refresh": false}}')])
+        assert read_create_update_attempts(spark) == ({"full_refresh": False}, "", 1)
+
+    def test_retries_are_counted(self):
+        spark = FakeSpark([[], RuntimeError("boom"), _row('{"create_update": {"full_refresh": false}}')])
+        assert read_create_update_attempts(spark)[2] == 3
+
+    def test_not_found_reports_every_attempt(self):
+        event, note, reads = read_create_update_attempts(FakeSpark([[]] * 4), attempts=3)
+        assert event is None and reads == 3
+
+    def test_not_attempted_counts_zero(self):
+        assert read_create_update_attempts(FakeSpark([], conf={}))[2] == 0
+
+    def test_row_shape(self):
+        assert guard_reads_row("u1", 2, True, "x" * 2000) == ("u1", 2, True, "x" * 1000)
+        assert guard_reads_row(None, 0, False, None) == ("", 0, False, "")
+
+
+class TestGuardAuditRow:
+    GUARD = {"update_id": "u1", "reads": 1, "event_found": True, "note": ""}
+
+    def _row(self, guard, expected="u1"):
+        return guard_audit_row(guard, expected, "run-7", None, None)
+
+    def test_found_on_first_read_is_ok(self):
+        r = self._row(self.GUARD)
+        assert (r["layer"], r["status"], r["rows_read"], r["table_id"], r["error"]) == ("guard", "OK", 1, None, None)
+
+    def test_retries_warn_with_the_count(self):
+        r = self._row({**self.GUARD, "reads": 3})
+        assert r["status"] == "WARN" and r["rows_read"] == 3 and "after 3 read(s)" in r["error"]
+
+    def test_not_found_warns_with_the_note(self):
+        r = self._row({**self.GUARD, "reads": 5, "event_found": False, "note": "no create_update event was visible"})
+        assert r["status"] == "WARN" and "NOT found" in r["error"] and "no create_update event" in r["error"]
+
+    def test_a_row_from_another_update_is_not_reported_as_this_one(self):
+        r = self._row(self.GUARD, expected="u2")
+        assert r["status"] == "WARN" and r["rows_read"] is None and "u2" in r["error"]
+
+    def test_missing_table_warns(self):
+        assert self._row(None)["status"] == "WARN"
+
+    def test_unknown_update_id_trusts_the_latest_row(self):
+        assert self._row(self.GUARD, expected=None)["status"] == "OK"
+
+
+class TestPickUpdateId:
+    def test_latest_update_inside_the_task_window(self):
+        updates = [("old", 100), ("mine", 1_050), ("retry", 1_200), ("later", 5_000)]
+        assert pick_update_id(updates, 1_000, 2_000) == "retry"
+
+    def test_open_window_while_the_task_runs(self):
+        assert pick_update_id([("a", 1_500)], 1_000, None) == "a"
+
+    def test_none_inside_the_window(self):
+        assert pick_update_id([("old", 100)], 1_000, 2_000) is None
+        assert pick_update_id([("a", 1_500)], None, None) is None

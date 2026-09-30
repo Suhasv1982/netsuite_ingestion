@@ -58,8 +58,10 @@ from metadata import (
     key_filter,
     pg_conn_from_conf,
     plan_flows,
+    GUARD_READS_TABLE,
+    guard_reads_row,
     read_jdbc_table,
-    read_create_update_detail,
+    read_create_update_attempts,
     refresh_guard_error,
     read_source_columns,
     read_table_defs,
@@ -76,7 +78,8 @@ table_defs = read_table_defs(spark, meta_conn)
 columns_by_table = read_source_columns(spark, meta_conn)
 
 # Hard guard: a full refresh of bronze is only allowed with bronze_rebuild=true (see metadata.refresh_guard_error).
-_create_update, _create_update_note = read_create_update_detail(spark)
+_create_update, _create_update_note, _guard_reads = read_create_update_attempts(spark)
+print(f"guard: create_update event {'found' if _create_update is not None else 'NOT found'} after {_guard_reads} read(s)")
 _guard_error = refresh_guard_error(
     _create_update,
     [bronze_table_name(t["source_table"]) for t in table_defs if is_incremental(t)],
@@ -90,7 +93,20 @@ _guard_error = refresh_guard_error(
     },
 )
 if _guard_error:
-    raise RuntimeError(_guard_error)
+    raise RuntimeError(f"{_guard_error}\n(guard event-log reads: {_guard_reads})")
+
+
+@dp.table(
+    name=GUARD_READS_TABLE,
+    comment="How many event-log reads the full-refresh guard needed in the latest update (copied to run_audit, layer guard)",
+)
+def guard_reads():
+    row = guard_reads_row(
+        spark.conf.get("spark.pipelines.updateId", None), _guard_reads, _create_update is not None, _create_update_note
+    )
+    return spark.createDataFrame(
+        [row], "update_id STRING, reads INT, event_found BOOLEAN, note STRING"
+    ).withColumn("recorded_at", F.current_timestamp())
 
 
 def _register_full_load_bronze(table_def: dict, column_list: list[str]) -> None:
