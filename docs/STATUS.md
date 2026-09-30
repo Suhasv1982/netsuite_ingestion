@@ -186,7 +186,8 @@ copy that holds the owner's bundle state.
     run (never with `bronze_rebuild`; the rebuild's full refresh is started by hand, plan section 5).
 * **Not created (ask first):** ci-prod, its OAuth secret and Lakebase role, scope `netsuite_ingestion_prod`, the
   `prod` environment and the `DATABRICKS_*_PROD` environment secrets. Also needed then: `run_as` ci-prod and
-  ci-prod in the prod target's `permissions`, `poc_netsuite.poc_gold`, and re-enabling the prod metadata endpoint.
+  ci-prod in the prod target's `permissions`, and `poc_netsuite.poc_gold` (the prod metadata endpoint is
+  enabled again since 2026-09-30).
 
 ## 3. Decisions waiting for the owner
 
