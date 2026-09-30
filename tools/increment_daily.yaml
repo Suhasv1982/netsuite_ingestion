@@ -1,0 +1,10 @@
+# Low-defect config for the proposed daily dev increment (docs/dev_daily_schedule.md).
+# Every rate is a fraction of the eligible rows emitted in that run (see defects.example.yaml).
+# Enough to exercise every HARD and SOFT rule path each day without drowning silver in defects.
+allow_overlap: false
+
+rates:
+  late_arriving: 0.05       # top-up flows (late rows onto already-loaded dates)
+  invalid_enum: 0.005       # HARD rules -> poc_reject.rejected_rows
+  end_before_start: 0.005   # SOFT rule "End Not Before Start" (dev metadata) + HARD date cutoff paths
+  amount_mismatch: 0.005    # SOFT rule "Amount Equals Qty x Rate" (dev metadata)

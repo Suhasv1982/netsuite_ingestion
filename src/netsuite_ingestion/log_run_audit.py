@@ -22,6 +22,12 @@ Layers logged per source table (table_id from aidq_metadata.source_table_def):
             metadata.has_merge_keys); rows_read = dq's rows_written;
             rows_written = current row count in poc_silver.<table>
 
+Plus one pipeline-wide row (table_id NULL):
+  guard  -- rows_read = event-log reads the full-refresh guard needed in this
+            run's pipeline update (from poc_bronze.guard_reads); status OK when
+            the event was found on the first read, WARN otherwise (see
+            metadata.guard_audit_row). Also printed to the task output.
+
 If the run_pipeline task did not succeed, one row per (table, layer) is
 still written with status=FAILED and the task's error message instead of
 row counts (the catalog state may not reflect a completed run).
@@ -39,7 +45,15 @@ from databricks.sdk.service.jobs import RunResultState
 from pyspark.sql import SparkSession
 from pyspark.sql.types import IntegerType, LongType, StringType, StructField, StructType, TimestampType
 
-from metadata import PgConn, has_merge_keys, read_table_defs, write_pg_rows
+from metadata import (
+    GUARD_READS_TABLE,
+    PgConn,
+    guard_audit_row,
+    has_merge_keys,
+    pick_update_id,
+    read_table_defs,
+    write_pg_rows,
+)
 
 RUN_AUDIT_SCHEMA = StructType(
     [
@@ -146,6 +160,32 @@ def _success_rows(spark, catalog: str, table_defs: list[dict], run_id: str, star
     return rows
 
 
+def _pipeline_update_id(w: WorkspaceClient, task):
+    pipeline_id = task.pipeline_task.pipeline_id if task.pipeline_task else None
+    if not pipeline_id:
+        return None
+    resp = w.pipelines.list_updates(pipeline_id=pipeline_id, max_results=25)
+    updates = [(u.update_id, u.creation_time) for u in (resp.updates or [])]
+    return pick_update_id(updates, task.start_time, task.end_time)
+
+
+def _guard_row(spark, w, catalog: str, task, run_id: str, started_at, ended_at) -> dict:
+    """run_audit `guard` row: event-log reads the bronze guard needed in this run's pipeline update."""
+    try:
+        update_id = _pipeline_update_id(w, task)
+    except Exception as exc:  # never fail the audit over the guard row
+        print(f"WARN guard: could not list pipeline updates: {type(exc).__name__}: {str(exc)[:200]}")
+        update_id = None
+    table = f"{catalog}.{GUARD_READS_TABLE}"
+    guard = None
+    if spark.catalog.tableExists(table):
+        rows = spark.table(table).orderBy("recorded_at", ascending=False).limit(1).collect()
+        guard = rows[0].asDict() if rows else None
+    row = guard_audit_row(guard, update_id, run_id, started_at, ended_at)
+    print(f"guard: {row['status']} reads={row['rows_read']} {row['error'] or ''}".rstrip())
+    return row
+
+
 def _failure_rows(table_defs: list[dict], run_id: str, started_at, ended_at, error: str) -> list[dict]:
     rows = []
     for td in table_defs:
@@ -199,6 +239,7 @@ def main() -> None:
     else:
         error = (task.state.state_message if task.state else None) or f"run_pipeline task result_state={result_state}"
         rows = _failure_rows(table_defs, run_id_str, started_at, ended_at, error)
+    rows.append(_guard_row(spark, w, args.catalog, task, run_id_str, started_at, ended_at))
 
     write_pg_rows(spark, meta_conn, "aidq_metadata", "run_audit", RUN_AUDIT_SCHEMA, rows)
     print(f"Logged {len(rows)} run_audit rows for job run {args.run_id}")
