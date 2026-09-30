@@ -12,7 +12,7 @@ live until it is merged, and every workflow file is shown to the owner before it
 | Secret scanning and push protection are free on public repos (they were off while the repo was private). To be switched on with the branch-protection change. | GitHub API: `Secret scanning is disabled on this repository` (checked while private). |
 | Databricks Free Edition has no account console and no account-level APIs, so OIDC federation for GitHub Actions (which needs `account service-principal-federation-policy`) is not available. | Docs: "No access to the account console or account-level APIs"; `databricks account ...` returns Not Found here. |
 | Personal access tokens work. One exists ("earthquake_analytics project", created 2026-04-08). | `databricks tokens list`. |
-| Workspace-level service principals and OAuth secrets exist in the CLI (`service-principals`, `service-principal-secrets-proxy`). Creating one on Free is **not yet verified**. | CLI help; only app-owned SPs exist today. |
+| Workspace-level service principals and OAuth M2M secrets **work on Free Edition** (verified 2026-09-30 with `ci-dev`). | Spike results, section 3. |
 | Free Edition allows at most 5 concurrent job tasks per account, and the free serverless quota was hit when the canary ran with a SQL warehouse also running. | Docs; canary run history in `baseline/before_agents_report_v2.md`. |
 | A Lakebase project allows 10 unarchived branches. After the 2026-09-26 cleanup and the new `dev` branch, `netsuite-sample` has 5 (production + 4 backups) and `aidq-metadata` has 2. | `databricks postgres list-branches`. |
 | The key ledger and its fingerprints are **per target, not shared**: every reader and writer builds the name from `${var.catalog}` (`dev` = `workspace`, `prod` = `poc_netsuite`), so dev uses `workspace.ledger.bronze_keys` / `bronze_fingerprints` and prod uses `poc_netsuite.ledger.*`. Only the dev tables exist today; prod's are created by `ensure_ledger_table` on the first prod run with the new code. | `resources/netsuite_ingestion_poc.pipeline.yml` (`ledger_table`, `ledger_fingerprint_table`), `sync_ledger` / `ledger_check` `--catalog ${var.catalog}`, `metadata.ledger_table_name`; `system.information_schema.tables WHERE table_schema = 'ledger'` on 2026-09-30. |
@@ -156,35 +156,92 @@ Ranked by preference (secrets are created by you or with your approval only):
    (`databricks service-principal-secrets-proxy create <id>`), stored as `DATABRICKS_CLIENT_ID` /
    `DATABRICKS_CLIENT_SECRET` (plus `DATABRICKS_HOST` as a variable) with `DATABRICKS_AUTH_TYPE=oauth-m2m`.
    Rights: `ci-dev` gets the dev schemas in `workspace` and the dev jobs; `ci-prod` gets `poc_netsuite` and the prod
-   jobs. Rotate the secrets every 90 days. **Unverified on Free Edition; the spike below decides it.**
+   jobs. Rotate the secrets every 90 days. **Chosen: the 2026-09-30 spike showed it works on Free Edition.**
+   Host and client id are stored as GitHub **secrets**, not variables, so they are masked in the public Actions logs
+   (`bundle validate` prints the identity and workspace path).
 2. **OIDC federation** (no long-lived secret): not possible on Free Edition (needs account-level APIs). It becomes
    the preferred option if the workspace ever moves to a paid account.
 3. **Personal access token** as the fallback: a new dedicated token (comment `ci-netsuite-ingestion`, 90-day
    lifetime) stored as `DATABRICKS_TOKEN`. Drawbacks: tied to your identity, carries your admin rights, and jobs
    would run as you. Do not reuse the existing "earthquake_analytics" token.
 
-### SP spike (approved 2026-09-30 for `ci-dev` only)
+### SP spike: results (2026-09-30, `ci-dev` only)
 
-Create `ci-dev` only, run the checks below with its OAuth credential, report the results, and **ask before
-creating `ci-prod`**. Anything the spike creates is listed in the report so it can be removed if the answer is
-"use a PAT".
+`ci-dev` was created (display name `ci-dev`) with one OAuth secret (90-day lifetime, expires 2026-12-29).
+`ci-prod` is **not** created; ask first.
 
-1. Create the SP and an OAuth secret; `databricks current-user me` as the SP.
-2. `bundle validate -t dev` as the SP.
-3. **Secret scope `netsuite_ingestion_poc`: WRITE** for `ci-dev` (`refresh_credentials` writes the minted tokens
-   with `put_secret`, so READ is not enough). Check that WRITE on the scope does not let it read or overwrite
-   anything beyond this scope. Note: scope ACLs are per scope, not per key, so `ci-dev` with WRITE could overwrite
-   `meta_pg_token` (prod's key) too; the spike reports whether that is acceptable or whether dev needs its own scope.
-4. **`run_as` in the bundle**: `run_as: { service_principal_name: <ci-dev application id> }` on the dev target, then
-   deploy and run the job and pipeline. Checks: `run_as` is accepted with `mode: development` and for the pipeline;
-   the `[dev <user>]` name prefix and the bundle `root_path` depend on the deploying identity, so a CI deploy
-   creates a **separate** set of dev resources from the ones deployed by hand (the report lists both sets and
-   proposes which to keep).
-5. `pg_user` defaults to `${workspace.current_user.userName}`, which becomes the SP's application id: the SP needs a
-   Lakebase Postgres role on `aidq-metadata/dev` and on `netsuite-sample/production` (read-only there), and
-   `generate-database-credential` must work under the SP.
-6. UC rights: USE CATALOG `workspace`, and create/modify on the dev schemas (`poc_bronze`, `poc_silver`,
-   `poc_reject`, `ledger`, `canary`, `default`).
+| # | Check | Result |
+|---|---|---|
+| 1 | Create a workspace SP and an OAuth secret on Free Edition | **Works.** `current-user me` as the SP returns it. |
+| 2 | `bundle validate -t dev` and `-t prod --var schedule_pause_status=PAUSED` as the SP | **Both OK.** Prod prints one warning: its bundle `permissions` name only the owner, not the deploying SP. Harmless for validate; for `ci-prod` deploys, the prod target's permissions must list `ci-prod`. |
+| 3 | `generate-database-credential` for `aidq-metadata/dev` as the SP | **Works without any grant.** Logging in with it fails (`password authentication failed`): the SP has **no Postgres role** yet. |
+| 4 | Secret scope WRITE on a dev-only scope (`netsuite_ingestion_dev`, created with approval) | **Works:** put, list, get and delete a test key. The SP **cannot** get, put or list in `netsuite_ingestion_poc`, and cannot change ACLs of the dev scope. Test key removed. |
+| 5 | Can the SP create scopes? (a probe expected to be denied) | **Yes.** The workspace lets any user or SP create secret scopes; the creator gets MANAGE. The probe left an empty scope `ci_dev_probe`, which stays until the owner approves deleting it. |
+| 6 | `run_as` with `mode: development`, and for the pipeline | **Not tested yet:** needs a deploy as the SP, which needs items 3/7 below first. |
+
+Still needed before CI can **deploy and run** dev (each shown to the owner before it is done):
+
+* Postgres role for the SP (application id) on `aidq-metadata/dev` (read/write on `aidq_metadata`) and on
+  `netsuite-sample/production` (read-only).
+* UC grants on catalog `workspace`: USE CATALOG, and USE SCHEMA / CREATE TABLE / MODIFY / SELECT on the dev schemas
+  (`poc_bronze`, `poc_silver`, `poc_reject`, `ledger`, `canary`, `default`), or CREATE SCHEMA where they do not exist.
+* The code change of section 3a (scope per target).
+
+### 3a. Secret scopes per environment (decided 2026-09-30)
+
+Scopes are split per environment regardless of the spike: `netsuite_ingestion_dev` and `netsuite_ingestion_prod`.
+`ci-dev` gets WRITE on the dev scope only; `ci-prod` later gets WRITE on the prod scope only. The owner keeps MANAGE
+on both. Creating or deleting a scope is always asked first.
+
+Today everything is in `netsuite_ingestion_poc`: `source_pg_token` (shared), `meta_pg_token` (prod) and
+`meta_pg_token_dev` (dev). All three are **short-lived OAuth tokens minted by `refresh_credentials` at the start of
+every run**, so nothing needs copying: the first run in each environment writes its own keys.
+
+Migration, in order:
+
+1. **Code (one PR):** new bundle variable `secret_scope` (dev `netsuite_ingestion_dev`, prod
+   `netsuite_ingestion_prod`) passed to every job task (`--secret-scope ${var.secret_scope}`, replacing the four
+   hard-coded `netsuite_ingestion_poc`) and to the pipeline configuration (`secret_scope`), read by
+   `metadata.pg_conn_from_conf` instead of its hard-coded default. Key names become the same in both scopes
+   (`source_pg_token`, `meta_pg_token`), so `meta_pg_token_key` is dropped. `test_bundle_targets.py` asserts the scope
+   differs per target and that no resource file names a scope literally.
+2. **Dev:** `netsuite_ingestion_dev` exists (created in the spike, `ci-dev` WRITE). The first dev run after the code
+   PR writes the dev keys.
+3. **Prod (with the first prod release, section 5):** create `netsuite_ingestion_prod` (ask), grant `ci-prod` WRITE
+   (ask), deploy; the first prod run writes the prod keys.
+4. **Cleanup:** after both environments have run on their own scope, delete `netsuite_ingestion_poc` (ask). Until
+   then prod keeps using it, so nothing breaks between steps.
+
+Residual risk: any workspace user or SP can **create** scopes (spike item 5). That does not give access to existing
+scopes, and CI never creates scopes.
+
+### 3b. Dev resources: CI-deployed dev becomes canonical (decided 2026-09-30)
+
+Dev-mode names and the bundle root depend on the deploying identity, so CI's dev deploy creates a second set
+(`[dev <ci-dev>] ...`, root under the SP's workspace folder) next to the hand-deployed `[dev suhasv]` set. The CI set
+becomes the canonical dev.
+
+**Expected conflict, to verify at the first CI deploy:** both sets write the same tables, because dev mode prefixes
+resource names but **not** catalog or schema: both pipelines target `workspace.poc_bronze.*` / `poc_silver.*` /
+`poc_reject.*`, both jobs write `workspace.ledger.*`, and both canaries use `workspace.canary`. A Unity Catalog table
+created by a pipeline is owned by that pipeline, so the CI pipeline's first update is expected to fail on the tables
+the hand-deployed pipeline owns. The deploy itself should succeed; the **run** is where it breaks.
+
+Sequence:
+
+1. CI deploys dev (`bundle deploy -t dev` as `ci-dev`) and `bundle validate` passes; no run yet.
+2. Proposal to the owner, before anything is removed: the list of hand-deployed resources (jobs
+   `[dev suhasv] netsuite_ingestion_daily` and `[dev suhasv] guard_canary_check`, pipelines
+   `[dev suhasv] netsuite_ingestion_poc` and `[dev suhasv] guard_canary`, the bundle folder
+   `.bundle/netsuite_ingestion/dev` under the owner's workspace folder), and the dev data each takes with it.
+   Deleting a pipeline drops the tables it owns (`workspace.poc_bronze/poc_silver/poc_reject` tables and
+   `workspace.canary`). Data check before asking: everything worth keeping from dev is already in the repo
+   (`baseline/v2/*`, stripped) or in the `aidq-metadata/dev` Lakebase branch, which is not touched; the dev
+   ledger (`workspace.ledger.*`) is not pipeline-owned and is rebuilt by the first CI run anyway.
+3. With the owner's OK only: `bundle destroy -t dev` as the owner (removes exactly the hand-deployed set).
+   Resources of other bundles (for example `[dev suhasv] earthquake_analytics_etl_job`) are not touched.
+4. First CI dev run with `bronze_rebuild=true` (bronze is rebuilt from the source; `sync_ledger` rebuilds the
+   ledger), then one normal run; `ledger_check` must report OK. This is also where `run_as` (spike item 6) is tested.
 
 ## 4. Migrations per environment
 
@@ -247,8 +304,9 @@ after your approval.
 
 ## 6. Open questions
 
-* Does workspace-level SP creation work on Free Edition, with scope WRITE and `run_as` (section 3, spike)?
-* Does scope-level WRITE for `ci-dev` require moving dev's token to its own scope (section 3, spike item 3)?
+* Does `run_as` work with `mode: development` and for the pipeline (section 3, spike item 6)? Tested at the first
+  CI dev run.
+* Is the pipeline table-ownership conflict between the two dev sets real (section 3b)? Seen at the first CI dev run.
 * Migration content: `001_agent_governance.sql` (you will provide it) and the `COMPUTE_QUOTA` category change.
 
 ## 7. Revisions approved 2026-09-30
@@ -262,3 +320,11 @@ after your approval.
 6. One `databricks-workspace` concurrency group, `cancel-in-progress: false` (section 1).
 7. CLAUDE.md: no `pull_request_target`; CODEOWNERS advisory only; scheduled workflows auto-disable after 60 days.
 8. `bundle validate` becomes a required status check once it exists (sections 1, 2).
+
+Later on 2026-09-30:
+
+9. Secret scopes split per environment, `netsuite_ingestion_dev` / `netsuite_ingestion_prod`, WRITE for the matching
+   CI identity only (section 3a).
+10. CI-deployed dev resources become the canonical dev; the hand-deployed set is removed only after the owner
+    approves a list of what goes (section 3b).
+11. SP spike run: OAuth M2M works on Free Edition and is the CI login method (section 3).
