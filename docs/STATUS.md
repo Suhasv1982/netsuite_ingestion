@@ -52,7 +52,7 @@ prod cannot run until it is re-enabled (ask).
   privileges for new tables), nothing on the backup schemas. Migration (DDL) rights: step C/D.
 * UC: USE CATALOG `workspace`; USE SCHEMA, CREATE TABLE, CREATE MATERIALIZED VIEW, SELECT, MODIFY on
   `workspace.poc_bronze`, `poc_silver`, `poc_reject`, `poc_gold` (new, created 2026-09-30), `ledger`, `canary`,
-  `default`.
+  `default`. **`default` is too broad** (it holds other projects' tables): reduce to USE SCHEMA (owner SQL).
 * Scope `netsuite_ingestion_dev`, ci-dev WRITE (owner MANAGE). ci-dev has no access to `netsuite_ingestion_poc`.
 * Verified as ci-dev: Lakebase login and the grants (allowed and denied cases), scope WRITE, `bundle validate`
   dev + prod, and `run_as` (accepted with `mode: development`; job and both pipelines run as ci-dev).
@@ -85,6 +85,38 @@ prod cannot run until it is re-enabled (ask).
   ownership of `aidq_metadata` objects to it (so ci-dev can run DDL) was refused by the tool's permission
   classifier; the owner runs it (SQL in the Phase 2 report). Until then `migrate plan (dev)` fails in CI with a
   permission error, and deploy-dev cannot apply migrations.
+
+## 2d. deploy-dev (Phase 2, step D)
+
+* `.github/workflows/deploy-dev.yml`: on push to `main` (and on demand) as ci-dev: `migrate --plan` + `--apply`
+  on dev metadata, `bundle deploy -t dev`, one normal smoke run of `netsuite_ingestion_daily`. Job-level
+  concurrency `databricks-workspace`; secrets only on the steps that call Databricks; run URLs stripped from the
+  public log.
+* Secret scope per target (plan 3a, code part): bundle variable `secret_scope` (dev `netsuite_ingestion_dev`,
+  prod still `netsuite_ingestion_poc` until the prod scope exists), passed to every job task and to the pipeline
+  configuration (`metadata.pg_conn_from_conf`). Tests: the scope differs per target and no resource file names
+  a scope literally.
+* No `run_as` in the dev target: CI deploys dev as ci-dev, which is then also the run identity; `run_as` (proven
+  in step A) is for prod, where a human deploy must still run as ci-prod (step F).
+* **First deploy-dev run will fail until:** (1) ci-dev has migration rights on dev metadata (owner SQL);
+  (2) the hand-deployed `[dev suhasv]` pipelines are removed, because they own the dev tables the CI pipeline
+  writes; (3) compute is available again.
+
+**Hand-deployed `[dev suhasv]` set (removal needs the owner's OK; nothing removed):**
+
+| Kind | Name | Goes with it |
+|---|---|---|
+| job | `[dev suhasv] netsuite_ingestion_daily` | run history |
+| job | `[dev suhasv] guard_canary_check` | run history |
+| pipeline | `[dev suhasv] netsuite_ingestion_poc` | the tables it owns: `workspace.poc_bronze` (5 source tables + `guard_reads`), `workspace.poc_silver` (4), `workspace.poc_reject.rejected_rows`, `workspace.poc_gold` (2) |
+| pipeline | `[dev suhasv] guard_canary` | `workspace.canary.canary_bronze` |
+| folder | the owner's `.bundle/netsuite_ingestion/dev` | deployed files and bundle state |
+
+Not affected: the owner's `.bundle/netsuite_ingestion/prod` folder and every prod resource; `workspace.ledger.*`
+(not pipeline-owned; the first CI run with `bronze_rebuild=true` rebuilds it); the dev metadata branch; other
+projects' tables in `workspace.default`. Data lost: only dev copies that the next CI run rebuilds from the source
+(the v2 baseline numbers are in `baseline/v2/`). Method: `bundle destroy -t dev` as the owner from the working
+copy that holds the owner's bundle state.
 
 ## 3. Decisions waiting for the owner
 

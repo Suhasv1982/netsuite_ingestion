@@ -17,6 +17,12 @@ variables:
   meta_pg_endpoint:
     description: Lakebase endpoint resource path of the metadata database (used to mint the OAuth credential)
     default: projects/aidq-metadata/branches/production/endpoints/primary
+  secret_scope:
+    description: >
+      Secret scope holding the database credentials that refresh_credentials writes and every task reads.
+      One scope per environment (docs/phase2_cicd_plan.md, section 3a), so each CI identity gets WRITE on
+      its own scope only. Prod stays on netsuite_ingestion_poc until netsuite_ingestion_prod exists.
+    default: netsuite_ingestion_poc
   meta_pg_token_key:
     description: >
       Secret key (in scope netsuite_ingestion_poc) holding the metadata-database credential. Differs per
@@ -57,6 +63,7 @@ targets:
       meta_pg_endpoint: projects/aidq-metadata/branches/dev/endpoints/primary
       meta_pg_host: ep-aged-cell-d8guvji9.database.us-east-2.cloud.databricks.com
       meta_pg_token_key: meta_pg_token_dev
+      secret_scope: netsuite_ingestion_dev
 
   prod:
     mode: production

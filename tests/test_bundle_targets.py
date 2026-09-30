@@ -38,7 +38,7 @@ def job_tasks() -> dict:
 
 
 class TestPerTargetIsolation:
-    @pytest.mark.parametrize("var", ["catalog", "meta_pg_token_key", "meta_pg_endpoint", "meta_pg_host"])
+    @pytest.mark.parametrize("var", ["catalog", "secret_scope", "meta_pg_token_key", "meta_pg_endpoint", "meta_pg_host"])
     def test_dev_and_prod_resolve_different_values(self, bundle, var):
         assert _resolved_var(bundle, "dev", var) != _resolved_var(bundle, "prod", var)
 
@@ -55,6 +55,21 @@ class TestLedgerLocation:
     def test_ledger_tasks_take_the_catalog_variable(self, job_tasks, task):
         params = job_tasks[task]["spark_python_task"]["parameters"]
         assert params[params.index("--catalog") + 1] == "${var.catalog}"
+
+    @pytest.mark.parametrize("task", LEDGER_TASKS + ("refresh_credentials", "log_run_audit"))
+    def test_secret_scope_is_the_per_target_variable(self, job_tasks, task):
+        params = job_tasks[task]["spark_python_task"]["parameters"]
+        assert params[params.index("--secret-scope") + 1] == "${var.secret_scope}"
+
+    def test_pipeline_reads_the_per_target_scope(self):
+        conf = _load("resources/netsuite_ingestion_poc.pipeline.yml")["resources"]["pipelines"][
+            "netsuite_ingestion_poc"
+        ]["configuration"]
+        assert conf["secret_scope"] == "${var.secret_scope}"
+
+    def test_no_resource_file_names_a_scope_literally(self):
+        for f in (ROOT / "resources").glob("*.yml"):
+            assert "netsuite_ingestion_poc\"" not in f.read_text(encoding="utf-8"), f.name
 
     @pytest.mark.parametrize("task", LEDGER_TASKS + ("refresh_credentials", "log_run_audit"))
     def test_metadata_key_is_the_per_target_variable(self, job_tasks, task):
