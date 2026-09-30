@@ -104,6 +104,9 @@ verified (the audit-log query needs the warehouse).
   indexes, views, functions, triggers), so both were recorded with the checksums of the edited files.
 * `003_blank_watermark_to_null`: blank `watermark_col` -> NULL plus a CHECK against blanks. Dry run OK on dev;
   applied by deploy-dev (step D). The code already treats blank and NULL the same.
+* Every migration transaction starts with `SET LOCAL ROLE aidq_owner` (dry runs and backfill too), so what a
+  migration creates is owned by that no-login role; `migrate.py` refuses to run if the role is missing or the
+  caller is not a member.
 * `migrate plan (dev)` job in pr-checks (as ci-dev, concurrency `databricks-workspace`). The CLI install is now
   the local composite action `.github/actions/databricks-cli`.
 * **Blocked: ci-dev has no migration rights on dev metadata.** Creating a no-login owner role and moving
