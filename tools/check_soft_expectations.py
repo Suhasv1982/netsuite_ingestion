@@ -88,7 +88,8 @@ def event_log_sql(pipeline_id: str, update_id: str | None = None) -> str:
     )
     return (
         "SELECT origin.update_id AS update_id, origin.flow_name AS flow_name, "
-        "to_json(details:flow_progress.data_quality.expectations) AS expectations "
+        "details:flow_progress.data_quality.expectations AS expectations "  # JSON text
+
         f"FROM event_log('{pipeline_id}') "
         f"WHERE event_type = 'flow_progress' AND origin.update_id = {update} "
         "AND details:flow_progress.data_quality.expectations IS NOT NULL"
