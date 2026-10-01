@@ -723,3 +723,18 @@ class TestDailyCadence:
         res = ng.generate_increment(ng.Generator(5), existing, SCALE, NEXT, cfg(), update_spread_days=0)
         merged = {t: existing.get(t, []) + res.data[t] for t in ng.TABLES}
         assert ng.current_watermark(merged) == NEXT
+
+    def test_allow_before_watermark_generates_a_batch_on_a_loaded_date(self, existing):
+        wm = ng.current_watermark(existing)
+        res = ng.generate_increment(ng.Generator(6), existing, SCALE, wm, cfg(), update_spread_days=0,
+                                    allow_before_watermark=True)
+        assert all(ng._as_date(r["created_date"]) == wm for r in res.data[ng.T_MEMBERSHIPS] if r.get("created_date"))
+        with pytest.raises(ValueError, match="must be later than the current watermark"):
+            ng.generate_increment(ng.Generator(6), existing, SCALE, wm, cfg())
+
+    def test_batch_exists_detects_a_batch_already_generated(self, existing):
+        wm = ng.current_watermark(existing)
+        assert not ng.batch_exists(existing, wm + dt.timedelta(days=1))
+        res = ng.generate_increment(ng.Generator(6), existing, SCALE, wm + dt.timedelta(days=1), cfg(), update_spread_days=0)
+        merged = {t: existing.get(t, []) + res.data[t] for t in ng.TABLES}
+        assert ng.batch_exists(merged, wm + dt.timedelta(days=1))

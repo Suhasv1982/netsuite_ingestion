@@ -104,9 +104,13 @@ step-1 backup); promote-prod now prunes them (below).
 * **Owner offline until 2026-10-05.** Failure emails for the two daily dev jobs (generator, dev
   `netsuite_ingestion_daily`) go to the `NOTIFICATION_EMAIL` repository variable's address (bundle, `on_failure`).
   **On 2026-10-05: run `python tools/daily_check.py --date <d> --profile DEFAULT` for 2026-10-02, 10-03, 10-04 and
-  10-05** (read-only; exit 1 on any FAIL). Expected: generator SKIPPED on 10-02 and 10-03, an increment on 10-04 and
-  10-05; dev job SUCCESS each day with ledger OK; dev bronze equal to the source; no prod runs (paused). Dev had
-  already loaded run 2's rows on 2026-10-01 (smoke run after PR #22), so the 10-02 and 10-03 dev runs load nothing.
+  10-05** (read-only; exit 1 on any FAIL). Expected (owner decision 2026-10-01: generate every day): the generator
+  writes an increment **every day, 10-02 to 10-05** (`--allow-before-watermark`: the 10-02 and 10-03 batches land on
+  dates the source already holds since run 2, so dev picks them up through top-up flows as late rows on loaded dates;
+  `--skip-if-batch-exists` keeps a same-day re-run from writing twice); dev job SUCCESS each day with ledger OK; dev
+  bronze equal to the source; no prod runs (paused). Note: on 10-02 and 10-03 some new versions of existing rows are
+  dated before those keys' 10-03 versions from run 2; silver (AUTO CDC by updated_date) correctly keeps the later one,
+  so silver grows less than bronze on those days.
   **Then decide on step 8** (promote-prod, `schedule_pause_status=UNPAUSED`, approved in the `prod` environment;
   prod cron 06:30 UTC; the first scheduled prod run catches up on run 2 and every increment since; also brings
   migration 004 to prod).
