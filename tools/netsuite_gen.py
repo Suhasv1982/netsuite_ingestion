@@ -763,7 +763,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--apply-schema-drift", action="store_true", help=f"--increment only: add {DRIFT_COLUMN} to {DRIFT_TABLE}")
     p.add_argument("--dry-run", action="store_true", help="generate and write the manifest, change nothing in the database")
     p.add_argument("--profile", default="DEFAULT", help="Databricks CLI profile")
+    p.add_argument("--auth", choices=["cli", "sdk"], default="cli",
+                   help="cli: Databricks CLI with --profile (local); sdk: databricks-sdk as the job's run-as identity")
+    p.add_argument("--backup", choices=["branch-and-schema", "schema"], default="branch-and-schema",
+                   help="branch-and-schema: Lakebase branch + verified schema copy; schema: verified copy in a "
+                        "netsuite_backup_daily_<stamp> schema only (daily schedule: no branch per day)")
+    p.add_argument("--backup-keep", type=int,
+                   help="with --backup schema: drop daily backup schemas beyond the newest N (others never touched)")
     return p
+
+
+def pg_writer_daily_prefix() -> str:
+    import pg_writer
+
+    return pg_writer.DAILY_BACKUP_PREFIX
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -771,6 +784,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.apply_schema_drift and not args.increment:
         print("--apply-schema-drift is only valid with --increment", file=sys.stderr)
         return 2
+    if args.backup_keep is not None and args.backup != "schema":
+        print("--backup-keep is only valid with --backup schema", file=sys.stderr)
+        return 2
+    backup_kwargs = (
+        {"with_branch": False, "schema_prefix": pg_writer_daily_prefix()} if args.backup == "schema" else {}
+    )
     cfg = load_config(args.config)
     scale = ScaleConfig().scaled(args.scale)
     manifest_path = Path(args.manifest or f"manifest_{'init' if args.init else 'increment'}_{args.seed}.json")
@@ -783,9 +802,9 @@ def main(argv: list[str] | None = None) -> int:
             extra_items = []
             backup_info = {"performed": False, "reason": "dry-run"}
             if not args.dry_run:
-                conn = pg_writer.connect(args.profile)
+                conn = pg_writer.connect(args.profile, args.auth)
                 extra_items = pg_writer.read_items(conn)
-                backup_info = pg_writer.create_backup(conn, args.profile)
+                backup_info = pg_writer.create_backup(conn, args.profile, **backup_kwargs)
                 pg_writer.require_backup(backup_info)
             gen = Generator(args.seed, extra_items)
             result = generate_init(gen, scale, args.batch_date or BASE_SNAPSHOT_DATE, cfg)
@@ -793,7 +812,7 @@ def main(argv: list[str] | None = None) -> int:
             if not args.dry_run:
                 pg_writer.load_init(conn, result.data)
         else:
-            conn = pg_writer.connect(args.profile)  # reads only, unless not --dry-run
+            conn = pg_writer.connect(args.profile, args.auth)  # reads only, unless not --dry-run
             live_cols = pg_writer.read_live_columns(conn)
             region_present = DRIFT_COLUMN in live_cols.get(DRIFT_TABLE, [])
             existing = pg_writer.read_existing(conn, live_cols)
@@ -806,9 +825,11 @@ def main(argv: list[str] | None = None) -> int:
             backup_info = {"performed": False, "reason": "dry-run"}
             if not args.dry_run:
                 # fresh backup before every data change, same gate as --init
-                backup_info = pg_writer.create_backup(conn, args.profile)
+                backup_info = pg_writer.create_backup(conn, args.profile, **backup_kwargs)
                 pg_writer.require_backup(backup_info)
                 pg_writer.load_increment(conn, result, apply_drift=args.apply_schema_drift, region_present=region_present)
+                if args.backup_keep:
+                    backup_info["pruned"] = pg_writer.prune_daily_backups(conn, args.backup_keep)
             result.manifest["backup"] = backup_info
     finally:
         if conn is not None:
