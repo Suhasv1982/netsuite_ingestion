@@ -110,6 +110,20 @@ jobs:
             --json '{"spec":{"source_branch":"projects/aidq-metadata/branches/production","no_expiry":true}}' > /dev/null
           echo "- backup branch: \`$branch\`" >> "$GITHUB_STEP_SUMMARY"
 
+      # Retention: keep the newest 3 pre-release-* branches and every one younger than 14 days (10-branch project
+      # limit). Only pre-release-* branches are considered; production and dev are never touched.
+      - name: Retention of metadata backup branches
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_PROD }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID_PROD }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET_PROD }}
+          DATABRICKS_AUTH_TYPE: oauth-m2m
+        run: |
+          set -euo pipefail
+          { echo '### Backup branch retention'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          python tools/prune_backup_branches.py --project aidq-metadata --keep 3 --min-age-days 14 | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Migrations (prod metadata)
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_PROD }}
