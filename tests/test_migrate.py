@@ -154,3 +154,28 @@ class TestOwnerRole:
         conn = _FakeConn()
         assert dry_run(conn, _m("003")) is None
         assert conn.log == [SET_OWNER_ROLE, "SELECT 1;", "ROLLBACK"]
+
+
+class TestDryRunSequence:
+    def test_files_run_in_order_in_one_transaction_then_roll_back(self):
+        from migrate import SET_OWNER_ROLE, dry_run_sequence
+
+        conn = _FakeConn()
+        res = dry_run_sequence(conn, [_m("001", "CREATE TABLE a (x int);"), _m("002", "ALTER TABLE a ADD y int;")])
+        assert res == {"001": None, "002": None}
+        assert conn.log == [SET_OWNER_ROLE, "CREATE TABLE a (x int);", "ALTER TABLE a ADD y int;", "ROLLBACK"]
+
+    def test_after_a_failure_later_files_are_not_tried(self):
+        from migrate import dry_run_sequence
+
+        conn = _FakeConn(fail_on="bad")
+        res = dry_run_sequence(conn, [_m("001", "bad;"), _m("002"), _m("003")])
+        assert res["001"].startswith("RuntimeError") and res["002"] == res["003"] == "not tried: an earlier file failed"
+        assert conn.log[-1] == "ROLLBACK" and "COMMIT" not in conn.log
+
+    def test_nothing_pending(self):
+        from migrate import dry_run_sequence
+
+        conn = _FakeConn()
+        assert dry_run_sequence(conn, []) == {}
+        assert conn.log[-1] == "ROLLBACK"

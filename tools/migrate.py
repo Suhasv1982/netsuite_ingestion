@@ -10,8 +10,9 @@ aidq_metadata.schema_migrations row in ONE transaction, so a file is either appl
 It stops at the first failure and refuses to run at all if an applied file's checksum changed (applied files
 are byte-stable: add a new migration instead of editing one).
 
-`--plan` changes nothing: it lists each file's state and dry-runs every pending file in a transaction that is
-rolled back, reporting whether it would apply cleanly or the error it would hit.
+`--plan` changes nothing: it lists each file's state and dry-runs the pending files in order, all in one
+transaction that is rolled back, so each file sees what the earlier ones create (as with --apply). It reports
+whether each would apply cleanly or the error it would hit.
 
 `--backfill UPTO` is for files that were applied by hand before this runner existed (001 and 002 on dev). It
 records them only after checking that the live schema already matches them: it replays the files in a
@@ -237,6 +238,31 @@ def dry_run(conn, m: Migration) -> str | None:
         conn.rollback()
 
 
+def dry_run_sequence(conn, pending: list[Migration]) -> dict[str, str | None]:
+    """Dry-run the pending files IN ORDER in one transaction (as OWNER_ROLE), then roll back everything.
+
+    Each file sees what the earlier ones created, exactly as --apply runs them (e.g. 002 needs 001's table).
+    version -> None (clean), the error, or "not tried" for files after the first failure.
+    """
+    out: dict[str, str | None] = {}
+    failed = False
+    try:
+        conn.execute(SET_OWNER_ROLE)
+        for m in pending:
+            if failed:
+                out[m.version] = "not tried: an earlier file failed"
+                continue
+            try:
+                conn.execute(m.sql)
+                out[m.version] = None
+            except Exception as exc:
+                out[m.version] = f"{type(exc).__name__}: {str(exc).splitlines()[0][:300]}"
+                failed = True
+    finally:
+        conn.rollback()
+    return out
+
+
 def apply_one(conn, m: Migration, env: str) -> None:
     """The file and its tracking row, in one transaction, as OWNER_ROLE."""
     try:
@@ -259,11 +285,12 @@ def apply_one(conn, m: Migration, env: str) -> None:
 def cmd_plan(conn, files, env) -> int:
     rows = plan(files, read_applied(conn))
     print(f"aidq_metadata migrations on {env} ({BRANCHES[env]} branch):")
+    dry = dry_run_sequence(conn, [m for m, s in rows if s == "pending"])
     bad = 0
     for m, state in rows:
         note = ""
         if state == "pending":
-            err = dry_run(conn, m)
+            err = dry[m.version]
             note = "dry run OK" if err is None else f"dry run FAILS: {err}"
             bad += err is not None
         elif state in ("CHANGED", "MISSING"):
