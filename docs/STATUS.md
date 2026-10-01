@@ -96,6 +96,16 @@ step-1 backup); promote-prod now prunes them (below).
   exit code, `--update-spread-days 0` and `--skip-if-not-after-watermark` for the daily job, so the 2026-10-02 and
   10-03 runs skip cleanly and real daily increments resume on **2026-10-04**. Dev and prod ingest the rows dated
   10-02/10-03 like any other dates.
+* **Rows dated in the future, kept on purpose (owner decision 2026-10-01):** generator run 2 (2026-10-01) wrote
+  updated versions with `updated_date` 2026-10-02 and 2026-10-03 (memberships 93 + 90, transactions 373 + 359, and
+  the matching certifications and lines). They entered the source on 10-01. Keep them as a natural "future
+  updated_date" defect for the Phase 4 rule recommender. They are not a pipeline bug: bronze loads them as their
+  own snapshot dates like any other.
+* **Verification plan before step 8:** (1) 2026-10-02 after 05:30 UTC: dev loaded exactly run 2's rows, `ledger_check`
+  OK, guard did not block, gold updated. (2) 2026-10-04 after 05:30: the generator wrote one 10-04 increment (SUCCESS),
+  dev loaded exactly it, `ledger_check` OK, rejects in line with the defect rate, and the 10-02/10-03 generator runs
+  were clean skips (no writes, no backup). Then ask the owner for step 8 (prod at 06:30; its first scheduled run on
+  10-05 catches up on run 2 + 10-04 + 10-05).
 * Backups of the source by the daily job: schema copies `netsuite_backup_daily_<stamp>` only (no Lakebase branch),
   newest 7 kept; historical `netsuite_backup_<stamp>` copies and `pre-synthetic-backup-*` branches are never touched.
 * **ci-dev MANAGE** on the six dev pipeline schemas (granted 2026-10-01), so the dev grant step can restore a missing
