@@ -639,6 +639,7 @@ def generate_increment(
     apply_drift: bool = False,
     region_present: bool = False,
     update_spread_days: int = 2,
+    allow_before_watermark: bool = False,
 ) -> GenResult:
     """`existing` maps table -> all current rows (every version) as dicts. New versions of existing rows get an
     updated_date of batch_date + 0..update_spread_days (0 for the daily schedule, so no row is dated after its
@@ -650,7 +651,7 @@ def generate_increment(
         if dates:
             ctx.snapshot_dates[table] = dates
             ctx.watermarks[table] = dates[-1]
-    if any(w >= batch_date for w in ctx.watermarks.values()):
+    if not allow_before_watermark and any(w >= batch_date for w in ctx.watermarks.values()):
         raise ValueError(f"--batch-date {batch_date} must be later than the current watermark {max(ctx.watermarks.values())}")
 
     populate_region = apply_drift or region_present
@@ -783,11 +784,24 @@ def build_parser() -> argparse.ArgumentParser:
                         "netsuite_backup_daily_<stamp> schema only (daily schedule: no branch per day)")
     p.add_argument("--update-spread-days", type=int, default=2,
                    help="--increment: new versions of existing rows are dated batch_date + 0..N days (daily: 0)")
+    p.add_argument("--allow-before-watermark", action="store_true",
+                   help="--increment: allow a --batch-date on or before the source watermark (rows on already-loaded "
+                        "dates arrive as late rows; the pipeline's top-up flows pick them up)")
+    p.add_argument("--skip-if-batch-exists", action="store_true",
+                   help="--increment: exit 0 without changes when the batch for --batch-date was already generated "
+                        "(new rows with that created_date exist): a re-run on the same day never writes twice")
     p.add_argument("--skip-if-not-after-watermark", action="store_true",
                    help="--increment: exit 0 without changes when --batch-date is not later than the source watermark")
     p.add_argument("--backup-keep", type=int,
                    help="with --backup schema: drop daily backup schemas beyond the newest N (others never touched)")
     return p
+
+
+def batch_exists(existing: dict, batch_date: dt.date) -> bool:
+    """True when rows created on batch_date exist: new rows of a batch get created_date = batch_date (new versions of
+    existing rows keep their original created_date)."""
+    return any(r.get("created_date") is not None and _as_date(r["created_date"]) == batch_date
+               for t in TABLES for r in existing.get(t, []))
 
 
 def current_watermark(existing: dict) -> dt.date | None:
@@ -841,6 +855,10 @@ def main(argv: list[str] | None = None) -> int:
             existing = pg_writer.read_existing(conn, live_cols)
             batch_date = args.batch_date or next_batch_date(existing)
             watermark = current_watermark(existing)
+            if args.skip_if_batch_exists and batch_exists(existing, batch_date):
+                print(f"SKIPPED: the batch for {batch_date} was already generated (new rows with created_date "
+                      f"{batch_date} exist); nothing generated, no backup, no write")
+                return 0
             if args.skip_if_not_after_watermark and watermark is not None and batch_date <= watermark:
                 print(f"SKIPPED: --batch-date {batch_date} is not later than the source watermark {watermark}; "
                       "nothing generated, no backup, no write")
@@ -850,6 +868,7 @@ def main(argv: list[str] | None = None) -> int:
                 gen, existing, scale, batch_date, cfg,
                 apply_drift=args.apply_schema_drift, region_present=region_present,
                 update_spread_days=args.update_spread_days,
+                allow_before_watermark=args.allow_before_watermark,
             )
             backup_info = {"performed": False, "reason": "dry-run"}
             if not args.dry_run:

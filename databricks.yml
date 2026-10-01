@@ -129,7 +129,10 @@ targets:
                   - "7"
                   - "--update-spread-days"
                   - "0"
-                  - "--skip-if-not-after-watermark"
+                  # generate every day, also on dates the source already holds (owner, 2026-10-01); a same-day
+                  # re-run never writes twice
+                  - "--allow-before-watermark"
+                  - "--skip-if-batch-exists"
                   - "--manifest"
                   - "/tmp/netsuite_daily_manifest.json"
               environment_key: generator
