@@ -101,11 +101,15 @@ step-1 backup); promote-prod now prunes them (below).
   the matching certifications and lines). They entered the source on 10-01. Keep them as a natural "future
   updated_date" defect for the Phase 4 rule recommender. They are not a pipeline bug: bronze loads them as their
   own snapshot dates like any other.
-* **Verification plan before step 8:** (1) 2026-10-02 after 05:30 UTC: dev loaded exactly run 2's rows, `ledger_check`
-  OK, guard did not block, gold updated. (2) 2026-10-04 after 05:30: the generator wrote one 10-04 increment (SUCCESS),
-  dev loaded exactly it, `ledger_check` OK, rejects in line with the defect rate, and the 10-02/10-03 generator runs
-  were clean skips (no writes, no backup). Then ask the owner for step 8 (prod at 06:30; its first scheduled run on
-  10-05 catches up on run 2 + 10-04 + 10-05).
+* **Owner offline until 2026-10-05.** Failure emails for the two daily dev jobs (generator, dev
+  `netsuite_ingestion_daily`) go to the `NOTIFICATION_EMAIL` repository variable's address (bundle, `on_failure`).
+  **On 2026-10-05: run `python tools/daily_check.py --date <d> --profile DEFAULT` for 2026-10-02, 10-03, 10-04 and
+  10-05** (read-only; exit 1 on any FAIL). Expected: generator SKIPPED on 10-02 and 10-03, an increment on 10-04 and
+  10-05; dev job SUCCESS each day with ledger OK; dev bronze equal to the source; no prod runs (paused). Dev had
+  already loaded run 2's rows on 2026-10-01 (smoke run after PR #22), so the 10-02 and 10-03 dev runs load nothing.
+  **Then decide on step 8** (promote-prod, `schedule_pause_status=UNPAUSED`, approved in the `prod` environment;
+  prod cron 06:30 UTC; the first scheduled prod run catches up on run 2 and every increment since; also brings
+  migration 004 to prod).
 * Backups of the source by the daily job: schema copies `netsuite_backup_daily_<stamp>` only (no Lakebase branch),
   newest 7 kept; historical `netsuite_backup_<stamp>` copies and `pre-synthetic-backup-*` branches are never touched.
 * **ci-dev MANAGE** on the six dev pipeline schemas (granted 2026-10-01), so the dev grant step can restore a missing
@@ -287,9 +291,7 @@ copy that holds the owner's bundle state.
 
 ## 3. Decisions waiting for the owner
 
-1. Step 8: unpause the prod schedule (06:30 UTC) after one good day of generator (05:00) and dev (05:30) runs:
-   promote-prod with `schedule_pause_status=UNPAUSED`, approved in the `prod` environment. Brings migration 004 to
-   prod in the same run.
+1. On 2026-10-05: review `tools/daily_check.py` for 10-02 to 10-05, then decide on step 8 (unpause prod at 06:30 UTC).
 2. After step 8 plus three good scheduled prod runs: drop `poc_netsuite.backup_pre_release_202610010127` (ask).
 
 ## 4. Gotchas
