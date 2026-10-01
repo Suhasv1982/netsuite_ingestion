@@ -1,0 +1,12 @@
+# Unity Catalog grants the dev target needs. Applied by tools/apply_grants.py in deploy-dev (additive: missing
+# privileges are granted, nothing is ever revoked). Principals: `ci` = the deploying service principal (ci-dev),
+# `owner` = the GRANT_OWNER_PRINCIPAL GitHub Actions variable (the workspace owner, who reads the dev tables now that
+# the pipeline's run identity owns them). workspace.default is not managed here: it holds other projects' tables.
+catalog: workspace
+grants:
+  - principal: ci
+    schemas: [poc_bronze, poc_silver, poc_reject, poc_gold, ledger, canary]
+    privileges: [USE_SCHEMA, CREATE_TABLE, CREATE_MATERIALIZED_VIEW, SELECT, MODIFY]
+  - principal: owner
+    schemas: [poc_bronze, poc_silver, poc_reject, poc_gold, ledger, canary]
+    privileges: [USE_SCHEMA, SELECT]

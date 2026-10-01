@@ -94,7 +94,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install migration runner dependency
-        run: python -m pip install -q "psycopg[binary]>=3.1"
+        run: python -m pip install -q "psycopg[binary]>=3.1" pyyaml
 
       - name: Backup branch of the prod metadata
         env:
@@ -135,6 +135,20 @@ jobs:
           databricks bundle deploy -t prod --var="schedule_pause_status=PAUSED" --var="bronze_rebuild=${BRONZE_REBUILD}" \
             2>&1 | grep -v '^Uploading' | tee deploy.log
           { echo '### bundle deploy -t prod'; echo '```'; grep -E '^(Resources|Files|Deployment)' deploy.log || true; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      # Unity Catalog grants this target needs (grants/prod.yml). Additive: grants what is missing, never revokes.
+      - name: Apply grants (prod)
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_PROD }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID_PROD }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET_PROD }}
+          DATABRICKS_AUTH_TYPE: oauth-m2m
+          GRANT_OWNER_PRINCIPAL: ${{ vars.GRANT_OWNER_PRINCIPAL }}
+        run: |
+          set -euo pipefail
+          { echo '### Grants (prod)'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          python tools/apply_grants.py --target prod | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       # Only when asked for, and never together with bronze_rebuild: the rebuild's full refresh (plan section 5,
       # step 4) is started by hand with --pipeline-params full_refresh=true. Run URLs are stripped from the log.

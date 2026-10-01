@@ -1,0 +1,16 @@
+# Unity Catalog grants the prod target needs. Applied by tools/apply_grants.py in promote-prod (additive: missing
+# privileges are granted, nothing is ever revoked). Principals: `ci` = the deploying service principal (ci-prod),
+# `owner` = the GRANT_OWNER_PRINCIPAL GitHub Actions variable.
+catalog: poc_netsuite
+grants:
+  - principal: ci
+    schemas: [poc_bronze, poc_silver, poc_reject, poc_gold, ledger, canary]
+    privileges: [USE_SCHEMA, CREATE_TABLE, CREATE_MATERIALIZED_VIEW, SELECT, MODIFY]
+  # The pipeline's default schema (`schema: default`): no table is stored there, but a full refresh fails with
+  # PERMISSION_DENIED unless the run identity may create in it (first prod release, 2026-10-01).
+  - principal: ci
+    schemas: [default]
+    privileges: [USE_SCHEMA, CREATE_TABLE, CREATE_MATERIALIZED_VIEW]
+  - principal: owner
+    schemas: [poc_bronze, poc_silver, poc_reject, poc_gold, ledger, canary]
+    privileges: [USE_SCHEMA, SELECT]
