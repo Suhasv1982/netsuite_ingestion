@@ -482,10 +482,10 @@ class TestCli:
 
     def _patch_writer(self, monkeypatch, existing, backup):
         calls = []
-        monkeypatch.setattr(pg_writer, "connect", lambda profile: FakeConn())
+        monkeypatch.setattr(pg_writer, "connect", lambda profile, auth="cli": FakeConn())
         monkeypatch.setattr(pg_writer, "read_live_columns", lambda conn: {t: ng.COLUMNS[t] for t in ng.TABLES})
         monkeypatch.setattr(pg_writer, "read_existing", lambda conn, live: existing)
-        monkeypatch.setattr(pg_writer, "create_backup", lambda conn, profile: calls.append("backup") or backup)
+        monkeypatch.setattr(pg_writer, "create_backup", lambda conn, profile, **kw: calls.append("backup") or backup)
         monkeypatch.setattr(pg_writer, "load_increment", lambda *a, **k: calls.append("load"))
         return calls
 

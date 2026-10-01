@@ -28,7 +28,8 @@ targets:
                 python_file: ../tools/netsuite_gen.py
                 parameters: ["--increment", "--seed", "{{job.run_id}}",
                              "--batch-date", "{{job.start_time.iso_date}}",
-                             "--config", "../tools/increment_daily.yaml", "--backup", "schema-only"]
+                             "--config", "../tools/increment_daily.yaml",
+                             "--auth", "sdk", "--backup", "schema", "--backup-keep", "7"]
               environment_key: tools
             - task_key: run_ingestion
               depends_on: [{ task_key: generate_increment }]
@@ -50,24 +51,22 @@ targets:
 * **Low defect rates** (`tools/increment_daily.yaml`): 5% late rows (top-ups), 0.5% each of invalid enums (HARD
   rejects), end-before-start and amount mismatches (the two SOFT rules in dev metadata).
 
-## Blockers (to settle before it is deployed)
+## Blockers
 
-1. **Backups per run.** Every `--increment` creates a no-expiry Lakebase branch and a full schema copy of the five
-   tables. `netsuite-sample` has 5 of 10 branches, so a daily run exhausts the branch quota in 5 days (the branch
-   step then fails "best effort") and the schema copies grow without bound. Needed: a `--backup schema-only` mode
-   and a retention rule (for example keep the last 7 daily schema copies). Deleting old backups is a deletion, so
-   the retention rule itself needs the owner's approval.
-2. **The generator shells out to the Databricks CLI** (`pg_writer.connect` mints the database token with
-   `databricks postgres ...`). A job task has no CLI; it needs a `databricks-sdk` code path
-   (`WorkspaceClient().postgres.generate_database_credential`).
-3. **Identity and rights.** The job runs as the deploying identity (ci-dev once step D lands), which today has
-   read-only access to the source. The generator needs INSERT/UPDATE on `netsuite.*` and CREATE on the database
-   (backup schemas). Options: widen ci-dev on the source, or a separate `data-generator` service principal
-   (preferred: CI keeps read-only on the source).
-4. **The source is shared with prod.** The generator writes to `netsuite-sample/production`, which prod also
-   reads. Prod is paused, but its first run (the bronze rebuild) will ingest everything generated until then, and
-   the dev-vs-prod comparison of the first prod release needs a quiet source: the schedule must be paused for the
-   release window.
+1. **Backups per run: resolved (2026-10-01).** `--backup schema` takes only the verified schema copy, named
+   `netsuite_backup_daily_<stamp>`, and no Lakebase branch; `--backup-keep 7` then drops daily copies beyond the
+   newest 7. Only `netsuite_backup_daily_*` schemas are ever dropped: the historical `netsuite_backup_<stamp>` copies
+   and the `pre-synthetic-backup-*` branches are never touched. Tested; a local `--dry-run` of the daily command works.
+2. **CLI dependency: resolved (2026-10-01).** `--auth sdk` mints the database credential with `databricks-sdk`
+   (`WorkspaceClient().postgres`) as the job's run-as identity. Not yet run inside a job (needs blocker 3).
+3. **Identity and rights: owner decision.** The writer needs INSERT/UPDATE on `netsuite.*` and CREATE on the source
+   database (backup schemas). That is a grant on the source prod also reads, so it is a prod-touching grant.
+   Options: widen ci-dev (CI then writes prod's source), or a separate `data-generator` service principal with only
+   those rights (preferred).
+4. **The source is shared with prod: owner decision.** Prod's schedule is on hold; once unpaused it ingests whatever
+   the generator wrote. Either accept synthetic daily data in prod, or keep the daily dev schedule paused while prod
+   runs, or point dev at its own source branch (a `netsuite-sample` branch for dev; that also changes dev's
+   `source_pg_host`).
 
 ## Once unblocked
 

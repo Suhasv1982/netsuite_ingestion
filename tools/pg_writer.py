@@ -47,10 +47,32 @@ def _cli_json(profile: str, *args: str):
     return json.loads(proc.stdout) if proc.stdout.strip() else {}
 
 
-def connect(profile: str = "DEFAULT"):
+DAILY_BACKUP_PREFIX = "netsuite_backup_daily_"
+
+
+def _connect_sdk():
+    """(host, user, token) via databricks-sdk: for a job task, where there is no CLI. The identity is the job's
+    run-as identity."""
+    from databricks.sdk import WorkspaceClient
+
+    w = WorkspaceClient()
+    endpoint = w.postgres.get_endpoint(name=ENDPOINT)
+    if endpoint.status and endpoint.status.disabled:
+        raise RuntimeError(f"Endpoint {ENDPOINT} is disabled; enable it first (this tool never does).")
+    token = w.postgres.generate_database_credential(endpoint=ENDPOINT).token
+    return endpoint.status.hosts.host, w.current_user.me().user_name, token
+
+
+def connect(profile: str = "DEFAULT", auth: str = "cli"):
     import psycopg
     from psycopg.rows import dict_row
 
+    if auth == "sdk":
+        host, user, token = _connect_sdk()
+        return psycopg.connect(
+            host=host, user=user, password=token, dbname=DATABASE, sslmode="require",
+            connect_timeout=30, row_factory=dict_row,
+        )
     endpoint = _cli_json(profile, "postgres", "get-endpoint", ENDPOINT)
     if endpoint["status"].get("disabled"):
         raise RuntimeError(
@@ -147,11 +169,12 @@ def _pre_existing_anomalies(cur) -> dict:
     }
 
 
-def create_backup(conn, profile: str = "DEFAULT") -> dict:
-    """Back up the five tables before --init touches anything.
+def create_backup(conn, profile: str = "DEFAULT", with_branch: bool = True, schema_prefix: str = "netsuite_backup_") -> dict:
+    """Back up the five tables before --init / --increment touches anything.
 
-    1. Lakebase branch (copy-on-write snapshot of the whole project), best effort.
-    2. A copy of the five tables in a new backup schema, verified by row counts.
+    1. Lakebase branch (copy-on-write snapshot of the whole project), best effort; skipped with with_branch=False
+       (the daily schedule: a branch per day would exhaust the project's 10 branches).
+    2. A copy of the five tables in a new backup schema `<schema_prefix><stamp>`, verified by row counts.
     The run only proceeds if the schema copy is verified (see require_backup).
     """
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d%H%M")
@@ -161,16 +184,19 @@ def create_backup(conn, profile: str = "DEFAULT") -> dict:
     }
 
     branch_id = f"pre-synthetic-backup-{stamp}"
-    try:
-        _cli_json(
-            profile, "postgres", "create-branch", f"projects/{PROJECT}", branch_id,
-            "--json", json.dumps({"spec": {"source_branch": f"projects/{PROJECT}/branches/{BRANCH}", "no_expiry": True}}),
-        )
-        info["branch"] = {"name": f"projects/{PROJECT}/branches/{branch_id}", "status": "created"}
-    except RuntimeError as exc:  # e.g. branch quota reached
-        info["branch"] = {"name": branch_id, "status": "failed", "error": str(exc)[:300]}
+    if not with_branch:
+        info["branch"] = {"name": None, "status": "skipped (schema-only backup)"}
+    else:
+        try:
+            _cli_json(
+                profile, "postgres", "create-branch", f"projects/{PROJECT}", branch_id,
+                "--json", json.dumps({"spec": {"source_branch": f"projects/{PROJECT}/branches/{BRANCH}", "no_expiry": True}}),
+            )
+            info["branch"] = {"name": f"projects/{PROJECT}/branches/{branch_id}", "status": "created"}
+        except RuntimeError as exc:  # e.g. branch quota reached
+            info["branch"] = {"name": branch_id, "status": "failed", "error": str(exc)[:300]}
 
-    schema = f"netsuite_backup_{stamp}"
+    schema = f"{schema_prefix}{stamp}"
     with conn.cursor() as cur:
         info["pre_existing"] = _pre_existing_anomalies(cur)
         cur.execute(f"CREATE SCHEMA {_ident(schema)}")
@@ -186,6 +212,27 @@ def create_backup(conn, profile: str = "DEFAULT") -> dict:
     info["row_counts"] = counts
     info["verified"] = all(c["source"] == c["backup"] for c in counts.values())
     return info
+
+
+def daily_backups_to_drop(schema_names: list[str], keep: int) -> list[str]:
+    """Daily backup schemas beyond the newest `keep` (names sort by their UTC stamp). Only DAILY_BACKUP_PREFIX
+    schemas are considered: the historical netsuite_backup_<stamp> copies are never dropped by the schedule."""
+    if keep < 1:
+        raise ValueError("keep must be at least 1: the backup just taken must survive")
+    daily = sorted((s for s in schema_names if s.startswith(DAILY_BACKUP_PREFIX)), reverse=True)
+    return daily[keep:]
+
+
+def prune_daily_backups(conn, keep: int) -> list[str]:
+    """Drop the daily backup schemas beyond the newest `keep`; returns the dropped names."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT nspname FROM pg_namespace WHERE nspname LIKE %s", (DAILY_BACKUP_PREFIX + "%",))
+        names = [r["nspname"] for r in cur.fetchall()]
+        doomed = daily_backups_to_drop(names, keep)
+        for s in doomed:
+            cur.execute(f"DROP SCHEMA {_ident(s)} CASCADE")
+    conn.commit()
+    return doomed
 
 
 def require_backup(info: dict) -> None:
