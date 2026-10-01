@@ -47,10 +47,20 @@ variables:
     default: "pending_only"
   schedule_pause_status:
     description: >
-      UNPAUSED to let netsuite_ingestion_daily actually run on its cron schedule, PAUSED to
-      keep it defined but inactive. Note: bundle `mode: development` (the dev target) pauses
-      schedules regardless of this value -- only the prod target's schedule can actually fire.
+      UNPAUSED to let netsuite_ingestion_daily actually run on its cron schedule, PAUSED to keep it defined but
+      inactive. An explicit value is honored in development mode too (only schedules left unset are paused there).
+      promote-prod always deploys prod with PAUSED unless its schedule_pause_status input says otherwise.
     default: "PAUSED"
+  daily_cron:
+    description: >
+      Quartz cron (UTC) of netsuite_ingestion_daily. Staggered after the source generator (05:00 UTC):
+      dev 05:30, prod 06:30.
+    default: "0 30 6 * * ?"
+  data_generator_sp:
+    description: >
+      Application id of the data-generator service principal, the run identity of the dev-only source generator job
+      (netsuite_daily_generator). Set in CI from the DATA_GENERATOR_SP repository variable.
+    default: ""
 
 targets:
   dev:
@@ -70,6 +80,61 @@ targets:
       meta_pg_host: ep-aged-cell-d8guvji9.database.us-east-2.cloud.databricks.com
       meta_pg_token_key: meta_pg_token_dev
       secret_scope: netsuite_ingestion_dev
+      # daily dev run at 05:30 UTC, after the generator (05:00); unpaused (owner decision 2026-10-01)
+      daily_cron: "0 30 5 * * ?"
+      schedule_pause_status: "UNPAUSED"
+    resources:
+      jobs:
+        # The source system: appends one day of synthetic NetSuite data (low defect rate) to netsuite-sample
+        # (shared by dev and prod; owner decision 2026-10-01). Dev-only resource, runs as data-generator, whose
+        # only rights are SELECT/INSERT on the source tables (+UPDATE on customers) and CREATE on the database for
+        # its netsuite_backup_daily_* schemas (grants/source.yml).
+        netsuite_daily_generator:
+          name: netsuite_daily_generator
+          description: Daily synthetic increment for the netsuite-sample source (docs/dev_daily_schedule.md)
+          run_as:
+            service_principal_name: ${var.data_generator_sp}
+          schedule:
+            quartz_cron_expression: "0 0 5 * * ?"
+            timezone_id: UTC
+            pause_status: UNPAUSED
+          max_concurrent_runs: 1
+          queue:
+            enabled: true
+          tasks:
+            - task_key: generate_increment
+              spark_python_task:
+                python_file: tools/netsuite_gen.py
+                parameters:
+                  - "--increment"
+                  - "--seed"
+                  - "{{job.run_id}}"
+                  - "--batch-date"
+                  - "{{job.start_time.iso_date}}"
+                  - "--config"
+                  - "increment_daily.yaml"  # resolved next to netsuite_gen.py
+                  - "--auth"
+                  - "sdk"
+                  - "--backup"
+                  - "schema"
+                  - "--backup-keep"
+                  - "7"
+                  - "--manifest"
+                  - "/tmp/netsuite_daily_manifest.json"
+              environment_key: generator
+          environments:
+            - environment_key: generator
+              spec:
+                client: "3"
+                dependencies:
+                  - faker>=30
+                  - pyyaml
+                  - psycopg[binary]>=3.1
+                  - databricks-sdk>=0.94.0
+    # data-generator must read the job's files in the deploying identity's bundle folder
+    permissions:
+      - service_principal_name: ${var.data_generator_sp}
+        level: CAN_VIEW
 
   prod:
     mode: production

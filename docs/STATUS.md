@@ -8,8 +8,8 @@ Read this first, then run `git status` and check open PRs. Updated after every P
 required checks `gitleaks (full history)`, `pytest` and `bundle validate` (added 2026-09-30), administrators
 included, no force push or deletion. Secret scanning and push protection on. Local pre-push hook: gitleaks + pytest.
 
-**Pull requests.** Merged: #1-#18 (#16 codified UC grants, #18 migration 004). Open: backup-branch retention (this
-change). Required checks on `main`: `gitleaks (full history)`, `pytest`, `bundle validate`, `migrate plan (dev)`.
+**Pull requests.** Merged: #1-#20, #21 (daily schedules). Required checks on `main`: `gitleaks (full history)`,
+`pytest`, `bundle validate`, `migrate plan (dev)`.
 
 **Work in progress** (owner's instructions of 2026-09-30):
 * Part 1, close out Phase 1 in one dev-only PR: gold layer, SOFT-rule expectation check, guard read-retry count,
@@ -71,6 +71,30 @@ step-1 backup); promote-prod now prunes them (below).
 * Not done, on purpose: MANAGE for the CI identities on their schemas (the grant step can then restore a missing
   grant instead of failing; for prod that is a prod grant change: ask first); dropping
   `poc_netsuite.backup_pre_release_202610010127` (condition: step 8 plus a few good scheduled runs).
+
+## 0c. Daily operation (owner decisions 2026-10-01)
+
+* **The generator is the source system.** `netsuite_daily_generator` (dev-only job) appends one day of synthetic
+  data to `netsuite-sample/production`, which dev and prod both read; prod accepts it. Defect rate stays low
+  (`tools/increment_daily.yaml`). Heavy defect / schema-drift experiments go later to an on-demand dev branch of
+  netsuite-sample, not to this source.
+* **Schedules (UTC, staggered):** generator 05:00, dev `netsuite_ingestion_daily` 05:30 (both unpaused), prod
+  `netsuite_ingestion_daily` 06:30 (**PAUSED until step 8**: after one good day of generator + dev, the owner approves
+  a promote-prod run with `schedule_pause_status=UNPAUSED`).
+* **data-generator** service principal: the generator job's run identity (job-level `run_as`), no OAuth secret.
+  Source grants (`grants/source.yml`, applied 2026-10-01, exact match verified): USAGE on `netsuite`; SELECT +
+  INSERT on the four incremental tables; SELECT + INSERT + UPDATE on `netsuite_customers`; CONNECT + CREATE on the
+  database (its `netsuite_backup_daily_*` schemas; Postgres cannot restrict CREATE to a name prefix). No DELETE,
+  TRUNCATE, REFERENCES, TRIGGER, ALTER, role memberships, or access to metadata, UC or secrets. deploy-dev runs
+  `tools/apply_pg_grants.py --check` and fails on anything missing or extra. ci-dev has the "Service Principal User"
+  role on data-generator (to deploy a job that runs as it); data-generator has CAN_VIEW on the dev bundle.
+  Repository variable `DATA_GENERATOR_SP`.
+* Backups of the source by the daily job: schema copies `netsuite_backup_daily_<stamp>` only (no Lakebase branch),
+  newest 7 kept; historical `netsuite_backup_<stamp>` copies and `pre-synthetic-backup-*` branches are never touched.
+* **ci-dev MANAGE** on the six dev pipeline schemas (granted 2026-10-01), so the dev grant step can restore a missing
+  grant. **Prod: no MANAGE for ci-prod by decision**; a missing prod grant fails the prod grant step.
+* **Prod table backup** `poc_netsuite.backup_pre_release_202610010127`: keep until step 8 plus three good scheduled
+  prod runs, then ask the owner before dropping.
 
 ## 1a. First CI dev run (2026-09-30, deploy-dev run on the #11 merge: green)
 
@@ -246,11 +270,10 @@ copy that holds the owner's bundle state.
 
 ## 3. Decisions waiting for the owner
 
-1. Step 8 (on hold): unpause the prod schedule (daily 06:00 UTC).
-2. Next promote-prod run (brings migration 004 and the grant/retention steps to prod).
-3. Optional: MANAGE for ci-dev / ci-prod on their pipeline schemas (prod part is a prod grant change).
-4. When to drop `poc_netsuite.backup_pre_release_202610010127`.
-5. The daily dev schedule (`docs/dev_daily_schedule.md`): writer identity for the shared source, then unpause.
+1. Step 8: unpause the prod schedule (06:30 UTC) after one good day of generator (05:00) and dev (05:30) runs:
+   promote-prod with `schedule_pause_status=UNPAUSED`, approved in the `prod` environment. Brings migration 004 to
+   prod in the same run.
+2. After step 8 plus three good scheduled prod runs: drop `poc_netsuite.backup_pre_release_202610010127` (ask).
 
 ## 4. Gotchas
 
@@ -264,6 +287,8 @@ copy that holds the owner's bundle state.
 * **Migrations before code.** Migration files stay byte-stable once recorded; add a new migration instead.
 * **Guard read retries.** The bronze guard retries reading its `create_update` event 5 times, 10 s apart, and fails
   closed for `pending_only`.
+* **Development mode and schedules.** An explicit `pause_status: UNPAUSED` on a job is honored in dev mode; only
+  `presets.trigger_pause_status: UNPAUSED` is refused there.
 * **Free Edition limits.** Stop the SQL warehouse before the canary or several updates (`RESOURCE_EXHAUSTED`). At
   most 5 concurrent job tasks. No account console or account APIs (no OIDC). One Lakebase project per account
   (owner's note; this account already has two, so no new project can be added). Lakebase endpoints can end up

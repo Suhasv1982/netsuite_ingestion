@@ -32,3 +32,10 @@ def test_daily_flags_parse():
     args = netsuite_gen.build_parser().parse_args(
         ["--increment", "--seed", "7", "--auth", "sdk", "--backup", "schema", "--backup-keep", "7"])
     assert (args.auth, args.backup, args.backup_keep) == ("sdk", "schema", 7)
+
+
+def test_daily_config_resolves_next_to_the_generator(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)  # a job task's working directory is not the repo root
+    resolved = netsuite_gen.resolve_config_path("increment_daily.yaml")
+    assert resolved.endswith("increment_daily.yaml") and __import__("os").path.exists(resolved)
+    assert netsuite_gen.load_config("increment_daily.yaml").rates["late_arriving"] == 0.05

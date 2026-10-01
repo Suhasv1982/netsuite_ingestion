@@ -171,9 +171,19 @@ class DefectConfig:
         return hashlib.sha256(json.dumps(self.to_dict(), sort_keys=True).encode()).hexdigest()[:16]
 
 
+def resolve_config_path(path: str) -> str:
+    """The path as given if it exists, else the same relative path next to this file (a job task's working
+    directory is not the repo root, so the daily job passes just `increment_daily.yaml`)."""
+    if Path(path).exists() or Path(path).is_absolute():
+        return path
+    beside = Path(__file__).resolve().parent / path
+    return str(beside) if beside.exists() else path
+
+
 def load_config(path: str | None) -> DefectConfig:
     if not path:
         return DefectConfig()
+    path = resolve_config_path(path)
     import yaml  # local import: only needed when a config file is given
 
     with open(path, encoding="utf-8") as fh:
