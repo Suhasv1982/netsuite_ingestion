@@ -56,6 +56,11 @@ variables:
       Quartz cron (UTC) of netsuite_ingestion_daily. Staggered after the source generator (05:00 UTC):
       dev 05:30, prod 06:30.
     default: "0 30 6 * * ?"
+  notification_email:
+    description: >
+      Address that gets an email when a daily dev job (generator, netsuite_ingestion_daily) fails. Set in CI from the
+      NOTIFICATION_EMAIL repository variable (no address in the repository).
+    default: ""
   data_generator_sp:
     description: >
       Application id of the data-generator service principal, the run identity of the dev-only source generator job
@@ -101,6 +106,9 @@ targets:
           max_concurrent_runs: 1
           queue:
             enabled: true
+          email_notifications:
+            on_failure:
+              - ${var.notification_email}
           tasks:
             - task_key: generate_increment
               spark_python_task:
@@ -136,6 +144,11 @@ targets:
                   # (SIGABRT on import) in this serverless environment (probed 2026-10-01)
                   - psycopg>=3.1
                   - databricks-sdk>=0.94.0
+        # failure email for the daily dev ingestion job too (merged into the job in resources/)
+        netsuite_ingestion_daily:
+          email_notifications:
+            on_failure:
+              - ${var.notification_email}
     # data-generator must read the job's files in the deploying identity's bundle folder
     permissions:
       - service_principal_name: ${var.data_generator_sp}

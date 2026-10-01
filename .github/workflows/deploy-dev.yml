@@ -104,6 +104,7 @@ jobs:
           DATABRICKS_AUTH_TYPE: oauth-m2m
           REBUILD: ${{ steps.mode.outputs.rebuild }}
           BUNDLE_VAR_data_generator_sp: ${{ vars.DATA_GENERATOR_SP }}
+          BUNDLE_VAR_notification_email: ${{ vars.NOTIFICATION_EMAIL }}
         run: |
           set -euo pipefail
           databricks bundle deploy -t dev --var="bronze_rebuild=${REBUILD}" 2>&1 | grep -v '^Uploading' | tee deploy.log
@@ -152,6 +153,7 @@ jobs:
           DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET_DEV }}
           DATABRICKS_AUTH_TYPE: oauth-m2m
           BUNDLE_VAR_data_generator_sp: ${{ vars.DATA_GENERATOR_SP }}
+          BUNDLE_VAR_notification_email: ${{ vars.NOTIFICATION_EMAIL }}
         run: |
           set -euo pipefail
           databricks bundle deploy -t dev --var="bronze_rebuild=false" 2>&1 | grep -v '^Uploading' | tail -3
