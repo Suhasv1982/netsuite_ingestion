@@ -89,6 +89,13 @@ step-1 backup); promote-prod now prunes them (below).
   `tools/apply_pg_grants.py --check` and fails on anything missing or extra. ci-dev has the "Service Principal User"
   role on data-generator (to deploy a job that runs as it); data-generator has CAN_VIEW on the dev bundle.
   Repository variable `DATA_GENERATOR_SP`.
+* **First generator runs (2026-10-01):** run 1 aborted on import (`psycopg-binary` 3.3 wheel; PR #22 switched to plain
+  `psycopg`), nothing written. Run 2 wrote one increment (+100 customers, +397 memberships, +318 certifications,
+  +1,590 transactions, +4,770 lines; backup schema `netsuite_backup_daily_202610011947`) but (a) was reported FAILED
+  only because of `sys.exit(0)` and (b) dated updated rows up to +2 days (source watermark now **2026-10-03**). Fixed:
+  exit code, `--update-spread-days 0` and `--skip-if-not-after-watermark` for the daily job, so the 2026-10-02 and
+  10-03 runs skip cleanly and real daily increments resume on **2026-10-04**. Dev and prod ingest the rows dated
+  10-02/10-03 like any other dates.
 * Backups of the source by the daily job: schema copies `netsuite_backup_daily_<stamp>` only (no Lakebase branch),
   newest 7 kept; historical `netsuite_backup_<stamp>` copies and `pre-synthetic-backup-*` branches are never touched.
 * **ci-dev MANAGE** on the six dev pipeline schemas (granted 2026-10-01), so the dev grant step can restore a missing

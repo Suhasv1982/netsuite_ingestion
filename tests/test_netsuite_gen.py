@@ -496,6 +496,19 @@ class TestCli:
         assert calls == ["backup", "load"]
         assert json.loads(out.read_text())["backup"]["verified"] is True
 
+    def test_daily_skip_when_batch_date_is_not_after_the_watermark(self, existing, tmp_path, monkeypatch, capsys):
+        calls = self._patch_writer(monkeypatch, existing, {"performed": True, "verified": True})
+        watermark = ng.current_watermark(existing)
+        rc = ng.main(["--increment", "--seed", "2", "--scale", "0.01", "--batch-date", watermark.isoformat(),
+                      "--skip-if-not-after-watermark", "--manifest", str(tmp_path / "m.json")])
+        assert rc == 0 and calls == [] and "SKIPPED" in capsys.readouterr().out
+
+    def test_without_the_skip_flag_an_old_batch_date_is_still_an_error(self, existing, tmp_path, monkeypatch):
+        self._patch_writer(monkeypatch, existing, {"performed": True, "verified": True})
+        with pytest.raises(ValueError, match="must be later than the current watermark"):
+            ng.main(["--increment", "--seed", "2", "--scale", "0.01", "--batch-date",
+                     ng.current_watermark(existing).isoformat(), "--manifest", str(tmp_path / "m.json")])
+
     def test_increment_refuses_to_load_without_a_verified_backup(self, existing, tmp_path, monkeypatch):
         calls = self._patch_writer(monkeypatch, existing, {"performed": True, "verified": False})
         with pytest.raises(RuntimeError, match="no verified backup"):
@@ -693,3 +706,20 @@ class TestItemsFromRows:
             {"item_id": 2, "item_name": None, "rate": 5},
         ]
         assert pg_writer.items_from_rows(rows) == [(1, "A", 10)]
+
+
+class TestDailyCadence:
+    def test_spread_zero_dates_every_update_on_the_batch_day(self, existing):
+        res = ng.generate_increment(ng.Generator(5), existing, SCALE, NEXT, cfg(), update_spread_days=0)
+        for table in ng.INCREMENTAL_TABLES:
+            assert {ng._as_date(r["updated_date"]) for r in res.data[table]} <= {NEXT}, table
+
+    def test_default_spread_reaches_two_days_ahead(self, existing):
+        res = ng.generate_increment(ng.Generator(5), existing, SCALE, NEXT, cfg())
+        latest = max(ng._as_date(r["updated_date"]) for t in ng.INCREMENTAL_TABLES for r in res.data[t])
+        assert latest <= NEXT + dt.timedelta(days=2)
+
+    def test_next_day_is_after_the_watermark_with_spread_zero(self, existing):
+        res = ng.generate_increment(ng.Generator(5), existing, SCALE, NEXT, cfg(), update_spread_days=0)
+        merged = {t: existing.get(t, []) + res.data[t] for t in ng.TABLES}
+        assert ng.current_watermark(merged) == NEXT

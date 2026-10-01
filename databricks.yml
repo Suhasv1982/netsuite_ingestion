@@ -119,6 +119,9 @@ targets:
                   - "schema"
                   - "--backup-keep"
                   - "7"
+                  - "--update-spread-days"
+                  - "0"
+                  - "--skip-if-not-after-watermark"
                   - "--manifest"
                   - "/tmp/netsuite_daily_manifest.json"
               environment_key: generator

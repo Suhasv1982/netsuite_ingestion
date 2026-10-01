@@ -638,8 +638,11 @@ def generate_increment(
     cfg: DefectConfig,
     apply_drift: bool = False,
     region_present: bool = False,
+    update_spread_days: int = 2,
 ) -> GenResult:
-    """`existing` maps table -> all current rows (every version) as dicts."""
+    """`existing` maps table -> all current rows (every version) as dicts. New versions of existing rows get an
+    updated_date of batch_date + 0..update_spread_days (0 for the daily schedule, so no row is dated after its
+    batch day and the next day's batch date stays later than the watermark)."""
     rng = gen.rng
     ctx = Context(mode="increment", batch_date=batch_date)
     for table in INCREMENTAL_TABLES:
@@ -690,7 +693,7 @@ def generate_increment(
             row = {c: latest[key].get(c) for c in COLUMNS[table]}
             mutate(row)
             # the watermark is updated_date: an update keeps its created_date and moves updated_date forward
-            row["updated_date"] = _stamp(table, _add_days(batch_date, rng.randint(0, 2)))
+            row["updated_date"] = _stamp(table, _add_days(batch_date, rng.randint(0, update_spread_days)))
             out.append(row)
         return out
 
@@ -778,9 +781,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--backup", choices=["branch-and-schema", "schema"], default="branch-and-schema",
                    help="branch-and-schema: Lakebase branch + verified schema copy; schema: verified copy in a "
                         "netsuite_backup_daily_<stamp> schema only (daily schedule: no branch per day)")
+    p.add_argument("--update-spread-days", type=int, default=2,
+                   help="--increment: new versions of existing rows are dated batch_date + 0..N days (daily: 0)")
+    p.add_argument("--skip-if-not-after-watermark", action="store_true",
+                   help="--increment: exit 0 without changes when --batch-date is not later than the source watermark")
     p.add_argument("--backup-keep", type=int,
                    help="with --backup schema: drop daily backup schemas beyond the newest N (others never touched)")
     return p
+
+
+def current_watermark(existing: dict) -> dt.date | None:
+    """Latest updated_date over the incremental tables (what --batch-date must be later than)."""
+    dates = [_as_date(r["updated_date"]) for t in INCREMENTAL_TABLES for r in existing.get(t, []) if r.get("updated_date") is not None]
+    return max(dates) if dates else None
 
 
 def pg_writer_daily_prefix() -> str:
@@ -827,10 +840,16 @@ def main(argv: list[str] | None = None) -> int:
             region_present = DRIFT_COLUMN in live_cols.get(DRIFT_TABLE, [])
             existing = pg_writer.read_existing(conn, live_cols)
             batch_date = args.batch_date or next_batch_date(existing)
+            watermark = current_watermark(existing)
+            if args.skip_if_not_after_watermark and watermark is not None and batch_date <= watermark:
+                print(f"SKIPPED: --batch-date {batch_date} is not later than the source watermark {watermark}; "
+                      "nothing generated, no backup, no write")
+                return 0
             gen = Generator(args.seed, pg_writer.items_from_rows(existing.get(T_LINES, [])))
             result = generate_increment(
                 gen, existing, scale, batch_date, cfg,
                 apply_drift=args.apply_schema_drift, region_present=region_present,
+                update_spread_days=args.update_spread_days,
             )
             backup_info = {"performed": False, "reason": "dry-run"}
             if not args.dry_run:
@@ -856,4 +875,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # exit explicitly only on failure: a Databricks Python task reports even SystemExit(0) as a failed run
+    rc = main()
+    if rc:
+        sys.exit(rc)
