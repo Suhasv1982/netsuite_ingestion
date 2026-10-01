@@ -7,11 +7,11 @@ name: Promote to prod
 #      matters: GitHub creates a missing environment on first use WITHOUT protection rules, which would skip the
 #      approval.
 #   2. prod (environment `prod`: waits for the required reviewer, main only): backup branch of the prod metadata,
-#      migrate --plan / --apply on prod metadata, bundle deploy -t prod with the schedule PAUSED, and, only if
-#      asked for, one run. Unpausing the schedule is never done here.
+#      backup-branch retention, migrate --plan / --apply on prod metadata, bundle deploy -t prod (schedule PAUSED
+#      unless the schedule_pause_status input is UNPAUSED: the owner's decision, step 8), grants, and, if asked
+#      for, one run.
 #
-# Runs as the ci-prod service principal (environment secrets DATABRICKS_*_PROD). ci-prod, its secrets and the
-# `prod` environment do not exist yet: they are created only with the owner's approval.
+# Runs as the ci-prod service principal (environment secrets DATABRICKS_*_PROD).
 # The first prod release (bronze rebuild, dev-vs-prod comparison) follows plan section 5 step by step.
 # Never switch the trigger to pull_request_target (CLAUDE.md). Third-party actions are pinned to commit SHAs.
 
@@ -29,6 +29,11 @@ on:
         description: Deploy with bronze_rebuild=true (first release / recovery only; see plan section 5)
         type: boolean
         default: false
+      schedule_pause_status:
+        description: Prod schedule after this deploy (UNPAUSED only with the owner's decision; step 8)
+        type: choice
+        options: [PAUSED, UNPAUSED]
+        default: PAUSED
 
 permissions:
   contents: read
@@ -137,16 +142,22 @@ jobs:
           python tools/migrate.py --env prod --apply | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: bundle deploy -t prod (schedule PAUSED)
+      - name: bundle deploy -t prod
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_PROD }}
           DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID_PROD }}
           DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET_PROD }}
           DATABRICKS_AUTH_TYPE: oauth-m2m
           BRONZE_REBUILD: ${{ inputs.bronze_rebuild }}
+          SCHEDULE: ${{ inputs.schedule_pause_status }}
         run: |
           set -euo pipefail
-          databricks bundle deploy -t prod --var="schedule_pause_status=PAUSED" --var="bronze_rebuild=${BRONZE_REBUILD}" \
+          # a rebuild deploy never unpauses the schedule
+          if [ "$BRONZE_REBUILD" = "true" ] && [ "$SCHEDULE" != "PAUSED" ]; then
+            echo "::error::bronze_rebuild=true requires the schedule to stay PAUSED"; exit 1
+          fi
+          echo "- prod schedule after this deploy: $SCHEDULE" >> "$GITHUB_STEP_SUMMARY"
+          databricks bundle deploy -t prod --var="schedule_pause_status=${SCHEDULE}" --var="bronze_rebuild=${BRONZE_REBUILD}" \
             2>&1 | grep -v '^Uploading' | tee deploy.log
           { echo '### bundle deploy -t prod'; echo '```'; grep -E '^(Resources|Files|Deployment)' deploy.log || true; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 

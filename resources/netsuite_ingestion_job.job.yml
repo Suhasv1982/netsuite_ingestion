@@ -3,7 +3,7 @@ resources:
     netsuite_ingestion_daily:
       name: netsuite_ingestion_daily
       schedule:
-        quartz_cron_expression: "0 0 6 * * ?" # daily at 06:00
+        quartz_cron_expression: ${var.daily_cron} # dev 05:30, prod 06:30 UTC
         timezone_id: "UTC"
         pause_status: ${var.schedule_pause_status}
       tasks:

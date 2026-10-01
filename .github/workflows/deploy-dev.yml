@@ -64,6 +64,21 @@ jobs:
           python tools/migrate.py --env dev --apply | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
+      # The source generator's Postgres rights must match grants/source.yml exactly (nothing missing, nothing extra:
+      # no DELETE/TRUNCATE, UPDATE only on customers). Read-only check as ci-dev; the owner applies changes.
+      - name: Verify source grants (data-generator)
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID_DEV }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET_DEV }}
+          DATABRICKS_AUTH_TYPE: oauth-m2m
+          DATA_GENERATOR_SP: ${{ vars.DATA_GENERATOR_SP }}
+        run: |
+          set -euo pipefail
+          { echo '### Source grants (data-generator)'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          python tools/apply_pg_grants.py --check | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Bronze mode (normal or rebuild)
         id: mode
         env:
@@ -88,6 +103,7 @@ jobs:
           DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET_DEV }}
           DATABRICKS_AUTH_TYPE: oauth-m2m
           REBUILD: ${{ steps.mode.outputs.rebuild }}
+          BUNDLE_VAR_data_generator_sp: ${{ vars.DATA_GENERATOR_SP }}
         run: |
           set -euo pipefail
           databricks bundle deploy -t dev --var="bronze_rebuild=${REBUILD}" 2>&1 | grep -v '^Uploading' | tee deploy.log
@@ -135,6 +151,7 @@ jobs:
           DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID_DEV }}
           DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET_DEV }}
           DATABRICKS_AUTH_TYPE: oauth-m2m
+          BUNDLE_VAR_data_generator_sp: ${{ vars.DATA_GENERATOR_SP }}
         run: |
           set -euo pipefail
           databricks bundle deploy -t dev --var="bronze_rebuild=false" 2>&1 | grep -v '^Uploading' | tail -3

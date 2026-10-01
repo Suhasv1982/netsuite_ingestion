@@ -1,0 +1,19 @@
+# Postgres grants on the source, Lakebase netsuite-sample / production, database databricks_postgres, for the
+# data-generator service principal (run identity of the daily generator job). Least privilege, derived from the SQL the
+# generator runs for --increment with --backup schema (tools/pg_writer.py):
+#   SELECT  reads existing rows, the backup copy, and the customers upsert (ON CONFLICT DO UPDATE)
+#   INSERT  COPY ... FROM STDIN of the new rows, and the customers upsert
+#   UPDATE  customers only (the upsert); the four incremental tables are append-only
+#   CREATE on the database: its own netsuite_backup_daily_<stamp> schemas (it owns, and later drops, only those)
+# Applied by the owner (tools/apply_pg_grants.py --apply); verified in CI (--check), which also fails on any privilege
+# not listed here (DELETE, TRUNCATE, ...), on ownership of a source table and on membership in another role.
+# ALTER (schema drift) is owner-only and never granted: drift experiments use an on-demand dev branch of the source.
+role_variable: DATA_GENERATOR_SP
+schema_usage: [netsuite]
+tables:
+  netsuite.netsuite_customers: [SELECT, INSERT, UPDATE]
+  netsuite.netsuite_memberships: [SELECT, INSERT]
+  netsuite.netsuite_certifications: [SELECT, INSERT]
+  netsuite.netsuite_transactions: [SELECT, INSERT]
+  netsuite.netsuite_transaction_lines: [SELECT, INSERT]
+database: [CONNECT, CREATE]
