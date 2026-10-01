@@ -48,7 +48,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Install migration runner dependency
-        run: python -m pip install -q "psycopg[binary]>=3.1"
+        run: python -m pip install -q "psycopg[binary]>=3.1" pyyaml
 
       # Stops the release before any code changes if a migration fails or an applied file was edited.
       - name: Migrations (dev metadata)
@@ -92,6 +92,20 @@ jobs:
           set -euo pipefail
           databricks bundle deploy -t dev --var="bronze_rebuild=${REBUILD}" 2>&1 | grep -v '^Uploading' | tee deploy.log
           { echo '### bundle deploy -t dev'; echo '```'; grep -E '^(Resources|Files|Deployment)' deploy.log || true; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      # Unity Catalog grants this target needs (grants/dev.yml). Additive: grants what is missing, never revokes.
+      - name: Apply grants (dev)
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID_DEV }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET_DEV }}
+          DATABRICKS_AUTH_TYPE: oauth-m2m
+          GRANT_OWNER_PRINCIPAL: ${{ vars.GRANT_OWNER_PRINCIPAL }}
+        run: |
+          set -euo pipefail
+          { echo '### Grants (dev)'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          python tools/apply_grants.py --target dev | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       # One run: normal, except a full refresh in rebuild mode when bronze already exists (the guard in bronze.py
       # allows that only because the deploy above set bronze_rebuild=true). Run-page URLs carry the workspace id and
