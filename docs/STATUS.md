@@ -48,9 +48,8 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
   numbers as the hand-deployed run earlier that day.
 * Dev metadata: `schema_migrations` 001, 002 (backfill), 003 (`applied_by` aidq_owner); `netsuite_customers` has
   `watermark_col` NULL. Deployed dev: `bronze_rebuild=false`, scope `netsuite_ingestion_dev`, schedules PAUSED.
-* **The owner cannot read the dev tables any more**: they are owned by ci-dev (the pipeline's identity). Fix
-  (owner runs it; the tool's classifier refuses grants): `GRANT SELECT ON SCHEMA workspace.<schema> TO <owner>`
-  for `poc_bronze`, `poc_silver`, `poc_reject`, `poc_gold` and `canary`.
+* The dev tables are owned by ci-dev (the pipeline's identity); the owner reads them through USE SCHEMA + SELECT
+  on `workspace.poc_bronze`, `poc_silver`, `poc_reject`, `poc_gold` and `canary` (granted 2026-09-30).
 
 ## 1b. Phase 1 close-out (Part 1, 2026-09-30)
 
@@ -89,8 +88,8 @@ refused to start (`Cannot create the resource`). Both worked again after the end
   `workspace.poc_bronze`, `poc_silver`, `poc_reject`, `poc_gold` (new, created 2026-09-30), `ledger`, `canary`,
   `default` (USE SCHEMA only since 2026-09-30: it holds other projects' tables). SQL warehouse: CAN_MANAGE (canary).
 * Grant inventory 2026-09-30: nothing beyond the plan. BROWSE on other catalogs comes from `account users` (all
-  users), not from a ci-dev grant. Not ci-dev: another user (`sid.v@...`) holds ALL_PRIVILEGES on `poc_netsuite`
-  (flagged to the owner).
+  users), not from a ci-dev grant. Another user (`sid.v@...`) held ALL_PRIVILEGES on `poc_netsuite`; reduced to
+  USE CATALOG + USE SCHEMA + SELECT (read-only) on 2026-09-30 with the owner's OK.
 * Scope `netsuite_ingestion_dev`, ci-dev WRITE (owner MANAGE). ci-dev has no access to `netsuite_ingestion_poc`.
 * Verified as ci-dev: Lakebase login and the grants (allowed and denied cases), scope WRITE, `bundle validate`
   dev + prod, and `run_as` (accepted with `mode: development`; job and both pipelines run as ci-dev).
@@ -200,7 +199,11 @@ copy that holds the owner's bundle state.
   `run_audit`; source USAGE + SELECT on `netsuite` (default privileges for new tables).
 * Scope **`netsuite_ingestion_prod`**: ci-prod WRITE, owner MANAGE. ci-prod has no access to the dev or `poc` scope.
 * UC: USE CATALOG `poc_netsuite`; USE SCHEMA, CREATE TABLE, CREATE MATERIALIZED VIEW, SELECT, MODIFY on
-  `poc_bronze`, `poc_silver`, `poc_reject`, `poc_gold` (created); USE SCHEMA on `default`.
+  `poc_bronze`, `poc_silver`, `poc_reject`, `poc_gold`, `ledger`, `canary` (the last three created for prod);
+  USE SCHEMA on `default`.
+* Release step 0 access (granted 2026-09-30, owner's OK): ci-prod CAN_MANAGE on the existing prod job
+  `netsuite_ingestion_daily` and pipeline `netsuite_ingestion_poc` (owner stays IS_OWNER). Not yet done: the
+  `bundle deployment bind` itself (first release).
 * Verified as ci-prod: identity, Lakebase login and grants (allowed and denied), prod scope WRITE, no access to
   other scopes, `bundle validate -t prod` from a clean checkout (no warnings).
 * PR (prod target): `run_as` and CAN_MANAGE = the deploying service principal (ci-prod via promote-prod),
@@ -210,14 +213,12 @@ copy that holds the owner's bundle state.
 
 ## 3. Decisions waiting for the owner
 
-1. Run `grant_ci_prod.py` (prod metadata ownership, above).
-2. First prod release, step by step (plan section 5, starting with the new step 0: take over the existing prod job
-   and pipeline with `bundle deployment bind`, ci-prod CAN_MANAGE on them, schemas `poc_netsuite.ledger` and
-   `poc_netsuite.canary`).
-3. Owner SELECT on the dev schemas (dev tables are owned by ci-dev now).
-4. Add `migrate plan (dev)` to the required checks.
-5. The daily dev schedule (`docs/dev_daily_schedule.md`): settle its 4 blockers, then unpause.
-6. The ALL_PRIVILEGES grant on `poc_netsuite` for another user.
+1. Run `grant_ci_prod.py` (`aidq_owner` on prod metadata with ci-prod as member): the tool's classifier refuses
+   role-ownership changes, so the owner runs it. promote-prod's `migrate --apply` needs it.
+2. First prod release, step by step (plan section 5, starting with step 0: `bundle deployment bind` of the
+   existing prod job and pipeline as ci-prod).
+3. Add `migrate plan (dev)` to the required checks.
+4. The daily dev schedule (`docs/dev_daily_schedule.md`): settle its 4 blockers, then unpause.
 
 ## 4. Gotchas
 
