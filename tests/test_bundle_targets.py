@@ -91,10 +91,10 @@ class TestDeployIdentity:
     def test_runs_as_the_deploying_service_principal(self, bundle, target):
         assert bundle["targets"][target]["run_as"] == {"service_principal_name": "${workspace.current_user.userName}"}
 
-    def test_prod_manage_permission_is_the_service_principal(self, bundle):
-        assert bundle["targets"]["prod"]["permissions"] == [
-            {"service_principal_name": "${workspace.current_user.userName}", "level": "CAN_MANAGE"}
-        ]
+    def test_prod_bundle_does_not_manage_acls(self, bundle):
+        # bundle permissions would change the pipeline owner, which only a metastore admin may do (Free Edition)
+        assert "permissions" not in bundle["targets"]["prod"]
+        assert "permissions" not in bundle
 
     def test_prod_uses_its_own_scope(self, bundle):
         assert _resolved_var(bundle, "prod", "secret_scope") == "netsuite_ingestion_prod"
