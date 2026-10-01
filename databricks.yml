@@ -129,7 +129,9 @@ targets:
                 dependencies:
                   - faker>=30
                   - pyyaml
-                  - psycopg[binary]>=3.1
+                  # plain psycopg on the runtime's libpq: the psycopg-binary 3.3 wheel aborts the interpreter
+                  # (SIGABRT on import) in this serverless environment (probed 2026-10-01)
+                  - psycopg>=3.1
                   - databricks-sdk>=0.94.0
     # data-generator must read the job's files in the deploying identity's bundle folder
     permissions:
