@@ -8,8 +8,7 @@ Read this first, then run `git status` and check open PRs. Updated after every P
 required checks `gitleaks (full history)`, `pytest` and `bundle validate` (added 2026-09-30), administrators
 included, no force push or deletion. Secret scanning and push protection on. Local pre-push hook: gitleaks + pytest.
 
-**Pull requests.** Merged: #1-#11 (#11: dev `run_as` fix; the first deploy-dev run failed because the pipelines API
-cannot unset a `run_as` set in step A). Open: the prod-target PR (Step F setup, below).
+**Pull requests.** Merged: #1-#15. Open: #16 (codify UC grants; waits for the `GRANT_OWNER_PRINCIPAL` variable).
 
 **Work in progress** (owner's instructions of 2026-09-30):
 * Part 1, close out Phase 1 in one dev-only PR: gold layer, SOFT-rule expectation check, guard read-retry count,
@@ -38,6 +37,25 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
 
 **Source database (`netsuite-sample`):** production plus backups `pre-synthetic-backup-202609242053`,
 `...202609252235`, `...202609260101`, `...202609260109` (5 of 10 branches).
+
+## 0. First prod release (2026-10-01, steps 0-7 done; step 8 open)
+
+| Step | Result |
+|---|---|
+| 0 bind | existing prod job `netsuite_ingestion_daily` and pipeline `netsuite_ingestion_poc` bound into ci-prod's bundle deployment (`bundle deployment bind`); plan showed in-place updates, 0 deletes |
+| 1 backups | Lakebase branch `aidq-metadata/pre-release-202610010053`; schema copy `aidq_metadata_backup_202610010053` (5 tables, counts verified); JSON snapshot in `baseline/raw/` (local) |
+| 2 migrations | 001, 002, 003 applied on prod metadata as `aidq_owner` (`--plan` first; PR #14 fixed the plan to dry-run files cumulatively) |
+| 3 deploy | promote-prod (bb48fef, `bronze_rebuild=true`): job and pipeline run as ci-prod, scope `netsuite_ingestion_prod`, schedule PAUSED; guard canary created. First attempt failed (403 on bundle ACLs) -> PR #15 dropped bundle `permissions`; job owner moved to ci-prod; the pipeline stays owned by the owner (only a metastore admin, `System user`, can change a pipeline owner) |
+| backup of prod tables | `poc_netsuite.backup_pre_release_202610010127`: 22 tables (17 per-date bronze views + customers, 4 silver, rejects) via CTAS (deep clone is refused for MVs/STs), counts verified. **Keep until step 8 plus a few good scheduled runs; ask before dropping.** |
+| 4-5 rebuild and compare | dev run 648860584880106, then prod `full_refresh` run 210819933825138 (first attempt failed in setup: ci-prod lacked CREATE on `poc_netsuite.default`; granted). Source exact counts equal before and after. **Dev = prod exactly** for bronze (5), silver (4), rejects as (table, rule, key) sets (54), ledger keys (57,552) and fingerprints (53), gold (5,280 / 1,861); no extra dev `_snapshot_date`. Prod `ledger_check` OK |
+| 6 normal mode | promote-prod (`bronze_rebuild=false`, one run 613901313133793): 0 new bronze rows, `ledger_check` OK, guard WARN (2 reads) |
+| 7 old views | the 16 per-date materialized views (`<table>__2026_06_20/07_11/08_01/08_22`) dropped as ci-prod after confirming no current dataset defines them; silver, rejects, gold counts unchanged; copies remain in the backup schema |
+| 8 schedule | **open: unpausing the prod schedule needs the owner's OK** |
+
+Access changes made during the release: ci-prod CAN_MANAGE on project `aidq-metadata` (backup branches), ci-prod
+CREATE TABLE/MV on `poc_netsuite.default`, owner USE SCHEMA + SELECT on the prod and dev pipeline schemas (tables are
+owned by the run identities). PR #16 codifies the UC grants (additive step in CI; needs the `GRANT_OWNER_PRINCIPAL`
+repository variable). `aidq-metadata` now has 5 of 10 branches (3 `pre-release-*`): needs a retention rule.
 
 ## 1a. First CI dev run (2026-09-30, deploy-dev run on the #11 merge: green)
 
@@ -213,12 +231,13 @@ copy that holds the owner's bundle state.
 
 ## 3. Decisions waiting for the owner
 
-1. Run `grant_ci_prod.py` (`aidq_owner` on prod metadata with ci-prod as member): the tool's classifier refuses
-   role-ownership changes, so the owner runs it. promote-prod's `migrate --apply` needs it.
-2. First prod release, step by step (plan section 5, starting with step 0: `bundle deployment bind` of the
-   existing prod job and pipeline as ci-prod).
-3. Add `migrate plan (dev)` to the required checks.
-4. The daily dev schedule (`docs/dev_daily_schedule.md`): settle its 4 blockers, then unpause.
+1. Step 8: unpause the prod schedule (daily 06:00 UTC).
+2. PR #16: create the repository variable `GRANT_OWNER_PRINCIPAL`; optionally MANAGE for the CI identities on their
+   schemas so the grant step can restore a missing grant (prod: a prod grant change).
+3. Retention for `pre-release-*` metadata branches (each promote-prod run adds one; 10-branch limit).
+4. When to drop `poc_netsuite.backup_pre_release_202610010127` (after step 8 plus a few good scheduled runs).
+5. Add `migrate plan (dev)` to the required checks.
+6. The daily dev schedule (`docs/dev_daily_schedule.md`): settle its 4 blockers, then unpause.
 
 ## 4. Gotchas
 
