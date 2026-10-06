@@ -14,7 +14,7 @@ import time
 import urllib.error
 import urllib.request
 
-from .investigate import MAX_TOOL_CALLS, RCA_SCHEMA, SYSTEM, Investigation, _user_prompt
+from .investigate import MAX_TOOL_CALLS, RCA_SCHEMA, Investigation, _user_prompt, system_prompt
 from .toolbox import ToolBox
 
 DEFAULT_MODEL = "databricks-gpt-oss-120b"
@@ -107,12 +107,12 @@ class DatabricksInvestigator:
     async def investigate(self, category: str, signals: list[str], notes: list[str], today: str,
                           toolbox: ToolBox) -> Investigation:
         tools = openai_tools(await toolbox.list_tools())
-        system = SYSTEM + f"\n\nWhen you are done, call {SUBMIT} with the analysis (do not answer in plain text)."
+        system = system_prompt() + f"\n\nWhen you are done, call {SUBMIT} with the analysis (do not answer in plain text)."
         messages = [{"role": "system", "content": system},
                     {"role": "user", "content": _user_prompt(category, signals, notes, today)}]
         calls: list[dict] = []
         usage = {"input_tokens": 0, "output_tokens": 0}
-        nudged = False
+        nudges = 0
         for _ in range(MAX_TOOL_CALLS + 6):
             try:
                 resp = await self.chat.complete(self.model, messages, tools)
@@ -131,9 +131,11 @@ class DatabricksInvestigator:
                     return Investigation(rca, calls, model=self.model, usage=usage)
                 if choice.get("finish_reason") == "length":
                     return Investigation(None, calls, "answer cut off at max_tokens", self.model, usage)
-                if nudged:
+                if nudges >= 2:
                     return Investigation(None, calls, f"no {SUBMIT} call; last text: {_text(msg)[:200]}", self.model, usage)
-                nudged = True
+                nudges += 1
+                if not _text(msg).strip():     # an empty reply: drop it and ask again instead of keeping a blank turn
+                    messages.pop()
                 messages.append({"role": "user", "content": f"Call {SUBMIT} now with your analysis."})
                 continue
             for tc in tool_calls:

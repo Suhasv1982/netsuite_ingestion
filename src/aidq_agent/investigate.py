@@ -8,6 +8,7 @@ output_config.format. Server-side fallbacks are on ("default"): a declined reque
 from __future__ import annotations
 
 import json
+import pathlib
 from dataclasses import dataclass, field
 
 import anthropic
@@ -55,6 +56,17 @@ otherwise give it as the most likely explanation, set confidence accordingly, an
 open_questions. Ruling things out is useful: put each explanation the evidence excludes in not_the_cause with the \
 reason. Do not repeat the context notes back as findings."""
 
+DESIGN_NOTES = pathlib.Path(__file__).resolve().parents[2] / "docs" / "platform_design_notes.md"
+
+
+def system_prompt() -> str:
+    """SYSTEM plus the maintained platform design notes (mechanisms only, no incident diagnoses)."""
+    try:
+        notes = DESIGN_NOTES.read_text(encoding="utf-8")
+    except OSError:
+        return SYSTEM
+    return f"{SYSTEM}\n\n<platform_design_notes>\n{notes}\n</platform_design_notes>"
+
 
 @dataclass
 class Investigation:
@@ -88,7 +100,7 @@ class AnthropicInvestigator:
         for _ in range(MAX_TOOL_CALLS + 4):          # tool turns + the final answer, with slack for pause_turn
             try:
                 resp = await self.client.beta.messages.create(
-                    model=self.model, max_tokens=16000, system=SYSTEM, tools=tools, messages=messages,
+                    model=self.model, max_tokens=16000, system=system_prompt(), tools=tools, messages=messages,
                     output_config={"effort": self.effort, "format": {"type": "json_schema", "schema": RCA_SCHEMA}},
                     betas=["server-side-fallback-2026-07-01"], fallbacks="default")
             except anthropic.RateLimitError as e:

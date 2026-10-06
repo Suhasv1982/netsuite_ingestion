@@ -40,7 +40,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(prog="python -m aidq_agent")
     ap.add_argument("--profile", default=os.environ.get("AIDQ_PROFILE"), help="Databricks CLI profile (or AIDQ_PROFILE)")
     ap.add_argument("--write", action="store_true", help="insert incidents (default: dry run)")
-    ap.add_argument("--model", default="claude-opus-5-5",
+    ap.add_argument("--model", default="databricks-gpt-oss-120b",
                     help="claude-* (Anthropic API) or databricks-* (a model served on the workspace, e.g. "
                          "databricks-gpt-oss-120b)")
     ap.add_argument("--report-file", help="append the markdown report here (e.g. $GITHUB_STEP_SUMMARY)")
