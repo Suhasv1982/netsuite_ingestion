@@ -24,13 +24,14 @@ class Unavailable(RuntimeError):
 
 
 class Reads:
-    def __init__(self, profile: str):
+    def __init__(self, profile: str | None):
+        """`profile` None: the CLI authenticates from DATABRICKS_* variables (CI)."""
         self.profile = profile
 
     # -- Databricks CLI ---------------------------------------------------------
 
     def cli(self, *args: str, body: dict | None = None):
-        cmd = ["databricks", *args, "--profile", self.profile, "-o", "json"]
+        cmd = ["databricks", *args, "-o", "json"] + (["--profile", self.profile] if self.profile else [])
         if body is not None:
             cmd += ["--json", json.dumps(body)]
         env = {**os.environ, "MSYS_NO_PATHCONV": "1"}

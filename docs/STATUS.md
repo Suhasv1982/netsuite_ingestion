@@ -163,6 +163,24 @@ step-1 backup); promote-prod now prunes them (below).
   migration 005 for incident categories `ORCHESTRATION` / `DATA_COMPLETENESS`, and (ask first) a read-only SP
   `aidq-reader` with INSERT on `incidents`.
 
+## 0f. Phase 4: monitor + RCA agent (2026-10-06)
+
+* Plan `docs/phase4_agent_plan.md` (approved). Code `src/aidq_agent` (PRs #31-#34): LangGraph `collect -> triage ->
+  dedupe -> investigate -> write -> report`; only `investigate` uses a model, only through the five aidq_mcp tools;
+  writing is a fixed node (INSERT into dev `aidq_metadata.incidents`, one OPEN incident per fingerprint,
+  migration 005 applied on dev).
+* Model (owner decision): free `databricks-gpt-oss-120b` served on the workspace, for evals and production (no
+  API key). `--model claude-opus-5-5` selects the Anthropic API. The agent's prompt includes
+  `docs/platform_design_notes.md` (mechanisms only, never an incident's diagnosis).
+* Evals (`evals/run_agent_eval.py`, recorded tool outputs, judge `databricks-qwen35-122b-a10b`): all targets met
+  (`evals/results/2026-10-06_databricks-gpt-oss-120b.md`).
+* Runs as ci-dev. ci-dev cannot read `system.access.audit` (not grantable on Free Edition): `config_changes` is
+  `unavailable` there; GitHub deploys are still reported.
+* **Scheduled:** `.github/workflows/monitor-dev.yml`, 06:15 UTC, writes incidents; fails (GitHub email) only when a
+  new incident was written. The first run is expected to write the 10-06 ORCHESTRATION incident (missed runs still
+  in its 3-day window). Manual run: Actions -> Monitor dev, `write` off for a dry run.
+* Local: `PYTHONPATH=src .venv/Scripts/python -m aidq_agent --profile DEFAULT [--write]`.
+
 ## 1a. First CI dev run (2026-09-30, deploy-dev run on the #11 merge: green)
 
 * Rebuild mode (poc_bronze was empty after `[dev suhasv]` was removed): migrations (003 applied by the previous,

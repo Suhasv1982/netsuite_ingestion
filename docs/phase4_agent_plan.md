@@ -1,6 +1,6 @@
 # Phase 4 plan: first agent, daily monitor + root-cause analysis (dev)
 
-Status: **approved 2026-10-06** (decisions in section 9). The agent runs as **ci-dev** (owner choice over a new
+Status: **approved 2026-10-06** (decisions in section 9); steps A-D done 2026-10-06. The agent runs as **ci-dev** (owner choice over a new
 read-only service principal).
 
 ## 1. Goal and scope
@@ -90,7 +90,7 @@ model client interface, so the choice is one config value plus its credentials.
 | A | migration 005, `get_recent_deploys` degrades without audit access, this plan | 005 applied on dev by deploy-dev |
 | B | `src/aidq_agent/`: graph, triage rules, RCA prompt and schema, writer; unit tests with a fake model and fake tools | CI green; local `--dry-run` against live dev |
 | C | recorded tool outputs, replay server, eval harness, first results | targets in section 7 met |
-| D | `monitor-dev.yml` (workflow file: ask first) and the model secret | first scheduled run reported |
+| D | `monitor-dev.yml` (approved 2026-10-06); SDK auth so the free-model client works as ci-dev (OAuth M2M); no secret needed | first scheduled run reported |
 
 ## 9. Decisions (owner, 2026-10-06)
 

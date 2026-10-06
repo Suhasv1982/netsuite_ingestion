@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import subprocess
 import time
 import urllib.error
 import urllib.request
@@ -22,34 +21,28 @@ SUBMIT = "submit_rca"
 
 
 class DatabricksChat:
-    """Chat completions as the CLI profile's identity; the OAuth token is refreshed every 30 minutes."""
+    """Chat completions as the caller: a CLI profile locally, the DATABRICKS_* variables (ci-dev, OAuth M2M) in CI.
+    The SDK's Config resolves either and refreshes the token."""
 
     def __init__(self, profile: str | None, timeout: int = 300):
         self.profile, self.timeout = profile, timeout
-        self._token, self._token_at, self._host = None, 0.0, None
+        self._config = None
 
-    def _cli(self, *args):
-        cmd = ["databricks", *args, "-o", "json"] + (["--profile", self.profile] if self.profile else [])
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        if p.returncode:
-            raise RuntimeError(f"databricks {' '.join(args)}: {p.stderr.strip()[:200]}")
-        return json.loads(p.stdout)
+    def _auth(self) -> tuple[str, dict]:
+        if self._config is None:
+            from databricks.sdk.core import Config
 
-    def _auth(self) -> tuple[str, str]:
-        if self._host is None:
-            self._host = self._cli("auth", "describe")["details"]["host"].rstrip("/")
-        if self._token is None or time.monotonic() - self._token_at > 1800:
-            self._token, self._token_at = self._cli("auth", "token")["access_token"], time.monotonic()
-        return self._host, self._token
+            self._config = Config(profile=self.profile) if self.profile else Config()
+        return self._config.host.rstrip("/"), self._config.authenticate()
 
     def complete_sync(self, model: str, messages: list[dict], tools: list[dict] | None = None,
                       max_tokens: int = 4000) -> dict:
-        host, token = self._auth()
+        host, auth_headers = self._auth()
         body = {"messages": messages, "max_tokens": max_tokens}
         if tools:
             body["tools"] = tools
         req = urllib.request.Request(f"{host}/serving-endpoints/{model}/invocations", data=json.dumps(body).encode(),
-                                     headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+                                     headers={**auth_headers, "Content-Type": "application/json"})
         for attempt in range(4):
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout) as r:
