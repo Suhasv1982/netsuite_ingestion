@@ -2,7 +2,7 @@
 
 import datetime as dt
 
-from daily_check import audit_findings, classify_generator_log, compare_counts, runs_on_date
+from daily_check import audit_findings, classify_generator_log, explain_count_gaps, runs_on_date
 
 D = dt.date(2026, 10, 4)
 
@@ -23,11 +23,35 @@ def test_generator_log_classification():
     assert classify_generator_log("Traceback ...") == "unknown"
 
 
-def test_compare_counts():
-    src = {"netsuite_customers": 1, "netsuite_memberships": 2, "netsuite_certifications": 3,
-           "netsuite_transactions": 4, "netsuite_transaction_lines": 5}
-    assert compare_counts(src, dict(src)) == []
-    assert compare_counts(src, {**src, "netsuite_transactions": 3}) == ["netsuite_transactions: source=4 dev=3"]
+SRC = {("netsuite_customers", None): 10, ("netsuite_transactions", "2026-07-11"): 50,
+       ("netsuite_transactions", "2026-10-02"): 40}
+
+
+def test_explain_count_gaps():
+    assert explain_count_gaps(SRC, dict(SRC), {}) == ([], [])
+    fails, warns = explain_count_gaps(SRC, {**SRC, ("netsuite_transactions", "2026-10-02"): 37}, {})
+    assert fails == ["netsuite_transactions@2026-10-02: source=40 dev=37"] and warns == []
+    fails, _ = explain_count_gaps(SRC, {**SRC, ("netsuite_customers", None): 9}, {})
+    assert fails == ["netsuite_customers: source=10 dev=9"]
+    fails, _ = explain_count_gaps(SRC, {**SRC, ("netsuite_transactions", "2026-10-09"): 1}, {})
+    assert fails == ["netsuite_transactions@2026-10-09: source=0 dev=1"]
+
+
+def test_date_short_by_its_same_day_duplicates_is_a_known_defect():
+    extra = {("netsuite_transactions", "2026-07-11"): 5, ("netsuite_transactions", "2026-10-02"): 3}
+    fails, warns = explain_count_gaps(SRC, {**SRC, ("netsuite_transactions", "2026-10-02"): 37}, extra)
+    assert fails == []
+    assert warns == ["netsuite_transactions@2026-10-02: source=40 dev=37, the 3 missing rows are same-day duplicate versions"]
+
+
+def test_duplicates_on_another_date_do_not_explain_a_gap():
+    # 07-11 duplicates arrived in one batch and are in bronze; they must not cover a gap elsewhere
+    extra = {("netsuite_transactions", "2026-07-11"): 3}
+    fails, warns = explain_count_gaps(SRC, {**SRC, ("netsuite_transactions", "2026-10-02"): 37}, extra)
+    assert fails == ["netsuite_transactions@2026-10-02: source=40 dev=37"] and warns == []
+    fails, _ = explain_count_gaps(SRC, {**SRC, ("netsuite_transactions", "2026-10-02"): 36},
+                                  {("netsuite_transactions", "2026-10-02"): 3})
+    assert fails == ["netsuite_transactions@2026-10-02: source=40 dev=36"]
 
 
 def _audit(ledger="OK", guard="OK", reads=1, failed=False):

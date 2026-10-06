@@ -687,7 +687,11 @@ def generate_increment(
 
     # new versions of existing rows (same key and created_date, later updated_date)
     def versions(table, mutate):
-        latest = _latest_by_key(existing.get(table, []), BUSINESS_KEY[table])
+        key_col = BUSINESS_KEY[table]
+        latest = _latest_by_key(existing.get(table, []), key_col)
+        # (key, date) pairs the source already holds: bronze's key ledger tracks distinct (key, date) pairs, so a
+        # second version of a key on a date it already has is never loaded (incident 2026-10-02/03). Skip those.
+        taken = {(r.get(key_col), _as_date(r.get("updated_date"))) for r in existing.get(table, [])}
         keys = rng.sample(sorted(latest), min(len(latest), int(len(latest) * scale.increment_update_pct)))
         out = []
         for key in keys:
@@ -695,6 +699,9 @@ def generate_increment(
             mutate(row)
             # the watermark is updated_date: an update keeps its created_date and moves updated_date forward
             row["updated_date"] = _stamp(table, _add_days(batch_date, rng.randint(0, update_spread_days)))
+            if (key, _as_date(row["updated_date"])) in taken:
+                continue
+            taken.add((key, _as_date(row["updated_date"])))
             out.append(row)
         return out
 
