@@ -7,8 +7,9 @@ Changes nothing. For the given date it reports, with OK / WARN / FAIL per line:
      increment; source rows with that updated_date; rows dated after it; daily backup schemas of that day.
   2. dev job (`[dev ci_dev] netsuite_ingestion_daily`) and prod job (`netsuite_ingestion_daily`): runs that day and
      their result; for each, the run_audit rows of that run (ledger status per table, guard status and reads).
-  3. dev bronze now: exact row counts against the source (FAIL on any difference); rows loaded into dev bronze that
-     day, per table and _snapshot_date.
+  3. dev bronze now: exact row counts against the source per table and snapshot date (FAIL on any difference,
+     except a WARN when a date is short by exactly the source's same-day duplicate versions on that date, which the
+     bronze key ledger never loads); rows loaded into dev bronze that day, per table and _snapshot_date.
   4. rejects (dev, now) per table and per reason; gold row counts and as_of_date.
 Exit 1 if any line is FAIL. Needs: Databricks CLI (profile), psycopg, a SQL warehouse (starts it if stopped).
 """
@@ -31,6 +32,8 @@ META_ENDPOINTS = {"dev": "projects/aidq-metadata/branches/dev/endpoints/primary"
 TABLES = ["netsuite_customers", "netsuite_memberships", "netsuite_certifications", "netsuite_transactions",
           "netsuite_transaction_lines"]
 INCREMENTAL = TABLES[1:]
+BUSINESS_KEY = {"netsuite_memberships": "membership_internal_id", "netsuite_certifications": "certification_internal_id",
+                "netsuite_transactions": "transaction_internal_id", "netsuite_transaction_lines": "transaction_line_id"}
 
 
 # -- pure -------------------------------------------------------------------
@@ -52,9 +55,23 @@ def classify_generator_log(log: str) -> str:
     return "unknown"
 
 
-def compare_counts(source: dict[str, int], target: dict[str, int]) -> list[str]:
-    """Tables whose counts differ, as 'table: source=X target=Y'."""
-    return [f"{t}: source={source.get(t)} dev={target.get(t)}" for t in TABLES if source.get(t) != target.get(t)]
+def explain_count_gaps(source: dict[tuple, int], target: dict[tuple, int],
+                       same_day_extra: dict[tuple, int]) -> tuple[list[str], list[str]]:
+    """(fails, warns) for dev bronze vs source, both keyed by (table, snapshot date) (date None for a full-load
+    table). A date short by exactly the source's same-day duplicate versions on that date (rows minus distinct
+    keys) is a known defect (WARN): the bronze key ledger tracks distinct (key, date) pairs, so a second version of a
+    key on a date that was already loaded never reaches bronze. Duplicates that arrived in one batch are loaded."""
+    fails, warns = [], []
+    for t, d in sorted(set(source) | set(target), key=lambda k: (k[0], str(k[1]))):
+        s, n, extra = source.get((t, d), 0), target.get((t, d), 0), same_day_extra.get((t, d), 0)
+        if s == n:
+            continue
+        where = t if d is None else f"{t}@{d}"
+        if extra and s - n == extra:
+            warns.append(f"{where}: source={s} dev={n}, the {extra} missing rows are same-day duplicate versions")
+        else:
+            fails.append(f"{where}: source={s} dev={n}")
+    return fails, warns
 
 
 def audit_findings(rows: list[dict]) -> tuple[list[str], list[str]]:
@@ -196,6 +213,13 @@ def main(argv: list[str] | None = None) -> int:
                  for t in INCREMENTAL}
         future = {t: c.execute(f"SELECT count(*) FROM netsuite.{t} WHERE updated_date::date > %s", (day,)).fetchone()[0]
                   for t in INCREMENTAL}
+        src_by_day, extra = {("netsuite_customers", None): source["netsuite_customers"]}, {}
+        for t in INCREMENTAL:
+            for d, n, k in c.execute(f"SELECT updated_date::date, count(*), count(DISTINCT {BUSINESS_KEY[t]}) "
+                                     f"FROM netsuite.{t} GROUP BY 1").fetchall():
+                src_by_day[(t, str(d))] = n
+                if n > k:
+                    extra[(t, str(d))] = n - k
         backups = [r[0] for r in c.execute("SELECT nspname FROM pg_namespace WHERE nspname LIKE %s ORDER BY 1",
                                            ("netsuite_backup_daily_%",)).fetchall()]
         c.rollback()
@@ -214,10 +238,19 @@ def main(argv: list[str] | None = None) -> int:
 
     # 3. dev bronze vs source, rows loaded that day; 4. rejects, gold
     wh = args.warehouse_id or _cli(prof, "warehouses", "list")[0]["id"]
-    q = " UNION ALL ".join(f"SELECT '{t}' t, count(*) n FROM workspace.poc_bronze.{t}" for t in TABLES)
-    dev_counts = {r["t"]: int(r["n"]) for r in sql(prof, wh, q)}
-    diff = compare_counts(source, dev_counts)
-    rep.line("FAIL" if diff else "OK", "dev bronze vs source (now): " + ("; ".join(diff) if diff else "identical counts"))
+    q = " UNION ALL ".join(
+        f"SELECT '{t}' t, cast(_snapshot_date AS string) d, count(*) n FROM workspace.poc_bronze.{t} GROUP BY 2"
+        for t in INCREMENTAL)
+    dev_by_day = {(r["t"], r["d"]): int(r["n"]) for r in sql(prof, wh, q)}
+    dev_by_day[("netsuite_customers", None)] = int(
+        sql(prof, wh, "SELECT count(*) n FROM workspace.poc_bronze.netsuite_customers")[0]["n"])
+    fails, warns = explain_count_gaps(src_by_day, dev_by_day, extra)
+    for msg in fails:
+        rep.line("FAIL", f"dev bronze vs source (now): {msg}")
+    for msg in warns:
+        rep.line("WARN", f"dev bronze vs source (now): {msg} (known defect)")
+    if not fails and not warns:
+        rep.line("OK", "dev bronze vs source (now): identical counts per table and snapshot date")
     q = " UNION ALL ".join(
         f"SELECT '{t}' t, cast(_snapshot_date AS string) d, count(*) n FROM workspace.poc_bronze.{t} "
         f"WHERE cast(_loaded_at AS date) = DATE'{day}' GROUP BY _snapshot_date" for t in INCREMENTAL)

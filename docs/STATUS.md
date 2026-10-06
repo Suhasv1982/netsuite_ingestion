@@ -1,4 +1,4 @@
-# STATUS (updated 2026-09-30)
+# STATUS (updated 2026-10-06)
 
 Read this first, then run `git status` and check open PRs. Updated after every Phase 2 step.
 
@@ -120,6 +120,26 @@ step-1 backup); promote-prod now prunes them (below).
   grant. **Prod: no MANAGE for ci-prod by decision**; a missing prod grant fails the prod grant step.
 * **Prod table backup** `poc_netsuite.backup_pre_release_202610010127`: keep until step 8 plus three good scheduled
   prod runs, then ask the owner before dropping.
+
+## 0d. Daily checks 10-02 to 10-05 (run 2026-10-06)
+
+* Generator and dev `netsuite_ingestion_daily` SUCCESS every day (scheduled), ledger OK, guard WARN (2 reads), no
+  prod runs. The source and dev metadata endpoints were found disabled again (last active 10-05 about 05:35 UTC)
+  and re-enabled with the owner's OK; prod metadata is still disabled.
+* **Incident 1: same-day duplicate versions not loaded.** Dev bronze was short of the source by 287 rows
+  (memberships 24, certifications 6, transactions 63, lines 194), all on snapshot dates 10-02 and 10-03. Cause:
+  generator run 2 (10-01) wrote versions dated 10-02/10-03; the 10-02/10-03 batches (`--allow-before-watermark`)
+  then wrote a second version of some of the same keys with the same `updated_date` (a plain date). The key ledger
+  and the per-date fingerprints count distinct (business_key, date) pairs, so such a version changes no
+  fingerprint and no top-up loads it; bronze and silver keep the 10-01 version. **Known pipeline limitation**: a
+  source that updates a key twice in one day loses the second version. Owner decision (10-06): keep the 287 rows
+  as a defect; the generator no longer writes a version on a (key, date) the source already holds;
+  `daily_check.py` compares per table and snapshot date and reports a date short by exactly its same-day
+  duplicates as a known-defect WARN (duplicates that arrive in one batch, e.g. 07-11, are loaded and stay OK).
+* **Incident 2: no scheduled runs on 10-06.** Both dev schedules UNPAUSED, no job change in the audit log since
+  10-04, no deploy-dev since 10-01, and no `runTriggered` on 10-06: the scheduler never fired. Recorded as a
+  platform cause (Free Edition, idle workspace suspected, not confirmed).
+* Prod job cron is `0 0 6 * * ?` (06:00 UTC), not 06:30 as planned: settle before step 8.
 
 ## 1a. First CI dev run (2026-09-30, deploy-dev run on the #11 merge: green)
 
@@ -295,7 +315,7 @@ copy that holds the owner's bundle state.
 
 ## 3. Decisions waiting for the owner
 
-1. On 2026-10-05: review `tools/daily_check.py` for 10-02 to 10-05, then decide on step 8 (unpause prod at 06:30 UTC).
+1. Step 8 (unpause prod): on hold until the daily checks are clean (section 0d); also settle the prod cron (06:00 vs 06:30).
 2. After step 8 plus three good scheduled prod runs: drop `poc_netsuite.backup_pre_release_202610010127` (ask).
 
 ## 4. Gotchas

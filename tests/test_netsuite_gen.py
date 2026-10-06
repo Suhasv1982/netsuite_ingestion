@@ -732,6 +732,18 @@ class TestDailyCadence:
         with pytest.raises(ValueError, match="must be later than the current watermark"):
             ng.generate_increment(ng.Generator(6), existing, SCALE, wm, cfg())
 
+    def test_no_second_version_of_a_key_on_a_date_it_already_has(self, existing):
+        # bronze's ledger tracks distinct (key, date) pairs and would never load such a version (2026-10-02/03)
+        wm = ng.current_watermark(existing)
+        for spread in (0, 2):
+            res = ng.generate_increment(ng.Generator(6), existing, SCALE, wm, cfg(), update_spread_days=spread,
+                                        allow_before_watermark=True)
+            for table in ng.INCREMENTAL_TABLES:
+                key = ng.BUSINESS_KEY[table]
+                held = {(r[key], ng._as_date(r["updated_date"])) for r in existing.get(table, [])}
+                clashes = [r[key] for r in res.data[table] if (r[key], ng._as_date(r["updated_date"])) in held]
+                assert clashes == [], (table, spread, clashes[:5])
+
     def test_batch_exists_detects_a_batch_already_generated(self, existing):
         wm = ng.current_watermark(existing)
         assert not ng.batch_exists(existing, wm + dt.timedelta(days=1))
