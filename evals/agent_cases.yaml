@@ -1,0 +1,23 @@
+# Agent eval cases: recorded tool outputs (evals/cassettes) + what the monitor must do with them.
+# `fixture` points at evals/incidents/<id>.yaml, whose grading.must_identify / must_not_claim the judge checks.
+cases:
+  - id: healthy_2026-10-05
+    cassette: 2026-10-05_after_daily_run
+    now: "2026-10-05T12:00:00+00:00"
+    expect_incident: false
+    note: both daily runs succeeded; the only gaps are the known same-day duplicates
+
+  - id: duplicate_versions
+    cassette: 2026-10-05_pre_fix
+    now: "2026-10-05T12:00:00+00:00"
+    expect_incident: true
+    categories: [DATA_COMPLETENESS]
+    fixture: 2026-10-02_same_day_duplicate_versions
+    note: the same state as seen before PR #27 (every gap unexplained)
+
+  - id: missed_runs
+    cassette: 2026-10-06_afternoon
+    now: "2026-10-06T14:45:00+00:00"
+    expect_incident: true
+    categories: [ORCHESTRATION]
+    fixture: 2026-10-06_scheduler_did_not_fire

@@ -1,0 +1,6195 @@
+{
+ "now": "2026-10-05T12:00:00+00:00",
+ "tools": [
+  {
+   "name": "get_table_health",
+   "description": "Latest status per source table and layer (bronze/silver/reject/ledger) from aidq_metadata.v_table_health:\n        status, error, rows read/written/rejected, reject rate vs threshold, active rules, open proposals; plus the\n        latest bronze guard row. `table` limits it to one source table, e.g. netsuite_transactions.",
+   "input_schema": {
+    "properties": {
+     "env": {
+      "default": "dev",
+      "title": "Env",
+      "type": "string"
+     },
+     "table": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Table"
+     }
+    },
+    "title": "get_table_healthArguments",
+    "type": "object"
+   }
+  },
+  {
+   "name": "get_recent_job_runs",
+   "description": "Runs of the daily jobs in the last `days` (default 3, max 14): start/end, trigger, result, state message;\n        each job's schedule (cron, pause status) and missed_schedules (fire times with no run started within 15\n        minutes). `job`: generator, ingestion or canary (default all).",
+   "input_schema": {
+    "properties": {
+     "env": {
+      "default": "dev",
+      "title": "Env",
+      "type": "string"
+     },
+     "days": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Days"
+     },
+     "job": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Job"
+     }
+    },
+    "title": "get_recent_job_runsArguments",
+    "type": "object"
+   }
+  },
+  {
+   "name": "get_pipeline_errors",
+   "description": "ERROR and WARN events from the ingestion and canary pipelines' event logs in the last `hours` (default\n        24, max 168), and run_audit rows with status FAILED in the same window.",
+   "input_schema": {
+    "properties": {
+     "env": {
+      "default": "dev",
+      "title": "Env",
+      "type": "string"
+     },
+     "hours": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Hours"
+     }
+    },
+    "title": "get_pipeline_errorsArguments",
+    "type": "object"
+   }
+  },
+  {
+   "name": "compare_bronze_to_source",
+   "description": "Row counts of dev bronze against the source per table and snapshot date (updated_date day). Lists every\n        date that differs, classified as known_defect_same_day_duplicates or unexplained; verdict identical /\n        known_defects_only / unexplained_gaps. `since` (YYYY-MM-DD) limits the dates compared.",
+   "input_schema": {
+    "properties": {
+     "env": {
+      "default": "dev",
+      "title": "Env",
+      "type": "string"
+     },
+     "table": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Table"
+     },
+     "since": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Since"
+     }
+    },
+    "title": "compare_bronze_to_sourceArguments",
+    "type": "object"
+   }
+  },
+  {
+   "name": "get_recent_deploys",
+   "description": "Deployments in the last `days` (default 7, max 30): GitHub Actions deploy workflow runs, and config\n        changes (create/update/reset/delete/permission changes) on this env's jobs and pipelines from the audit\n        log, with the actor as a role (owner, ci-dev, data-generator, system, other).",
+   "input_schema": {
+    "properties": {
+     "env": {
+      "default": "dev",
+      "title": "Env",
+      "type": "string"
+     },
+     "days": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Days"
+     }
+    },
+    "title": "get_recent_deploysArguments",
+    "type": "object"
+   }
+  }
+ ],
+ "calls": [
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 1
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-10-04T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "generator",
+      "name": "[dev ci_dev] netsuite_daily_generator",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-1>",
+         "start": "2026-10-05T05:00:04.610000+00:00",
+         "end": "2026-10-05T05:00:52.201000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 1,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     },
+     {
+      "job": "ingestion",
+      "name": "[dev ci_dev] netsuite_ingestion_daily",
+      "found": true,
+      "schedule": {
+       "cron": "0 30 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-2>",
+         "start": "2026-10-05T05:30:02.679000+00:00",
+         "end": "2026-10-05T05:39:50.136000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 1,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     },
+     {
+      "job": "canary",
+      "name": "[dev ci_dev] guard_canary_check",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 7 ? * MON",
+       "timezone": "UTC",
+       "pause_status": "PAUSED"
+      },
+      "runs": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 1,
+    "job": "generator"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-10-04T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "generator",
+      "name": "[dev ci_dev] netsuite_daily_generator",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-1>",
+         "start": "2026-10-05T05:00:04.610000+00:00",
+         "end": "2026-10-05T05:00:52.201000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 1,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 1,
+    "job": "ingestion"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-10-04T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "ingestion",
+      "name": "[dev ci_dev] netsuite_ingestion_daily",
+      "found": true,
+      "schedule": {
+       "cron": "0 30 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-2>",
+         "start": "2026-10-05T05:30:02.679000+00:00",
+         "end": "2026-10-05T05:39:50.136000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 1,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 1,
+    "job": "canary"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-10-04T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "canary",
+      "name": "[dev ci_dev] guard_canary_check",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 7 ? * MON",
+       "timezone": "UTC",
+       "pause_status": "PAUSED"
+      },
+      "runs": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 2
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-10-03T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "generator",
+      "name": "[dev ci_dev] netsuite_daily_generator",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-3>",
+         "start": "2026-10-04T05:00:05.497000+00:00",
+         "end": "2026-10-04T05:00:46.573000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-1>",
+         "start": "2026-10-05T05:00:04.610000+00:00",
+         "end": "2026-10-05T05:00:52.201000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 2,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     },
+     {
+      "job": "ingestion",
+      "name": "[dev ci_dev] netsuite_ingestion_daily",
+      "found": true,
+      "schedule": {
+       "cron": "0 30 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-4>",
+         "start": "2026-10-04T05:30:02.824000+00:00",
+         "end": "2026-10-04T05:40:54.939000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-2>",
+         "start": "2026-10-05T05:30:02.679000+00:00",
+         "end": "2026-10-05T05:39:50.136000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 2,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     },
+     {
+      "job": "canary",
+      "name": "[dev ci_dev] guard_canary_check",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 7 ? * MON",
+       "timezone": "UTC",
+       "pause_status": "PAUSED"
+      },
+      "runs": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 2,
+    "job": "generator"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-10-03T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "generator",
+      "name": "[dev ci_dev] netsuite_daily_generator",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-3>",
+         "start": "2026-10-04T05:00:05.497000+00:00",
+         "end": "2026-10-04T05:00:46.573000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-1>",
+         "start": "2026-10-05T05:00:04.610000+00:00",
+         "end": "2026-10-05T05:00:52.201000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 2,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 2,
+    "job": "ingestion"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-10-03T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "ingestion",
+      "name": "[dev ci_dev] netsuite_ingestion_daily",
+      "found": true,
+      "schedule": {
+       "cron": "0 30 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-4>",
+         "start": "2026-10-04T05:30:02.824000+00:00",
+         "end": "2026-10-04T05:40:54.939000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-2>",
+         "start": "2026-10-05T05:30:02.679000+00:00",
+         "end": "2026-10-05T05:39:50.136000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 2,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 2,
+    "job": "canary"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-10-03T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "canary",
+      "name": "[dev ci_dev] guard_canary_check",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 7 ? * MON",
+       "timezone": "UTC",
+       "pause_status": "PAUSED"
+      },
+      "runs": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 3
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-10-02T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "generator",
+      "name": "[dev ci_dev] netsuite_daily_generator",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-5>",
+         "start": "2026-10-03T05:00:05.129000+00:00",
+         "end": "2026-10-03T05:00:51.129000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-3>",
+         "start": "2026-10-04T05:00:05.497000+00:00",
+         "end": "2026-10-04T05:00:46.573000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-1>",
+         "start": "2026-10-05T05:00:04.610000+00:00",
+         "end": "2026-10-05T05:00:52.201000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 3,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     },
+     {
+      "job": "ingestion",
+      "name": "[dev ci_dev] netsuite_ingestion_daily",
+      "found": true,
+      "schedule": {
+       "cron": "0 30 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-6>",
+         "start": "2026-10-03T05:30:03.707000+00:00",
+         "end": "2026-10-03T05:42:57.057000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-4>",
+         "start": "2026-10-04T05:30:02.824000+00:00",
+         "end": "2026-10-04T05:40:54.939000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-2>",
+         "start": "2026-10-05T05:30:02.679000+00:00",
+         "end": "2026-10-05T05:39:50.136000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 3,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     },
+     {
+      "job": "canary",
+      "name": "[dev ci_dev] guard_canary_check",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 7 ? * MON",
+       "timezone": "UTC",
+       "pause_status": "PAUSED"
+      },
+      "runs": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 3,
+    "job": "generator"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-10-02T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "generator",
+      "name": "[dev ci_dev] netsuite_daily_generator",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-5>",
+         "start": "2026-10-03T05:00:05.129000+00:00",
+         "end": "2026-10-03T05:00:51.129000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-3>",
+         "start": "2026-10-04T05:00:05.497000+00:00",
+         "end": "2026-10-04T05:00:46.573000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-1>",
+         "start": "2026-10-05T05:00:04.610000+00:00",
+         "end": "2026-10-05T05:00:52.201000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 3,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 3,
+    "job": "ingestion"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-10-02T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "ingestion",
+      "name": "[dev ci_dev] netsuite_ingestion_daily",
+      "found": true,
+      "schedule": {
+       "cron": "0 30 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-6>",
+         "start": "2026-10-03T05:30:03.707000+00:00",
+         "end": "2026-10-03T05:42:57.057000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-4>",
+         "start": "2026-10-04T05:30:02.824000+00:00",
+         "end": "2026-10-04T05:40:54.939000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-2>",
+         "start": "2026-10-05T05:30:02.679000+00:00",
+         "end": "2026-10-05T05:39:50.136000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 3,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 3,
+    "job": "canary"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-10-02T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "canary",
+      "name": "[dev ci_dev] guard_canary_check",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 7 ? * MON",
+       "timezone": "UTC",
+       "pause_status": "PAUSED"
+      },
+      "runs": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 5
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-09-30T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "generator",
+      "name": "[dev ci_dev] netsuite_daily_generator",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-7>",
+         "start": "2026-10-01T19:33:13.576000+00:00",
+         "end": "2026-10-01T19:34:26.274000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "INTERNAL_ERROR",
+         "result_state": "FAILED",
+         "state_message": "Task generate_increment failed with message: The Python process exited unexpectedly with an abort signal (SIGABRT).\nPlease contact Databricks support and provide the trace ID: <id-8>/<id-9>/<id-7>/<id-10>."
+        },
+        {
+         "run_id": "<id-11>",
+         "start": "2026-10-01T19:47:08.983000+00:00",
+         "end": "2026-10-01T19:48:29.664000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "INTERNAL_ERROR",
+         "result_state": "FAILED",
+         "state_message": "Task generate_increment failed with message: Workload failed, see run output for details."
+        },
+        {
+         "run_id": "<id-12>",
+         "start": "2026-10-01T20:01:50.133000+00:00",
+         "end": "2026-10-01T20:02:23.723000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-13>",
+         "start": "2026-10-02T05:00:03.565000+00:00",
+         "end": "2026-10-02T05:00:45.595000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-5>",
+         "start": "2026-10-03T05:00:05.129000+00:00",
+         "end": "2026-10-03T05:00:51.129000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-3>",
+         "start": "2026-10-04T05:00:05.497000+00:00",
+         "end": "2026-10-04T05:00:46.573000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-1>",
+         "start": "2026-10-05T05:00:04.610000+00:00",
+         "end": "2026-10-05T05:00:52.201000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 7,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": [
+       "2026-10-01T05:00:00+00:00"
+      ]
+     },
+     {
+      "job": "ingestion",
+      "name": "[dev ci_dev] netsuite_ingestion_daily",
+      "found": true,
+      "schedule": {
+       "cron": "0 30 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-14>",
+         "start": "2026-09-30T21:10:51.294000+00:00",
+         "end": "2026-09-30T21:18:54.267000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-15>",
+         "start": "2026-09-30T21:22:07.403000+00:00",
+         "end": "2026-09-30T21:27:17.774000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-16>",
+         "start": "2026-09-30T21:28:33.104000+00:00",
+         "end": "2026-09-30T21:33:39.939000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-17>",
+         "start": "2026-09-30T22:26:07.567000+00:00",
+         "end": "2026-09-30T22:32:12.621000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-18>",
+         "start": "2026-10-01T00:49:54.915000+00:00",
+         "end": "2026-10-01T00:56:20.652000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-19>",
+         "start": "2026-10-01T00:57:56.840000+00:00",
+         "end": "2026-10-01T01:03:02.867000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-20>",
+         "start": "2026-10-01T01:13:48.440000+00:00",
+         "end": "2026-10-01T01:20:13.807000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-21>",
+         "start": "2026-10-01T01:34:24.651000+00:00",
+         "end": "2026-10-01T01:39:54.577000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-22>",
+         "start": "2026-10-01T15:59:54.752000+00:00",
+         "end": "2026-10-01T16:05:23.015000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-23>",
+         "start": "2026-10-01T16:41:08.751000+00:00",
+         "end": "2026-10-01T16:47:14.392000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-24>",
+         "start": "2026-10-01T16:50:06.485000+00:00",
+         "end": "2026-10-01T16:55:32.930000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-25>",
+         "start": "2026-10-01T16:59:04.393000+00:00",
+         "end": "2026-10-01T17:04:25.498000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-26>",
+         "start": "2026-10-01T17:06:04.315000+00:00",
+         "end": "2026-10-01T17:11:14.937000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-27>",
+         "start": "2026-10-01T19:25:40.098000+00:00",
+         "end": "2026-10-01T19:32:00.142000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-28>",
+         "start": "2026-10-01T19:40:03.880000+00:00",
+         "end": "2026-10-01T19:46:38.726000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-29>",
+         "start": "2026-10-01T19:52:01.506000+00:00",
+         "end": "2026-10-01T20:01:01.987000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-30>",
+         "start": "2026-10-01T20:26:44.965000+00:00",
+         "end": "2026-10-01T20:33:10.111000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-31>",
+         "start": "2026-10-01T20:42:15.201000+00:00",
+         "end": "2026-10-01T20:48:29.170000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-32>",
+         "start": "2026-10-01T20:50:21.459000+00:00",
+         "end": "2026-10-01T20:55:33.098000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-33>",
+         "start": "2026-10-01T20:56:51.735000+00:00",
+         "end": "2026-10-01T21:01:46.880000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-34>",
+         "start": "2026-10-02T05:30:04.259000+00:00",
+         "end": "2026-10-02T05:42:05.102000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-6>",
+         "start": "2026-10-03T05:30:03.707000+00:00",
+         "end": "2026-10-03T05:42:57.057000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-4>",
+         "start": "2026-10-04T05:30:02.824000+00:00",
+         "end": "2026-10-04T05:40:54.939000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-2>",
+         "start": "2026-10-05T05:30:02.679000+00:00",
+         "end": "2026-10-05T05:39:50.136000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 24,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": [
+       "2026-10-01T05:30:00+00:00"
+      ]
+     },
+     {
+      "job": "canary",
+      "name": "[dev ci_dev] guard_canary_check",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 7 ? * MON",
+       "timezone": "UTC",
+       "pause_status": "PAUSED"
+      },
+      "runs": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 5,
+    "job": "generator"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-09-30T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "generator",
+      "name": "[dev ci_dev] netsuite_daily_generator",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-7>",
+         "start": "2026-10-01T19:33:13.576000+00:00",
+         "end": "2026-10-01T19:34:26.274000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "INTERNAL_ERROR",
+         "result_state": "FAILED",
+         "state_message": "Task generate_increment failed with message: The Python process exited unexpectedly with an abort signal (SIGABRT).\nPlease contact Databricks support and provide the trace ID: <id-8>/<id-9>/<id-7>/<id-10>."
+        },
+        {
+         "run_id": "<id-11>",
+         "start": "2026-10-01T19:47:08.983000+00:00",
+         "end": "2026-10-01T19:48:29.664000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "INTERNAL_ERROR",
+         "result_state": "FAILED",
+         "state_message": "Task generate_increment failed with message: Workload failed, see run output for details."
+        },
+        {
+         "run_id": "<id-12>",
+         "start": "2026-10-01T20:01:50.133000+00:00",
+         "end": "2026-10-01T20:02:23.723000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-13>",
+         "start": "2026-10-02T05:00:03.565000+00:00",
+         "end": "2026-10-02T05:00:45.595000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-5>",
+         "start": "2026-10-03T05:00:05.129000+00:00",
+         "end": "2026-10-03T05:00:51.129000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-3>",
+         "start": "2026-10-04T05:00:05.497000+00:00",
+         "end": "2026-10-04T05:00:46.573000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-1>",
+         "start": "2026-10-05T05:00:04.610000+00:00",
+         "end": "2026-10-05T05:00:52.201000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 7,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": [
+       "2026-10-01T05:00:00+00:00"
+      ]
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 5,
+    "job": "ingestion"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-09-30T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "ingestion",
+      "name": "[dev ci_dev] netsuite_ingestion_daily",
+      "found": true,
+      "schedule": {
+       "cron": "0 30 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-14>",
+         "start": "2026-09-30T21:10:51.294000+00:00",
+         "end": "2026-09-30T21:18:54.267000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-15>",
+         "start": "2026-09-30T21:22:07.403000+00:00",
+         "end": "2026-09-30T21:27:17.774000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-16>",
+         "start": "2026-09-30T21:28:33.104000+00:00",
+         "end": "2026-09-30T21:33:39.939000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-17>",
+         "start": "2026-09-30T22:26:07.567000+00:00",
+         "end": "2026-09-30T22:32:12.621000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-18>",
+         "start": "2026-10-01T00:49:54.915000+00:00",
+         "end": "2026-10-01T00:56:20.652000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-19>",
+         "start": "2026-10-01T00:57:56.840000+00:00",
+         "end": "2026-10-01T01:03:02.867000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-20>",
+         "start": "2026-10-01T01:13:48.440000+00:00",
+         "end": "2026-10-01T01:20:13.807000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-21>",
+         "start": "2026-10-01T01:34:24.651000+00:00",
+         "end": "2026-10-01T01:39:54.577000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-22>",
+         "start": "2026-10-01T15:59:54.752000+00:00",
+         "end": "2026-10-01T16:05:23.015000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-23>",
+         "start": "2026-10-01T16:41:08.751000+00:00",
+         "end": "2026-10-01T16:47:14.392000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-24>",
+         "start": "2026-10-01T16:50:06.485000+00:00",
+         "end": "2026-10-01T16:55:32.930000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-25>",
+         "start": "2026-10-01T16:59:04.393000+00:00",
+         "end": "2026-10-01T17:04:25.498000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-26>",
+         "start": "2026-10-01T17:06:04.315000+00:00",
+         "end": "2026-10-01T17:11:14.937000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-27>",
+         "start": "2026-10-01T19:25:40.098000+00:00",
+         "end": "2026-10-01T19:32:00.142000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-28>",
+         "start": "2026-10-01T19:40:03.880000+00:00",
+         "end": "2026-10-01T19:46:38.726000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-29>",
+         "start": "2026-10-01T19:52:01.506000+00:00",
+         "end": "2026-10-01T20:01:01.987000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-30>",
+         "start": "2026-10-01T20:26:44.965000+00:00",
+         "end": "2026-10-01T20:33:10.111000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-31>",
+         "start": "2026-10-01T20:42:15.201000+00:00",
+         "end": "2026-10-01T20:48:29.170000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-32>",
+         "start": "2026-10-01T20:50:21.459000+00:00",
+         "end": "2026-10-01T20:55:33.098000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-33>",
+         "start": "2026-10-01T20:56:51.735000+00:00",
+         "end": "2026-10-01T21:01:46.880000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-34>",
+         "start": "2026-10-02T05:30:04.259000+00:00",
+         "end": "2026-10-02T05:42:05.102000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-6>",
+         "start": "2026-10-03T05:30:03.707000+00:00",
+         "end": "2026-10-03T05:42:57.057000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-4>",
+         "start": "2026-10-04T05:30:02.824000+00:00",
+         "end": "2026-10-04T05:40:54.939000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-2>",
+         "start": "2026-10-05T05:30:02.679000+00:00",
+         "end": "2026-10-05T05:39:50.136000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 24,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": [
+       "2026-10-01T05:30:00+00:00"
+      ]
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 5,
+    "job": "canary"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-09-30T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "canary",
+      "name": "[dev ci_dev] guard_canary_check",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 7 ? * MON",
+       "timezone": "UTC",
+       "pause_status": "PAUSED"
+      },
+      "runs": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 7
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-09-28T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "generator",
+      "name": "[dev ci_dev] netsuite_daily_generator",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-7>",
+         "start": "2026-10-01T19:33:13.576000+00:00",
+         "end": "2026-10-01T19:34:26.274000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "INTERNAL_ERROR",
+         "result_state": "FAILED",
+         "state_message": "Task generate_increment failed with message: The Python process exited unexpectedly with an abort signal (SIGABRT).\nPlease contact Databricks support and provide the trace ID: <id-8>/<id-9>/<id-7>/<id-10>."
+        },
+        {
+         "run_id": "<id-11>",
+         "start": "2026-10-01T19:47:08.983000+00:00",
+         "end": "2026-10-01T19:48:29.664000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "INTERNAL_ERROR",
+         "result_state": "FAILED",
+         "state_message": "Task generate_increment failed with message: Workload failed, see run output for details."
+        },
+        {
+         "run_id": "<id-12>",
+         "start": "2026-10-01T20:01:50.133000+00:00",
+         "end": "2026-10-01T20:02:23.723000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-13>",
+         "start": "2026-10-02T05:00:03.565000+00:00",
+         "end": "2026-10-02T05:00:45.595000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-5>",
+         "start": "2026-10-03T05:00:05.129000+00:00",
+         "end": "2026-10-03T05:00:51.129000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-3>",
+         "start": "2026-10-04T05:00:05.497000+00:00",
+         "end": "2026-10-04T05:00:46.573000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-1>",
+         "start": "2026-10-05T05:00:04.610000+00:00",
+         "end": "2026-10-05T05:00:52.201000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 7,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": [
+       "2026-09-29T05:00:00+00:00",
+       "2026-09-30T05:00:00+00:00",
+       "2026-10-01T05:00:00+00:00"
+      ]
+     },
+     {
+      "job": "ingestion",
+      "name": "[dev ci_dev] netsuite_ingestion_daily",
+      "found": true,
+      "schedule": {
+       "cron": "0 30 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-14>",
+         "start": "2026-09-30T21:10:51.294000+00:00",
+         "end": "2026-09-30T21:18:54.267000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-15>",
+         "start": "2026-09-30T21:22:07.403000+00:00",
+         "end": "2026-09-30T21:27:17.774000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-16>",
+         "start": "2026-09-30T21:28:33.104000+00:00",
+         "end": "2026-09-30T21:33:39.939000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-17>",
+         "start": "2026-09-30T22:26:07.567000+00:00",
+         "end": "2026-09-30T22:32:12.621000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-18>",
+         "start": "2026-10-01T00:49:54.915000+00:00",
+         "end": "2026-10-01T00:56:20.652000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-19>",
+         "start": "2026-10-01T00:57:56.840000+00:00",
+         "end": "2026-10-01T01:03:02.867000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-20>",
+         "start": "2026-10-01T01:13:48.440000+00:00",
+         "end": "2026-10-01T01:20:13.807000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-21>",
+         "start": "2026-10-01T01:34:24.651000+00:00",
+         "end": "2026-10-01T01:39:54.577000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-22>",
+         "start": "2026-10-01T15:59:54.752000+00:00",
+         "end": "2026-10-01T16:05:23.015000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-23>",
+         "start": "2026-10-01T16:41:08.751000+00:00",
+         "end": "2026-10-01T16:47:14.392000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-24>",
+         "start": "2026-10-01T16:50:06.485000+00:00",
+         "end": "2026-10-01T16:55:32.930000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-25>",
+         "start": "2026-10-01T16:59:04.393000+00:00",
+         "end": "2026-10-01T17:04:25.498000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-26>",
+         "start": "2026-10-01T17:06:04.315000+00:00",
+         "end": "2026-10-01T17:11:14.937000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-27>",
+         "start": "2026-10-01T19:25:40.098000+00:00",
+         "end": "2026-10-01T19:32:00.142000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-28>",
+         "start": "2026-10-01T19:40:03.880000+00:00",
+         "end": "2026-10-01T19:46:38.726000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-29>",
+         "start": "2026-10-01T19:52:01.506000+00:00",
+         "end": "2026-10-01T20:01:01.987000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-30>",
+         "start": "2026-10-01T20:26:44.965000+00:00",
+         "end": "2026-10-01T20:33:10.111000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-31>",
+         "start": "2026-10-01T20:42:15.201000+00:00",
+         "end": "2026-10-01T20:48:29.170000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-32>",
+         "start": "2026-10-01T20:50:21.459000+00:00",
+         "end": "2026-10-01T20:55:33.098000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-33>",
+         "start": "2026-10-01T20:56:51.735000+00:00",
+         "end": "2026-10-01T21:01:46.880000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-34>",
+         "start": "2026-10-02T05:30:04.259000+00:00",
+         "end": "2026-10-02T05:42:05.102000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-6>",
+         "start": "2026-10-03T05:30:03.707000+00:00",
+         "end": "2026-10-03T05:42:57.057000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-4>",
+         "start": "2026-10-04T05:30:02.824000+00:00",
+         "end": "2026-10-04T05:40:54.939000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-2>",
+         "start": "2026-10-05T05:30:02.679000+00:00",
+         "end": "2026-10-05T05:39:50.136000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 24,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": [
+       "2026-09-29T05:30:00+00:00",
+       "2026-09-30T05:30:00+00:00",
+       "2026-10-01T05:30:00+00:00"
+      ]
+     },
+     {
+      "job": "canary",
+      "name": "[dev ci_dev] guard_canary_check",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 7 ? * MON",
+       "timezone": "UTC",
+       "pause_status": "PAUSED"
+      },
+      "runs": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 7,
+    "job": "generator"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-09-28T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "generator",
+      "name": "[dev ci_dev] netsuite_daily_generator",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-7>",
+         "start": "2026-10-01T19:33:13.576000+00:00",
+         "end": "2026-10-01T19:34:26.274000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "INTERNAL_ERROR",
+         "result_state": "FAILED",
+         "state_message": "Task generate_increment failed with message: The Python process exited unexpectedly with an abort signal (SIGABRT).\nPlease contact Databricks support and provide the trace ID: <id-8>/<id-9>/<id-7>/<id-10>."
+        },
+        {
+         "run_id": "<id-11>",
+         "start": "2026-10-01T19:47:08.983000+00:00",
+         "end": "2026-10-01T19:48:29.664000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "INTERNAL_ERROR",
+         "result_state": "FAILED",
+         "state_message": "Task generate_increment failed with message: Workload failed, see run output for details."
+        },
+        {
+         "run_id": "<id-12>",
+         "start": "2026-10-01T20:01:50.133000+00:00",
+         "end": "2026-10-01T20:02:23.723000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-13>",
+         "start": "2026-10-02T05:00:03.565000+00:00",
+         "end": "2026-10-02T05:00:45.595000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-5>",
+         "start": "2026-10-03T05:00:05.129000+00:00",
+         "end": "2026-10-03T05:00:51.129000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-3>",
+         "start": "2026-10-04T05:00:05.497000+00:00",
+         "end": "2026-10-04T05:00:46.573000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-1>",
+         "start": "2026-10-05T05:00:04.610000+00:00",
+         "end": "2026-10-05T05:00:52.201000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 7,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": [
+       "2026-09-29T05:00:00+00:00",
+       "2026-09-30T05:00:00+00:00",
+       "2026-10-01T05:00:00+00:00"
+      ]
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 7,
+    "job": "ingestion"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-09-28T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "ingestion",
+      "name": "[dev ci_dev] netsuite_ingestion_daily",
+      "found": true,
+      "schedule": {
+       "cron": "0 30 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-14>",
+         "start": "2026-09-30T21:10:51.294000+00:00",
+         "end": "2026-09-30T21:18:54.267000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-15>",
+         "start": "2026-09-30T21:22:07.403000+00:00",
+         "end": "2026-09-30T21:27:17.774000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-16>",
+         "start": "2026-09-30T21:28:33.104000+00:00",
+         "end": "2026-09-30T21:33:39.939000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-17>",
+         "start": "2026-09-30T22:26:07.567000+00:00",
+         "end": "2026-09-30T22:32:12.621000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-18>",
+         "start": "2026-10-01T00:49:54.915000+00:00",
+         "end": "2026-10-01T00:56:20.652000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-19>",
+         "start": "2026-10-01T00:57:56.840000+00:00",
+         "end": "2026-10-01T01:03:02.867000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-20>",
+         "start": "2026-10-01T01:13:48.440000+00:00",
+         "end": "2026-10-01T01:20:13.807000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-21>",
+         "start": "2026-10-01T01:34:24.651000+00:00",
+         "end": "2026-10-01T01:39:54.577000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-22>",
+         "start": "2026-10-01T15:59:54.752000+00:00",
+         "end": "2026-10-01T16:05:23.015000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-23>",
+         "start": "2026-10-01T16:41:08.751000+00:00",
+         "end": "2026-10-01T16:47:14.392000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-24>",
+         "start": "2026-10-01T16:50:06.485000+00:00",
+         "end": "2026-10-01T16:55:32.930000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-25>",
+         "start": "2026-10-01T16:59:04.393000+00:00",
+         "end": "2026-10-01T17:04:25.498000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-26>",
+         "start": "2026-10-01T17:06:04.315000+00:00",
+         "end": "2026-10-01T17:11:14.937000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-27>",
+         "start": "2026-10-01T19:25:40.098000+00:00",
+         "end": "2026-10-01T19:32:00.142000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-28>",
+         "start": "2026-10-01T19:40:03.880000+00:00",
+         "end": "2026-10-01T19:46:38.726000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-29>",
+         "start": "2026-10-01T19:52:01.506000+00:00",
+         "end": "2026-10-01T20:01:01.987000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-30>",
+         "start": "2026-10-01T20:26:44.965000+00:00",
+         "end": "2026-10-01T20:33:10.111000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-31>",
+         "start": "2026-10-01T20:42:15.201000+00:00",
+         "end": "2026-10-01T20:48:29.170000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-32>",
+         "start": "2026-10-01T20:50:21.459000+00:00",
+         "end": "2026-10-01T20:55:33.098000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-33>",
+         "start": "2026-10-01T20:56:51.735000+00:00",
+         "end": "2026-10-01T21:01:46.880000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-34>",
+         "start": "2026-10-02T05:30:04.259000+00:00",
+         "end": "2026-10-02T05:42:05.102000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-6>",
+         "start": "2026-10-03T05:30:03.707000+00:00",
+         "end": "2026-10-03T05:42:57.057000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-4>",
+         "start": "2026-10-04T05:30:02.824000+00:00",
+         "end": "2026-10-04T05:40:54.939000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-2>",
+         "start": "2026-10-05T05:30:02.679000+00:00",
+         "end": "2026-10-05T05:39:50.136000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 24,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": [
+       "2026-09-29T05:30:00+00:00",
+       "2026-09-30T05:30:00+00:00",
+       "2026-10-01T05:30:00+00:00"
+      ]
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 7,
+    "job": "canary"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-09-28T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "canary",
+      "name": "[dev ci_dev] guard_canary_check",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 7 ? * MON",
+       "timezone": "UTC",
+       "pause_status": "PAUSED"
+      },
+      "runs": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 14
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-09-21T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "generator",
+      "name": "[dev ci_dev] netsuite_daily_generator",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-7>",
+         "start": "2026-10-01T19:33:13.576000+00:00",
+         "end": "2026-10-01T19:34:26.274000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "INTERNAL_ERROR",
+         "result_state": "FAILED",
+         "state_message": "Task generate_increment failed with message: The Python process exited unexpectedly with an abort signal (SIGABRT).\nPlease contact Databricks support and provide the trace ID: <id-8>/<id-9>/<id-7>/<id-10>."
+        },
+        {
+         "run_id": "<id-11>",
+         "start": "2026-10-01T19:47:08.983000+00:00",
+         "end": "2026-10-01T19:48:29.664000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "INTERNAL_ERROR",
+         "result_state": "FAILED",
+         "state_message": "Task generate_increment failed with message: Workload failed, see run output for details."
+        },
+        {
+         "run_id": "<id-12>",
+         "start": "2026-10-01T20:01:50.133000+00:00",
+         "end": "2026-10-01T20:02:23.723000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-13>",
+         "start": "2026-10-02T05:00:03.565000+00:00",
+         "end": "2026-10-02T05:00:45.595000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-5>",
+         "start": "2026-10-03T05:00:05.129000+00:00",
+         "end": "2026-10-03T05:00:51.129000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-3>",
+         "start": "2026-10-04T05:00:05.497000+00:00",
+         "end": "2026-10-04T05:00:46.573000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-1>",
+         "start": "2026-10-05T05:00:04.610000+00:00",
+         "end": "2026-10-05T05:00:52.201000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 7,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": [
+       "2026-09-22T05:00:00+00:00",
+       "2026-09-23T05:00:00+00:00",
+       "2026-09-24T05:00:00+00:00",
+       "2026-09-25T05:00:00+00:00",
+       "2026-09-26T05:00:00+00:00",
+       "2026-09-27T05:00:00+00:00",
+       "2026-09-28T05:00:00+00:00",
+       "2026-09-29T05:00:00+00:00",
+       "2026-09-30T05:00:00+00:00",
+       "2026-10-01T05:00:00+00:00"
+      ]
+     },
+     {
+      "job": "ingestion",
+      "name": "[dev ci_dev] netsuite_ingestion_daily",
+      "found": true,
+      "schedule": {
+       "cron": "0 30 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-14>",
+         "start": "2026-09-30T21:10:51.294000+00:00",
+         "end": "2026-09-30T21:18:54.267000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-15>",
+         "start": "2026-09-30T21:22:07.403000+00:00",
+         "end": "2026-09-30T21:27:17.774000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-16>",
+         "start": "2026-09-30T21:28:33.104000+00:00",
+         "end": "2026-09-30T21:33:39.939000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-17>",
+         "start": "2026-09-30T22:26:07.567000+00:00",
+         "end": "2026-09-30T22:32:12.621000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-18>",
+         "start": "2026-10-01T00:49:54.915000+00:00",
+         "end": "2026-10-01T00:56:20.652000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-19>",
+         "start": "2026-10-01T00:57:56.840000+00:00",
+         "end": "2026-10-01T01:03:02.867000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-20>",
+         "start": "2026-10-01T01:13:48.440000+00:00",
+         "end": "2026-10-01T01:20:13.807000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-21>",
+         "start": "2026-10-01T01:34:24.651000+00:00",
+         "end": "2026-10-01T01:39:54.577000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-22>",
+         "start": "2026-10-01T15:59:54.752000+00:00",
+         "end": "2026-10-01T16:05:23.015000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-23>",
+         "start": "2026-10-01T16:41:08.751000+00:00",
+         "end": "2026-10-01T16:47:14.392000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-24>",
+         "start": "2026-10-01T16:50:06.485000+00:00",
+         "end": "2026-10-01T16:55:32.930000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-25>",
+         "start": "2026-10-01T16:59:04.393000+00:00",
+         "end": "2026-10-01T17:04:25.498000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-26>",
+         "start": "2026-10-01T17:06:04.315000+00:00",
+         "end": "2026-10-01T17:11:14.937000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-27>",
+         "start": "2026-10-01T19:25:40.098000+00:00",
+         "end": "2026-10-01T19:32:00.142000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-28>",
+         "start": "2026-10-01T19:40:03.880000+00:00",
+         "end": "2026-10-01T19:46:38.726000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-29>",
+         "start": "2026-10-01T19:52:01.506000+00:00",
+         "end": "2026-10-01T20:01:01.987000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-30>",
+         "start": "2026-10-01T20:26:44.965000+00:00",
+         "end": "2026-10-01T20:33:10.111000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-31>",
+         "start": "2026-10-01T20:42:15.201000+00:00",
+         "end": "2026-10-01T20:48:29.170000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-32>",
+         "start": "2026-10-01T20:50:21.459000+00:00",
+         "end": "2026-10-01T20:55:33.098000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-33>",
+         "start": "2026-10-01T20:56:51.735000+00:00",
+         "end": "2026-10-01T21:01:46.880000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-34>",
+         "start": "2026-10-02T05:30:04.259000+00:00",
+         "end": "2026-10-02T05:42:05.102000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-6>",
+         "start": "2026-10-03T05:30:03.707000+00:00",
+         "end": "2026-10-03T05:42:57.057000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-4>",
+         "start": "2026-10-04T05:30:02.824000+00:00",
+         "end": "2026-10-04T05:40:54.939000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-2>",
+         "start": "2026-10-05T05:30:02.679000+00:00",
+         "end": "2026-10-05T05:39:50.136000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 24,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": [
+       "2026-09-22T05:30:00+00:00",
+       "2026-09-23T05:30:00+00:00",
+       "2026-09-24T05:30:00+00:00",
+       "2026-09-25T05:30:00+00:00",
+       "2026-09-26T05:30:00+00:00",
+       "2026-09-27T05:30:00+00:00",
+       "2026-09-28T05:30:00+00:00",
+       "2026-09-29T05:30:00+00:00",
+       "2026-09-30T05:30:00+00:00",
+       "2026-10-01T05:30:00+00:00"
+      ]
+     },
+     {
+      "job": "canary",
+      "name": "[dev ci_dev] guard_canary_check",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 7 ? * MON",
+       "timezone": "UTC",
+       "pause_status": "PAUSED"
+      },
+      "runs": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 14,
+    "job": "generator"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-09-21T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "generator",
+      "name": "[dev ci_dev] netsuite_daily_generator",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-7>",
+         "start": "2026-10-01T19:33:13.576000+00:00",
+         "end": "2026-10-01T19:34:26.274000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "INTERNAL_ERROR",
+         "result_state": "FAILED",
+         "state_message": "Task generate_increment failed with message: The Python process exited unexpectedly with an abort signal (SIGABRT).\nPlease contact Databricks support and provide the trace ID: <id-8>/<id-9>/<id-7>/<id-10>."
+        },
+        {
+         "run_id": "<id-11>",
+         "start": "2026-10-01T19:47:08.983000+00:00",
+         "end": "2026-10-01T19:48:29.664000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "INTERNAL_ERROR",
+         "result_state": "FAILED",
+         "state_message": "Task generate_increment failed with message: Workload failed, see run output for details."
+        },
+        {
+         "run_id": "<id-12>",
+         "start": "2026-10-01T20:01:50.133000+00:00",
+         "end": "2026-10-01T20:02:23.723000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-13>",
+         "start": "2026-10-02T05:00:03.565000+00:00",
+         "end": "2026-10-02T05:00:45.595000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-5>",
+         "start": "2026-10-03T05:00:05.129000+00:00",
+         "end": "2026-10-03T05:00:51.129000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-3>",
+         "start": "2026-10-04T05:00:05.497000+00:00",
+         "end": "2026-10-04T05:00:46.573000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-1>",
+         "start": "2026-10-05T05:00:04.610000+00:00",
+         "end": "2026-10-05T05:00:52.201000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 7,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": [
+       "2026-09-22T05:00:00+00:00",
+       "2026-09-23T05:00:00+00:00",
+       "2026-09-24T05:00:00+00:00",
+       "2026-09-25T05:00:00+00:00",
+       "2026-09-26T05:00:00+00:00",
+       "2026-09-27T05:00:00+00:00",
+       "2026-09-28T05:00:00+00:00",
+       "2026-09-29T05:00:00+00:00",
+       "2026-09-30T05:00:00+00:00",
+       "2026-10-01T05:00:00+00:00"
+      ]
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 14,
+    "job": "ingestion"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-09-21T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "ingestion",
+      "name": "[dev ci_dev] netsuite_ingestion_daily",
+      "found": true,
+      "schedule": {
+       "cron": "0 30 5 * * ?",
+       "timezone": "UTC",
+       "pause_status": "UNPAUSED"
+      },
+      "runs": {
+       "items": [
+        {
+         "run_id": "<id-14>",
+         "start": "2026-09-30T21:10:51.294000+00:00",
+         "end": "2026-09-30T21:18:54.267000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-15>",
+         "start": "2026-09-30T21:22:07.403000+00:00",
+         "end": "2026-09-30T21:27:17.774000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-16>",
+         "start": "2026-09-30T21:28:33.104000+00:00",
+         "end": "2026-09-30T21:33:39.939000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-17>",
+         "start": "2026-09-30T22:26:07.567000+00:00",
+         "end": "2026-09-30T22:32:12.621000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-18>",
+         "start": "2026-10-01T00:49:54.915000+00:00",
+         "end": "2026-10-01T00:56:20.652000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-19>",
+         "start": "2026-10-01T00:57:56.840000+00:00",
+         "end": "2026-10-01T01:03:02.867000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-20>",
+         "start": "2026-10-01T01:13:48.440000+00:00",
+         "end": "2026-10-01T01:20:13.807000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-21>",
+         "start": "2026-10-01T01:34:24.651000+00:00",
+         "end": "2026-10-01T01:39:54.577000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-22>",
+         "start": "2026-10-01T15:59:54.752000+00:00",
+         "end": "2026-10-01T16:05:23.015000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-23>",
+         "start": "2026-10-01T16:41:08.751000+00:00",
+         "end": "2026-10-01T16:47:14.392000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-24>",
+         "start": "2026-10-01T16:50:06.485000+00:00",
+         "end": "2026-10-01T16:55:32.930000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-25>",
+         "start": "2026-10-01T16:59:04.393000+00:00",
+         "end": "2026-10-01T17:04:25.498000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-26>",
+         "start": "2026-10-01T17:06:04.315000+00:00",
+         "end": "2026-10-01T17:11:14.937000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-27>",
+         "start": "2026-10-01T19:25:40.098000+00:00",
+         "end": "2026-10-01T19:32:00.142000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-28>",
+         "start": "2026-10-01T19:40:03.880000+00:00",
+         "end": "2026-10-01T19:46:38.726000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-29>",
+         "start": "2026-10-01T19:52:01.506000+00:00",
+         "end": "2026-10-01T20:01:01.987000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-30>",
+         "start": "2026-10-01T20:26:44.965000+00:00",
+         "end": "2026-10-01T20:33:10.111000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-31>",
+         "start": "2026-10-01T20:42:15.201000+00:00",
+         "end": "2026-10-01T20:48:29.170000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-32>",
+         "start": "2026-10-01T20:50:21.459000+00:00",
+         "end": "2026-10-01T20:55:33.098000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-33>",
+         "start": "2026-10-01T20:56:51.735000+00:00",
+         "end": "2026-10-01T21:01:46.880000+00:00",
+         "trigger": "ONE_TIME",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-34>",
+         "start": "2026-10-02T05:30:04.259000+00:00",
+         "end": "2026-10-02T05:42:05.102000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-6>",
+         "start": "2026-10-03T05:30:03.707000+00:00",
+         "end": "2026-10-03T05:42:57.057000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-4>",
+         "start": "2026-10-04T05:30:02.824000+00:00",
+         "end": "2026-10-04T05:40:54.939000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        },
+        {
+         "run_id": "<id-2>",
+         "start": "2026-10-05T05:30:02.679000+00:00",
+         "end": "2026-10-05T05:39:50.136000+00:00",
+         "trigger": "PERIODIC",
+         "life_cycle_state": "TERMINATED",
+         "result_state": "SUCCESS",
+         "state_message": ""
+        }
+       ],
+       "total": 24,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": [
+       "2026-09-22T05:30:00+00:00",
+       "2026-09-23T05:30:00+00:00",
+       "2026-09-24T05:30:00+00:00",
+       "2026-09-25T05:30:00+00:00",
+       "2026-09-26T05:30:00+00:00",
+       "2026-09-27T05:30:00+00:00",
+       "2026-09-28T05:30:00+00:00",
+       "2026-09-29T05:30:00+00:00",
+       "2026-09-30T05:30:00+00:00",
+       "2026-10-01T05:30:00+00:00"
+      ]
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_recent_job_runs",
+   "arguments": {
+    "env": "dev",
+    "days": 14,
+    "job": "canary"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "window": {
+     "start": "2026-09-21T12:00:00+00:00",
+     "end": "2026-10-05T12:00:00+00:00"
+    },
+    "jobs": [
+     {
+      "job": "canary",
+      "name": "[dev ci_dev] guard_canary_check",
+      "found": true,
+      "schedule": {
+       "cron": "0 0 7 ? * MON",
+       "timezone": "UTC",
+       "pause_status": "PAUSED"
+      },
+      "runs": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      },
+      "missed_schedules": [],
+      "missed_schedules_unconfirmed": []
+     }
+    ],
+    "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); a missed run sends no failure email"
+   }
+  },
+  {
+   "tool": "get_table_health",
+   "arguments": {
+    "env": "dev"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "tables": [
+     {
+      "source_table": "netsuite_certifications",
+      "layer": "bronze",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 4309,
+      "rows_written": 4309,
+      "rows_rejected": null,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 2,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_certifications",
+      "layer": "dq",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 4309,
+      "rows_written": 4242,
+      "rows_rejected": 67,
+      "reject_rate": 0.0155,
+      "discard_threshold": 0.05,
+      "threshold_breached": false,
+      "active_rules": 2,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_certifications",
+      "layer": "ledger",
+      "run_id": "<id-35>",
+      "status": "OK",
+      "error": null,
+      "rows_read": 4271,
+      "rows_written": 4271,
+      "rows_rejected": 0,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 2,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:39:18.887939+00:00",
+      "ended_at": "2026-10-06T17:39:32.451540+00:00"
+     },
+     {
+      "source_table": "netsuite_certifications",
+      "layer": "silver",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 4242,
+      "rows_written": 2646,
+      "rows_rejected": null,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 2,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_customers",
+      "layer": "bronze",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 2700,
+      "rows_written": 2700,
+      "rows_rejected": null,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 0,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_customers",
+      "layer": "dq",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 2700,
+      "rows_written": 2700,
+      "rows_rejected": 0,
+      "reject_rate": 0.0,
+      "discard_threshold": 0.05,
+      "threshold_breached": false,
+      "active_rules": 0,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_memberships",
+      "layer": "bronze",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 5368,
+      "rows_written": 5368,
+      "rows_rejected": null,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 2,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_memberships",
+      "layer": "dq",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 5368,
+      "rows_written": 5333,
+      "rows_rejected": 35,
+      "reject_rate": 0.0065,
+      "discard_threshold": 0.05,
+      "threshold_breached": false,
+      "active_rules": 2,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_memberships",
+      "layer": "ledger",
+      "run_id": "<id-35>",
+      "status": "OK",
+      "error": null,
+      "rows_read": 5320,
+      "rows_written": 5320,
+      "rows_rejected": 0,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 2,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:39:18.887939+00:00",
+      "ended_at": "2026-10-06T17:39:38.337721+00:00"
+     },
+     {
+      "source_table": "netsuite_memberships",
+      "layer": "silver",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 5333,
+      "rows_written": 3334,
+      "rows_rejected": null,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 2,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_transaction_lines",
+      "layer": "bronze",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 64534,
+      "rows_written": 64534,
+      "rows_rejected": null,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 1,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_transaction_lines",
+      "layer": "dq",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 64534,
+      "rows_written": 64534,
+      "rows_rejected": 0,
+      "reject_rate": 0.0,
+      "discard_threshold": 0.05,
+      "threshold_breached": false,
+      "active_rules": 1,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_transaction_lines",
+      "layer": "ledger",
+      "run_id": "<id-35>",
+      "status": "OK",
+      "error": null,
+      "rows_read": 63956,
+      "rows_written": 63956,
+      "rows_rejected": 0,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 1,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:39:18.887939+00:00",
+      "ended_at": "2026-10-06T17:39:26.956265+00:00"
+     },
+     {
+      "source_table": "netsuite_transaction_lines",
+      "layer": "silver",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 64534,
+      "rows_written": 40210,
+      "rows_rejected": null,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 1,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_transactions",
+      "layer": "bronze",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 21515,
+      "rows_written": 21515,
+      "rows_rejected": null,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 0,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_transactions",
+      "layer": "dq",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 21515,
+      "rows_written": 21515,
+      "rows_rejected": 0,
+      "reject_rate": 0.0,
+      "discard_threshold": 0.05,
+      "threshold_breached": false,
+      "active_rules": 0,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_transactions",
+      "layer": "ledger",
+      "run_id": "<id-35>",
+      "status": "OK",
+      "error": null,
+      "rows_read": 21319,
+      "rows_written": 21319,
+      "rows_rejected": 0,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 0,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:39:18.887939+00:00",
+      "ended_at": "2026-10-06T17:39:44.152983+00:00"
+     },
+     {
+      "source_table": "netsuite_transactions",
+      "layer": "silver",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 21515,
+      "rows_written": 13402,
+      "rows_rejected": null,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 0,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     }
+    ],
+    "latest_guard": {
+     "run_id": "<id-35>",
+     "status": "WARN",
+     "event_log_reads": 2,
+     "error": "update <id-36>: create_update event found after 2 read(s)",
+     "started_at": "2026-10-06T17:34:08.370000+00:00"
+    },
+    "note": "layer 'ledger' stores ledger pairs in rows_read and mismatches in rows_rejected; guard WARN with 2 event-log reads is the normal baseline"
+   }
+  },
+  {
+   "tool": "get_table_health",
+   "arguments": {
+    "env": "dev",
+    "table": "netsuite_customers"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "tables": [
+     {
+      "source_table": "netsuite_customers",
+      "layer": "bronze",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 2700,
+      "rows_written": 2700,
+      "rows_rejected": null,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 0,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_customers",
+      "layer": "dq",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 2700,
+      "rows_written": 2700,
+      "rows_rejected": 0,
+      "reject_rate": 0.0,
+      "discard_threshold": 0.05,
+      "threshold_breached": false,
+      "active_rules": 0,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     }
+    ],
+    "latest_guard": {
+     "run_id": "<id-35>",
+     "status": "WARN",
+     "event_log_reads": 2,
+     "error": "update <id-36>: create_update event found after 2 read(s)",
+     "started_at": "2026-10-06T17:34:08.370000+00:00"
+    },
+    "note": "layer 'ledger' stores ledger pairs in rows_read and mismatches in rows_rejected; guard WARN with 2 event-log reads is the normal baseline"
+   }
+  },
+  {
+   "tool": "get_table_health",
+   "arguments": {
+    "env": "dev",
+    "table": "netsuite_memberships"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "tables": [
+     {
+      "source_table": "netsuite_memberships",
+      "layer": "bronze",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 5368,
+      "rows_written": 5368,
+      "rows_rejected": null,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 2,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_memberships",
+      "layer": "dq",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 5368,
+      "rows_written": 5333,
+      "rows_rejected": 35,
+      "reject_rate": 0.0065,
+      "discard_threshold": 0.05,
+      "threshold_breached": false,
+      "active_rules": 2,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_memberships",
+      "layer": "ledger",
+      "run_id": "<id-35>",
+      "status": "OK",
+      "error": null,
+      "rows_read": 5320,
+      "rows_written": 5320,
+      "rows_rejected": 0,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 2,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:39:18.887939+00:00",
+      "ended_at": "2026-10-06T17:39:38.337721+00:00"
+     },
+     {
+      "source_table": "netsuite_memberships",
+      "layer": "silver",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 5333,
+      "rows_written": 3334,
+      "rows_rejected": null,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 2,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     }
+    ],
+    "latest_guard": {
+     "run_id": "<id-35>",
+     "status": "WARN",
+     "event_log_reads": 2,
+     "error": "update <id-36>: create_update event found after 2 read(s)",
+     "started_at": "2026-10-06T17:34:08.370000+00:00"
+    },
+    "note": "layer 'ledger' stores ledger pairs in rows_read and mismatches in rows_rejected; guard WARN with 2 event-log reads is the normal baseline"
+   }
+  },
+  {
+   "tool": "get_table_health",
+   "arguments": {
+    "env": "dev",
+    "table": "netsuite_certifications"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "tables": [
+     {
+      "source_table": "netsuite_certifications",
+      "layer": "bronze",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 4309,
+      "rows_written": 4309,
+      "rows_rejected": null,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 2,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_certifications",
+      "layer": "dq",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 4309,
+      "rows_written": 4242,
+      "rows_rejected": 67,
+      "reject_rate": 0.0155,
+      "discard_threshold": 0.05,
+      "threshold_breached": false,
+      "active_rules": 2,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_certifications",
+      "layer": "ledger",
+      "run_id": "<id-35>",
+      "status": "OK",
+      "error": null,
+      "rows_read": 4271,
+      "rows_written": 4271,
+      "rows_rejected": 0,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 2,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:39:18.887939+00:00",
+      "ended_at": "2026-10-06T17:39:32.451540+00:00"
+     },
+     {
+      "source_table": "netsuite_certifications",
+      "layer": "silver",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 4242,
+      "rows_written": 2646,
+      "rows_rejected": null,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 2,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     }
+    ],
+    "latest_guard": {
+     "run_id": "<id-35>",
+     "status": "WARN",
+     "event_log_reads": 2,
+     "error": "update <id-36>: create_update event found after 2 read(s)",
+     "started_at": "2026-10-06T17:34:08.370000+00:00"
+    },
+    "note": "layer 'ledger' stores ledger pairs in rows_read and mismatches in rows_rejected; guard WARN with 2 event-log reads is the normal baseline"
+   }
+  },
+  {
+   "tool": "get_table_health",
+   "arguments": {
+    "env": "dev",
+    "table": "netsuite_transactions"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "tables": [
+     {
+      "source_table": "netsuite_transactions",
+      "layer": "bronze",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 21515,
+      "rows_written": 21515,
+      "rows_rejected": null,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 0,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_transactions",
+      "layer": "dq",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 21515,
+      "rows_written": 21515,
+      "rows_rejected": 0,
+      "reject_rate": 0.0,
+      "discard_threshold": 0.05,
+      "threshold_breached": false,
+      "active_rules": 0,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_transactions",
+      "layer": "ledger",
+      "run_id": "<id-35>",
+      "status": "OK",
+      "error": null,
+      "rows_read": 21319,
+      "rows_written": 21319,
+      "rows_rejected": 0,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 0,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:39:18.887939+00:00",
+      "ended_at": "2026-10-06T17:39:44.152983+00:00"
+     },
+     {
+      "source_table": "netsuite_transactions",
+      "layer": "silver",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 21515,
+      "rows_written": 13402,
+      "rows_rejected": null,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 0,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     }
+    ],
+    "latest_guard": {
+     "run_id": "<id-35>",
+     "status": "WARN",
+     "event_log_reads": 2,
+     "error": "update <id-36>: create_update event found after 2 read(s)",
+     "started_at": "2026-10-06T17:34:08.370000+00:00"
+    },
+    "note": "layer 'ledger' stores ledger pairs in rows_read and mismatches in rows_rejected; guard WARN with 2 event-log reads is the normal baseline"
+   }
+  },
+  {
+   "tool": "get_table_health",
+   "arguments": {
+    "env": "dev",
+    "table": "netsuite_transaction_lines"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "tables": [
+     {
+      "source_table": "netsuite_transaction_lines",
+      "layer": "bronze",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 64534,
+      "rows_written": 64534,
+      "rows_rejected": null,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 1,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_transaction_lines",
+      "layer": "dq",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 64534,
+      "rows_written": 64534,
+      "rows_rejected": 0,
+      "reject_rate": 0.0,
+      "discard_threshold": 0.05,
+      "threshold_breached": false,
+      "active_rules": 1,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     },
+     {
+      "source_table": "netsuite_transaction_lines",
+      "layer": "ledger",
+      "run_id": "<id-35>",
+      "status": "OK",
+      "error": null,
+      "rows_read": 63956,
+      "rows_written": 63956,
+      "rows_rejected": 0,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 1,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:39:18.887939+00:00",
+      "ended_at": "2026-10-06T17:39:26.956265+00:00"
+     },
+     {
+      "source_table": "netsuite_transaction_lines",
+      "layer": "silver",
+      "run_id": "<id-35>",
+      "status": "SUCCESS",
+      "error": null,
+      "rows_read": 64534,
+      "rows_written": 40210,
+      "rows_rejected": null,
+      "reject_rate": null,
+      "discard_threshold": 0.05,
+      "threshold_breached": null,
+      "active_rules": 1,
+      "open_proposals": 0,
+      "started_at": "2026-10-06T17:34:08.370000+00:00",
+      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+     }
+    ],
+    "latest_guard": {
+     "run_id": "<id-35>",
+     "status": "WARN",
+     "event_log_reads": 2,
+     "error": "update <id-36>: create_update event found after 2 read(s)",
+     "started_at": "2026-10-06T17:34:08.370000+00:00"
+    },
+    "note": "layer 'ledger' stores ledger pairs in rows_read and mismatches in rows_rejected; guard WARN with 2 event-log reads is the normal baseline"
+   }
+  },
+  {
+   "tool": "get_pipeline_errors",
+   "arguments": {
+    "env": "dev",
+    "hours": 6
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": "2026-10-05T06:00:00+00:00",
+    "pipelines": [
+     {
+      "pipeline": "ingestion",
+      "name": "[dev ci_dev] netsuite_ingestion_poc",
+      "found": true,
+      "events": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      }
+     },
+     {
+      "pipeline": "canary",
+      "name": "[dev ci_dev] guard_canary",
+      "found": true,
+      "events": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      }
+     }
+    ],
+    "failed_run_audit": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    }
+   }
+  },
+  {
+   "tool": "get_pipeline_errors",
+   "arguments": {
+    "env": "dev",
+    "hours": 12
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": "2026-10-05T00:00:00+00:00",
+    "pipelines": [
+     {
+      "pipeline": "ingestion",
+      "name": "[dev ci_dev] netsuite_ingestion_poc",
+      "found": true,
+      "events": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      }
+     },
+     {
+      "pipeline": "canary",
+      "name": "[dev ci_dev] guard_canary",
+      "found": true,
+      "events": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      }
+     }
+    ],
+    "failed_run_audit": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    }
+   }
+  },
+  {
+   "tool": "get_pipeline_errors",
+   "arguments": {
+    "env": "dev",
+    "hours": 24
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": "2026-10-04T12:00:00+00:00",
+    "pipelines": [
+     {
+      "pipeline": "ingestion",
+      "name": "[dev ci_dev] netsuite_ingestion_poc",
+      "found": true,
+      "events": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      }
+     },
+     {
+      "pipeline": "canary",
+      "name": "[dev ci_dev] guard_canary",
+      "found": true,
+      "events": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      }
+     }
+    ],
+    "failed_run_audit": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    }
+   }
+  },
+  {
+   "tool": "get_pipeline_errors",
+   "arguments": {
+    "env": "dev",
+    "hours": 48
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": "2026-10-03T12:00:00+00:00",
+    "pipelines": [
+     {
+      "pipeline": "ingestion",
+      "name": "[dev ci_dev] netsuite_ingestion_poc",
+      "found": true,
+      "events": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      }
+     },
+     {
+      "pipeline": "canary",
+      "name": "[dev ci_dev] guard_canary",
+      "found": true,
+      "events": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      }
+     }
+    ],
+    "failed_run_audit": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    }
+   }
+  },
+  {
+   "tool": "get_pipeline_errors",
+   "arguments": {
+    "env": "dev",
+    "hours": 72
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": "2026-10-02T12:00:00+00:00",
+    "pipelines": [
+     {
+      "pipeline": "ingestion",
+      "name": "[dev ci_dev] netsuite_ingestion_poc",
+      "found": true,
+      "events": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      }
+     },
+     {
+      "pipeline": "canary",
+      "name": "[dev ci_dev] guard_canary",
+      "found": true,
+      "events": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      }
+     }
+    ],
+    "failed_run_audit": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    }
+   }
+  },
+  {
+   "tool": "get_pipeline_errors",
+   "arguments": {
+    "env": "dev",
+    "hours": 168
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": "2026-09-28T12:00:00+00:00",
+    "pipelines": [
+     {
+      "pipeline": "ingestion",
+      "name": "[dev ci_dev] netsuite_ingestion_poc",
+      "found": true,
+      "events": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      }
+     },
+     {
+      "pipeline": "canary",
+      "name": "[dev ci_dev] guard_canary",
+      "found": true,
+      "events": {
+       "items": [],
+       "total": 0,
+       "truncated": false
+      }
+     }
+    ],
+    "failed_run_audit": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    }
+   }
+  },
+  {
+   "tool": "compare_bronze_to_source",
+   "arguments": {
+    "env": "dev"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": null,
+    "verdict": "known_defects_only",
+    "totals": [
+     {
+      "table": "netsuite_customers",
+      "source": 2700,
+      "bronze": 2700
+     },
+     {
+      "table": "netsuite_memberships",
+      "source": 5392,
+      "bronze": 5368
+     },
+     {
+      "table": "netsuite_certifications",
+      "source": 4315,
+      "bronze": 4309
+     },
+     {
+      "table": "netsuite_transactions",
+      "source": 21578,
+      "bronze": 21515
+     },
+     {
+      "table": "netsuite_transaction_lines",
+      "source": 64728,
+      "bronze": 64534
+     }
+    ],
+    "gaps": {
+     "items": [
+      {
+       "table": "netsuite_certifications",
+       "date": "2026-10-02",
+       "source": 392,
+       "bronze": 387,
+       "missing": 5,
+       "same_day_extra": 5,
+       "classification": "known_defect_same_day_duplicates"
+      },
+      {
+       "table": "netsuite_certifications",
+       "date": "2026-10-03",
+       "source": 398,
+       "bronze": 397,
+       "missing": 1,
+       "same_day_extra": 1,
+       "classification": "known_defect_same_day_duplicates"
+      },
+      {
+       "table": "netsuite_memberships",
+       "date": "2026-10-02",
+       "source": 500,
+       "bronze": 489,
+       "missing": 11,
+       "same_day_extra": 11,
+       "classification": "known_defect_same_day_duplicates"
+      },
+      {
+       "table": "netsuite_memberships",
+       "date": "2026-10-03",
+       "source": 506,
+       "bronze": 493,
+       "missing": 13,
+       "same_day_extra": 13,
+       "classification": "known_defect_same_day_duplicates"
+      },
+      {
+       "table": "netsuite_transaction_lines",
+       "date": "2026-10-02",
+       "source": 5988,
+       "bronze": 5898,
+       "missing": 90,
+       "same_day_extra": 90,
+       "classification": "known_defect_same_day_duplicates"
+      },
+      {
+       "table": "netsuite_transaction_lines",
+       "date": "2026-10-03",
+       "source": 6074,
+       "bronze": 5970,
+       "missing": 104,
+       "same_day_extra": 104,
+       "classification": "known_defect_same_day_duplicates"
+      },
+      {
+       "table": "netsuite_transactions",
+       "date": "2026-10-02",
+       "source": 1994,
+       "bronze": 1960,
+       "missing": 34,
+       "same_day_extra": 34,
+       "classification": "known_defect_same_day_duplicates"
+      },
+      {
+       "table": "netsuite_transactions",
+       "date": "2026-10-03",
+       "source": 2024,
+       "bronze": 1995,
+       "missing": 29,
+       "same_day_extra": 29,
+       "classification": "known_defect_same_day_duplicates"
+      }
+     ],
+     "total": 8,
+     "truncated": false
+    },
+    "note": "known_defect_same_day_duplicates: a date short by exactly its same-day duplicate versions (same key, same updated_date day), which the bronze key ledger never loads"
+   }
+  },
+  {
+   "tool": "compare_bronze_to_source",
+   "arguments": {
+    "env": "dev",
+    "table": "netsuite_customers"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": null,
+    "verdict": "identical",
+    "totals": [
+     {
+      "table": "netsuite_customers",
+      "source": 2700,
+      "bronze": 2700
+     }
+    ],
+    "gaps": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    },
+    "note": "known_defect_same_day_duplicates: a date short by exactly its same-day duplicate versions (same key, same updated_date day), which the bronze key ledger never loads"
+   }
+  },
+  {
+   "tool": "compare_bronze_to_source",
+   "arguments": {
+    "env": "dev",
+    "table": "netsuite_memberships"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": null,
+    "verdict": "known_defects_only",
+    "totals": [
+     {
+      "table": "netsuite_memberships",
+      "source": 5392,
+      "bronze": 5368
+     }
+    ],
+    "gaps": {
+     "items": [
+      {
+       "table": "netsuite_memberships",
+       "date": "2026-10-02",
+       "source": 500,
+       "bronze": 489,
+       "missing": 11,
+       "same_day_extra": 11,
+       "classification": "known_defect_same_day_duplicates"
+      },
+      {
+       "table": "netsuite_memberships",
+       "date": "2026-10-03",
+       "source": 506,
+       "bronze": 493,
+       "missing": 13,
+       "same_day_extra": 13,
+       "classification": "known_defect_same_day_duplicates"
+      }
+     ],
+     "total": 2,
+     "truncated": false
+    },
+    "note": "known_defect_same_day_duplicates: a date short by exactly its same-day duplicate versions (same key, same updated_date day), which the bronze key ledger never loads"
+   }
+  },
+  {
+   "tool": "compare_bronze_to_source",
+   "arguments": {
+    "env": "dev",
+    "table": "netsuite_certifications"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": null,
+    "verdict": "known_defects_only",
+    "totals": [
+     {
+      "table": "netsuite_certifications",
+      "source": 4315,
+      "bronze": 4309
+     }
+    ],
+    "gaps": {
+     "items": [
+      {
+       "table": "netsuite_certifications",
+       "date": "2026-10-02",
+       "source": 392,
+       "bronze": 387,
+       "missing": 5,
+       "same_day_extra": 5,
+       "classification": "known_defect_same_day_duplicates"
+      },
+      {
+       "table": "netsuite_certifications",
+       "date": "2026-10-03",
+       "source": 398,
+       "bronze": 397,
+       "missing": 1,
+       "same_day_extra": 1,
+       "classification": "known_defect_same_day_duplicates"
+      }
+     ],
+     "total": 2,
+     "truncated": false
+    },
+    "note": "known_defect_same_day_duplicates: a date short by exactly its same-day duplicate versions (same key, same updated_date day), which the bronze key ledger never loads"
+   }
+  },
+  {
+   "tool": "compare_bronze_to_source",
+   "arguments": {
+    "env": "dev",
+    "table": "netsuite_transactions"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": null,
+    "verdict": "known_defects_only",
+    "totals": [
+     {
+      "table": "netsuite_transactions",
+      "source": 21578,
+      "bronze": 21515
+     }
+    ],
+    "gaps": {
+     "items": [
+      {
+       "table": "netsuite_transactions",
+       "date": "2026-10-02",
+       "source": 1994,
+       "bronze": 1960,
+       "missing": 34,
+       "same_day_extra": 34,
+       "classification": "known_defect_same_day_duplicates"
+      },
+      {
+       "table": "netsuite_transactions",
+       "date": "2026-10-03",
+       "source": 2024,
+       "bronze": 1995,
+       "missing": 29,
+       "same_day_extra": 29,
+       "classification": "known_defect_same_day_duplicates"
+      }
+     ],
+     "total": 2,
+     "truncated": false
+    },
+    "note": "known_defect_same_day_duplicates: a date short by exactly its same-day duplicate versions (same key, same updated_date day), which the bronze key ledger never loads"
+   }
+  },
+  {
+   "tool": "compare_bronze_to_source",
+   "arguments": {
+    "env": "dev",
+    "table": "netsuite_transaction_lines"
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": null,
+    "verdict": "known_defects_only",
+    "totals": [
+     {
+      "table": "netsuite_transaction_lines",
+      "source": 64728,
+      "bronze": 64534
+     }
+    ],
+    "gaps": {
+     "items": [
+      {
+       "table": "netsuite_transaction_lines",
+       "date": "2026-10-02",
+       "source": 5988,
+       "bronze": 5898,
+       "missing": 90,
+       "same_day_extra": 90,
+       "classification": "known_defect_same_day_duplicates"
+      },
+      {
+       "table": "netsuite_transaction_lines",
+       "date": "2026-10-03",
+       "source": 6074,
+       "bronze": 5970,
+       "missing": 104,
+       "same_day_extra": 104,
+       "classification": "known_defect_same_day_duplicates"
+      }
+     ],
+     "total": 2,
+     "truncated": false
+    },
+    "note": "known_defect_same_day_duplicates: a date short by exactly its same-day duplicate versions (same key, same updated_date day), which the bronze key ledger never loads"
+   }
+  },
+  {
+   "tool": "get_recent_deploys",
+   "arguments": {
+    "env": "dev",
+    "days": 1
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": "2026-10-04T12:00:00+00:00",
+    "deploys": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    },
+    "config_changes": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    },
+    "note": "config_changes come from system.access.audit, which lags by several minutes; 'unavailable' when this identity cannot read it (then only changes made through CI deploys are visible)"
+   }
+  },
+  {
+   "tool": "get_recent_deploys",
+   "arguments": {
+    "env": "dev",
+    "days": 2
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": "2026-10-03T12:00:00+00:00",
+    "deploys": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    },
+    "config_changes": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    },
+    "note": "config_changes come from system.access.audit, which lags by several minutes; 'unavailable' when this identity cannot read it (then only changes made through CI deploys are visible)"
+   }
+  },
+  {
+   "tool": "get_recent_deploys",
+   "arguments": {
+    "env": "dev",
+    "days": 3
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": "2026-10-02T12:00:00+00:00",
+    "deploys": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    },
+    "config_changes": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    },
+    "note": "config_changes come from system.access.audit, which lags by several minutes; 'unavailable' when this identity cannot read it (then only changes made through CI deploys are visible)"
+   }
+  },
+  {
+   "tool": "get_recent_deploys",
+   "arguments": {
+    "env": "dev",
+    "days": 5
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": "2026-09-30T12:00:00+00:00",
+    "deploys": {
+     "items": [
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T20:56:18Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "f14ef2d",
+       "title": "Merge pull request #26 from Suhasv1982/feat/generator-allow-before-wa\u00e2\u20ac\u00a6"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T20:49:35Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "ac5e632",
+       "title": "Merge pull request #25 from Suhasv1982/feat/daily-check-and-alerts"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T20:41:42Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "ac5e632",
+       "title": "Merge pull request #25 from Suhasv1982/feat/daily-check-and-alerts"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T20:26:08Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "70e542c",
+       "title": "Merge pull request #24 from Suhasv1982/docs/future-dated-rows"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T19:51:33Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "7d1bc86",
+       "title": "Merge pull request #23 from Suhasv1982/fix/generator-daily-cadence"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T19:39:34Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "e5a8d67",
+       "title": "Merge pull request #22 from Suhasv1982/fix/generator-psycopg"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T19:24:55Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "52c3552",
+       "title": "Merge pull request #21 from Suhasv1982/feat/daily-schedules"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T17:05:28Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "b654c12",
+       "title": "Merge pull request #20 from Suhasv1982/feat/daily-generator-blockers"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T16:58:38Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "fff3cf5",
+       "title": "Merge pull request #19 from Suhasv1982/feat/backup-branch-retention"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T16:49:38Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "bb8ad74",
+       "title": "Merge pull request #18 from Suhasv1982/feat/migration-004-revoke-publ\u00e2\u20ac\u00a6"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T16:40:42Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "0244ac8",
+       "title": "Merge pull request #16 from Suhasv1982/feat/codify-grants"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T15:59:25Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "5f781a1",
+       "title": "Merge pull request #17 from Suhasv1982/docs/first-prod-release"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T01:13:16Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "bb48fef",
+       "title": "Merge pull request #15 from Suhasv1982/fix/prod-no-bundle-permissions"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T00:57:36Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "339b24f",
+       "title": "Merge pull request #14 from Suhasv1982/fix/migrate-plan-cumulative"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T00:49:26Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "5dbe524",
+       "title": "Merge pull request #13 from Suhasv1982/docs/access-fixes"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T22:25:28Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "9e810ea",
+       "title": "Merge pull request #12 from Suhasv1982/feat/prod-target"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T21:28:13Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "de0dc17",
+       "title": "Merge pull request #10 from Suhasv1982/feat/promote-prod"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T21:21:44Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "9ea083a",
+       "title": "Merge pull request #9 from Suhasv1982/feat/canary-workflow"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T21:10:31Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "79c049b",
+       "title": "Merge pull request #11 from Suhasv1982/fix/dev-run-as"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T21:07:47Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "failure",
+       "sha": "2e42392",
+       "title": "Merge pull request #8 from Suhasv1982/feat/deploy-dev"
+      }
+     ],
+     "total": 20,
+     "truncated": false
+    },
+    "config_changes": {
+     "items": [
+      {
+       "time": "2026-10-01 20:56:45.777",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 20:42:09.797",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 20:42:09.678",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:51:56.326",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:39:59.486",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:31.189",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:31.077",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.659",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.553",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.329",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.205",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:canary",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.101",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:canary",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.029",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:19:07.521",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:19:07.048",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:10:50.161",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:10:49.559",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:08:09.971",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "1000"
+      },
+      {
+       "time": "2026-09-30 21:08:09.956",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:canary",
+       "actor": "ci-dev",
+       "status_code": "1000"
+      },
+      {
+       "time": "2026-09-30 21:08:07.628",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "1000"
+      },
+      {
+       "time": "2026-09-30 21:08:07.617",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:canary",
+       "actor": "ci-dev",
+       "status_code": "1000"
+      },
+      {
+       "time": "2026-09-30 16:07:35.185",
+       "service": "jobs",
+       "action": "create",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 16:07:35.156",
+       "service": "jobs",
+       "action": "create",
+       "resource": "pipeline:canary",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 16:07:35.034",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 16:07:35.007",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:canary",
+       "actor": "ci-dev",
+       "status_code": "200"
+      }
+     ],
+     "total": 25,
+     "truncated": false
+    },
+    "note": "config_changes come from system.access.audit, which lags by several minutes; 'unavailable' when this identity cannot read it (then only changes made through CI deploys are visible)"
+   }
+  },
+  {
+   "tool": "get_recent_deploys",
+   "arguments": {
+    "env": "dev",
+    "days": 7
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": "2026-09-28T12:00:00+00:00",
+    "deploys": {
+     "items": [
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T20:56:18Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "f14ef2d",
+       "title": "Merge pull request #26 from Suhasv1982/feat/generator-allow-before-wa\u00e2\u20ac\u00a6"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T20:49:35Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "ac5e632",
+       "title": "Merge pull request #25 from Suhasv1982/feat/daily-check-and-alerts"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T20:41:42Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "ac5e632",
+       "title": "Merge pull request #25 from Suhasv1982/feat/daily-check-and-alerts"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T20:26:08Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "70e542c",
+       "title": "Merge pull request #24 from Suhasv1982/docs/future-dated-rows"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T19:51:33Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "7d1bc86",
+       "title": "Merge pull request #23 from Suhasv1982/fix/generator-daily-cadence"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T19:39:34Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "e5a8d67",
+       "title": "Merge pull request #22 from Suhasv1982/fix/generator-psycopg"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T19:24:55Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "52c3552",
+       "title": "Merge pull request #21 from Suhasv1982/feat/daily-schedules"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T17:05:28Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "b654c12",
+       "title": "Merge pull request #20 from Suhasv1982/feat/daily-generator-blockers"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T16:58:38Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "fff3cf5",
+       "title": "Merge pull request #19 from Suhasv1982/feat/backup-branch-retention"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T16:49:38Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "bb8ad74",
+       "title": "Merge pull request #18 from Suhasv1982/feat/migration-004-revoke-publ\u00e2\u20ac\u00a6"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T16:40:42Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "0244ac8",
+       "title": "Merge pull request #16 from Suhasv1982/feat/codify-grants"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T15:59:25Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "5f781a1",
+       "title": "Merge pull request #17 from Suhasv1982/docs/first-prod-release"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T01:13:16Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "bb48fef",
+       "title": "Merge pull request #15 from Suhasv1982/fix/prod-no-bundle-permissions"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T00:57:36Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "339b24f",
+       "title": "Merge pull request #14 from Suhasv1982/fix/migrate-plan-cumulative"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T00:49:26Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "5dbe524",
+       "title": "Merge pull request #13 from Suhasv1982/docs/access-fixes"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T22:25:28Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "9e810ea",
+       "title": "Merge pull request #12 from Suhasv1982/feat/prod-target"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T21:28:13Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "de0dc17",
+       "title": "Merge pull request #10 from Suhasv1982/feat/promote-prod"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T21:21:44Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "9ea083a",
+       "title": "Merge pull request #9 from Suhasv1982/feat/canary-workflow"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T21:10:31Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "79c049b",
+       "title": "Merge pull request #11 from Suhasv1982/fix/dev-run-as"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T21:07:47Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "failure",
+       "sha": "2e42392",
+       "title": "Merge pull request #8 from Suhasv1982/feat/deploy-dev"
+      }
+     ],
+     "total": 20,
+     "truncated": false
+    },
+    "config_changes": {
+     "items": [
+      {
+       "time": "2026-10-01 20:56:45.777",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 20:42:09.797",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 20:42:09.678",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:51:56.326",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:39:59.486",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:31.189",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:31.077",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.659",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.553",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.329",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.205",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:canary",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.101",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:canary",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.029",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:19:07.521",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:19:07.048",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:10:50.161",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:10:49.559",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:08:09.971",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "1000"
+      },
+      {
+       "time": "2026-09-30 21:08:09.956",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:canary",
+       "actor": "ci-dev",
+       "status_code": "1000"
+      },
+      {
+       "time": "2026-09-30 21:08:07.628",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "1000"
+      },
+      {
+       "time": "2026-09-30 21:08:07.617",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:canary",
+       "actor": "ci-dev",
+       "status_code": "1000"
+      },
+      {
+       "time": "2026-09-30 16:07:35.185",
+       "service": "jobs",
+       "action": "create",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 16:07:35.156",
+       "service": "jobs",
+       "action": "create",
+       "resource": "pipeline:canary",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 16:07:35.034",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 16:07:35.007",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:canary",
+       "actor": "ci-dev",
+       "status_code": "200"
+      }
+     ],
+     "total": 25,
+     "truncated": false
+    },
+    "note": "config_changes come from system.access.audit, which lags by several minutes; 'unavailable' when this identity cannot read it (then only changes made through CI deploys are visible)"
+   }
+  },
+  {
+   "tool": "get_recent_deploys",
+   "arguments": {
+    "env": "dev",
+    "days": 14
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": "2026-09-21T12:00:00+00:00",
+    "deploys": {
+     "items": [
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T20:56:18Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "f14ef2d",
+       "title": "Merge pull request #26 from Suhasv1982/feat/generator-allow-before-wa\u00e2\u20ac\u00a6"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T20:49:35Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "ac5e632",
+       "title": "Merge pull request #25 from Suhasv1982/feat/daily-check-and-alerts"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T20:41:42Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "ac5e632",
+       "title": "Merge pull request #25 from Suhasv1982/feat/daily-check-and-alerts"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T20:26:08Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "70e542c",
+       "title": "Merge pull request #24 from Suhasv1982/docs/future-dated-rows"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T19:51:33Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "7d1bc86",
+       "title": "Merge pull request #23 from Suhasv1982/fix/generator-daily-cadence"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T19:39:34Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "e5a8d67",
+       "title": "Merge pull request #22 from Suhasv1982/fix/generator-psycopg"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T19:24:55Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "52c3552",
+       "title": "Merge pull request #21 from Suhasv1982/feat/daily-schedules"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T17:05:28Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "b654c12",
+       "title": "Merge pull request #20 from Suhasv1982/feat/daily-generator-blockers"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T16:58:38Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "fff3cf5",
+       "title": "Merge pull request #19 from Suhasv1982/feat/backup-branch-retention"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T16:49:38Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "bb8ad74",
+       "title": "Merge pull request #18 from Suhasv1982/feat/migration-004-revoke-publ\u00e2\u20ac\u00a6"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T16:40:42Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "0244ac8",
+       "title": "Merge pull request #16 from Suhasv1982/feat/codify-grants"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T15:59:25Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "5f781a1",
+       "title": "Merge pull request #17 from Suhasv1982/docs/first-prod-release"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T01:13:16Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "bb48fef",
+       "title": "Merge pull request #15 from Suhasv1982/fix/prod-no-bundle-permissions"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T00:57:36Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "339b24f",
+       "title": "Merge pull request #14 from Suhasv1982/fix/migrate-plan-cumulative"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T00:49:26Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "5dbe524",
+       "title": "Merge pull request #13 from Suhasv1982/docs/access-fixes"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T22:25:28Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "9e810ea",
+       "title": "Merge pull request #12 from Suhasv1982/feat/prod-target"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T21:28:13Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "de0dc17",
+       "title": "Merge pull request #10 from Suhasv1982/feat/promote-prod"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T21:21:44Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "9ea083a",
+       "title": "Merge pull request #9 from Suhasv1982/feat/canary-workflow"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T21:10:31Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "79c049b",
+       "title": "Merge pull request #11 from Suhasv1982/fix/dev-run-as"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T21:07:47Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "failure",
+       "sha": "2e42392",
+       "title": "Merge pull request #8 from Suhasv1982/feat/deploy-dev"
+      }
+     ],
+     "total": 20,
+     "truncated": false
+    },
+    "config_changes": {
+     "items": [
+      {
+       "time": "2026-10-01 20:56:45.777",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 20:42:09.797",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 20:42:09.678",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:51:56.326",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:39:59.486",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:31.189",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:31.077",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.659",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.553",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.329",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.205",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:canary",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.101",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:canary",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.029",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:19:07.521",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:19:07.048",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:10:50.161",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:10:49.559",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:08:09.971",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "1000"
+      },
+      {
+       "time": "2026-09-30 21:08:09.956",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:canary",
+       "actor": "ci-dev",
+       "status_code": "1000"
+      },
+      {
+       "time": "2026-09-30 21:08:07.628",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "1000"
+      },
+      {
+       "time": "2026-09-30 21:08:07.617",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:canary",
+       "actor": "ci-dev",
+       "status_code": "1000"
+      },
+      {
+       "time": "2026-09-30 16:07:35.185",
+       "service": "jobs",
+       "action": "create",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 16:07:35.156",
+       "service": "jobs",
+       "action": "create",
+       "resource": "pipeline:canary",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 16:07:35.034",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 16:07:35.007",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:canary",
+       "actor": "ci-dev",
+       "status_code": "200"
+      }
+     ],
+     "total": 25,
+     "truncated": false
+    },
+    "note": "config_changes come from system.access.audit, which lags by several minutes; 'unavailable' when this identity cannot read it (then only changes made through CI deploys are visible)"
+   }
+  },
+  {
+   "tool": "get_recent_deploys",
+   "arguments": {
+    "env": "dev",
+    "days": 30
+   },
+   "result": {
+    "status": "ok",
+    "env": "dev",
+    "since": "2026-09-05T12:00:00+00:00",
+    "deploys": {
+     "items": [
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T20:56:18Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "f14ef2d",
+       "title": "Merge pull request #26 from Suhasv1982/feat/generator-allow-before-wa\u00e2\u20ac\u00a6"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T20:49:35Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "ac5e632",
+       "title": "Merge pull request #25 from Suhasv1982/feat/daily-check-and-alerts"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T20:41:42Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "ac5e632",
+       "title": "Merge pull request #25 from Suhasv1982/feat/daily-check-and-alerts"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T20:26:08Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "70e542c",
+       "title": "Merge pull request #24 from Suhasv1982/docs/future-dated-rows"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T19:51:33Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "7d1bc86",
+       "title": "Merge pull request #23 from Suhasv1982/fix/generator-daily-cadence"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T19:39:34Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "e5a8d67",
+       "title": "Merge pull request #22 from Suhasv1982/fix/generator-psycopg"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T19:24:55Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "52c3552",
+       "title": "Merge pull request #21 from Suhasv1982/feat/daily-schedules"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T17:05:28Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "b654c12",
+       "title": "Merge pull request #20 from Suhasv1982/feat/daily-generator-blockers"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T16:58:38Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "fff3cf5",
+       "title": "Merge pull request #19 from Suhasv1982/feat/backup-branch-retention"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T16:49:38Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "bb8ad74",
+       "title": "Merge pull request #18 from Suhasv1982/feat/migration-004-revoke-publ\u00e2\u20ac\u00a6"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T16:40:42Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "0244ac8",
+       "title": "Merge pull request #16 from Suhasv1982/feat/codify-grants"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T15:59:25Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "5f781a1",
+       "title": "Merge pull request #17 from Suhasv1982/docs/first-prod-release"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T01:13:16Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "bb48fef",
+       "title": "Merge pull request #15 from Suhasv1982/fix/prod-no-bundle-permissions"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T00:57:36Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "339b24f",
+       "title": "Merge pull request #14 from Suhasv1982/fix/migrate-plan-cumulative"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-10-01T00:49:26Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "5dbe524",
+       "title": "Merge pull request #13 from Suhasv1982/docs/access-fixes"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T22:25:28Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "9e810ea",
+       "title": "Merge pull request #12 from Suhasv1982/feat/prod-target"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T21:28:13Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "de0dc17",
+       "title": "Merge pull request #10 from Suhasv1982/feat/promote-prod"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T21:21:44Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "9ea083a",
+       "title": "Merge pull request #9 from Suhasv1982/feat/canary-workflow"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T21:10:31Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "success",
+       "sha": "79c049b",
+       "title": "Merge pull request #11 from Suhasv1982/fix/dev-run-as"
+      },
+      {
+       "workflow": "deploy-dev.yml",
+       "created": "2026-09-30T21:07:47Z",
+       "event": "push",
+       "status": "completed",
+       "conclusion": "failure",
+       "sha": "2e42392",
+       "title": "Merge pull request #8 from Suhasv1982/feat/deploy-dev"
+      }
+     ],
+     "total": 20,
+     "truncated": false
+    },
+    "config_changes": {
+     "items": [
+      {
+       "time": "2026-10-01 20:56:45.777",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 20:42:09.797",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 20:42:09.678",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:51:56.326",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:39:59.486",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:31.189",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:31.077",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.659",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.553",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.329",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:generator",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.205",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:canary",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.101",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:canary",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-10-01 19:25:30.029",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:19:07.521",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:19:07.048",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:10:50.161",
+       "service": "jobs",
+       "action": "reset",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:10:49.559",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 21:08:09.971",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "1000"
+      },
+      {
+       "time": "2026-09-30 21:08:09.956",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:canary",
+       "actor": "ci-dev",
+       "status_code": "1000"
+      },
+      {
+       "time": "2026-09-30 21:08:07.628",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "1000"
+      },
+      {
+       "time": "2026-09-30 21:08:07.617",
+       "service": "deltaPipelines",
+       "action": "edit",
+       "resource": "pipeline:canary",
+       "actor": "ci-dev",
+       "status_code": "1000"
+      },
+      {
+       "time": "2026-09-30 16:07:35.185",
+       "service": "jobs",
+       "action": "create",
+       "resource": "pipeline:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 16:07:35.156",
+       "service": "jobs",
+       "action": "create",
+       "resource": "pipeline:canary",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 16:07:35.034",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:ingestion",
+       "actor": "ci-dev",
+       "status_code": "200"
+      },
+      {
+       "time": "2026-09-30 16:07:35.007",
+       "service": "jobs",
+       "action": "changeJobAcl",
+       "resource": "job:canary",
+       "actor": "ci-dev",
+       "status_code": "200"
+      }
+     ],
+     "total": 25,
+     "truncated": false
+    },
+    "note": "config_changes come from system.access.audit, which lags by several minutes; 'unavailable' when this identity cannot read it (then only changes made through CI deploys are visible)"
+   }
+  }
+ ],
+ "note": "Recorded by evals/record_cassettes.py. Job runs, events, deploys and audit rows are as of `now`; table health and bronze-vs-source counts are the state at recording time. Ids are placeholders."
+}

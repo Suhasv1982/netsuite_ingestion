@@ -1,0 +1,517 @@
+[
+ {
+  "case": "healthy_2026-10-05",
+  "run": 1,
+  "incidents": 0,
+  "checks": {
+   "incident_as_expected": true
+  },
+  "judge": [],
+  "reports": [],
+  "tool_calls": [],
+  "errors": [],
+  "usage": []
+ },
+ {
+  "case": "healthy_2026-10-05",
+  "run": 2,
+  "incidents": 0,
+  "checks": {
+   "incident_as_expected": true
+  },
+  "judge": [],
+  "reports": [],
+  "tool_calls": [],
+  "errors": [],
+  "usage": []
+ },
+ {
+  "case": "healthy_2026-10-05",
+  "run": 3,
+  "incidents": 0,
+  "checks": {
+   "incident_as_expected": true
+  },
+  "judge": [],
+  "reports": [],
+  "tool_calls": [],
+  "errors": [],
+  "usage": []
+ },
+ {
+  "case": "duplicate_versions",
+  "run": 1,
+  "incidents": 1,
+  "checks": {
+   "incident_as_expected": true,
+   "category_allowed": true,
+   "rca_produced": true
+  },
+  "judge": [
+   {
+    "id": "identify_1",
+    "kind": "identify",
+    "text": "the gap is confined to snapshot dates 2026-10-02 and 2026-10-03",
+    "verdict": "no",
+    "pass": false,
+    "quote": ""
+   },
+   {
+    "id": "identify_2",
+    "kind": "identify",
+    "text": "same key and same updated_date appears twice in the source",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "duplicate (business_key, updated_date) rows"
+   },
+   {
+    "id": "identify_3",
+    "kind": "identify",
+    "text": "the ledger / fingerprint keys on distinct (key, date) pairs, so the second version is skipped",
+    "verdict": "no",
+    "pass": false,
+    "quote": ""
+   },
+   {
+    "id": "claim_1",
+    "kind": "claim",
+    "text": "the pipeline or ledger_check failed",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_2",
+    "kind": "claim",
+    "text": "rows were rejected by data quality rules",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_3",
+    "kind": "claim",
+    "text": "the source rows are exact duplicates (most differ)",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   }
+  ],
+  "reports": [
+   "Category: DATA_COMPLETENESS\nSummary: Bronze layer shows fewer rows than source for recent dates due to duplicate business\u2011key rows in the source. Root cause: A recent change to the daily generator (enable --allow-before-watermark) caused it to re\u2011append rows for dates that already existed, creating same\u2011day duplicate keys. Bronze de\u2011duplicates on (business_key, snapshot_date), so those duplicates are dropped, appearing as missing rows. (confidence high)\nEvidence [compare_bronze_to_source]: For netsuite_certifications, memberships, transaction_lines, and transactions on 2026\u201110\u201102 and 2026\u201110\u201103, bronze row counts are lower than source by exactly the number of same\u2011day extra rows (e.g., missing 5, same_day_extra 5).\nEvidence [get_recent_deploys]: Deploy on 2026\u201110\u201101 titled \"feat/generator-allow-before-wa\u2026\" introduced the allow\u2011before\u2011watermark flag to the generator.\nRuled out: Orchestration: ingestion and generator jobs ran successfully on schedule with no missed runs.\nRuled out: Pipeline errors: no failure events reported in the last 48\u202fh (budget exhausted before error check, but prior runs show SUCCESS).\nRuled out: Ledger mismatch: ledger status OK, indicating bronze keys match ledger.\nRuled out: Compute quota or source unavailability: source rows are present; no signs of outage.\nNot verified: Confirm that the source tables actually contain duplicate (business_key, updated_date) rows for the affected dates.\nNot verified: Check generator logs to verify that the allow\u2011before\u2011watermark flag was active on the runs for 2026\u201110\u201102 and 2026\u201110\u201103.\nNext step: Disable the --allow-before-watermark option in the generator or add logic to prevent emitting duplicate business\u2011key rows for the same snapshot date; optionally add a validation step to detect and alert on duplicate keys before loading."
+  ],
+  "tool_calls": [
+   "get_recent_job_runs",
+   "get_recent_deploys",
+   "get_recent_job_runs",
+   "get_table_health",
+   "compare_bronze_to_source",
+   "compare_bronze_to_source",
+   "compare_bronze_to_source",
+   "get_table_health"
+  ],
+  "errors": [],
+  "usage": [
+   {
+    "input_tokens": 81473,
+    "output_tokens": 5394
+   }
+  ],
+  "tools_expected_hit": "3/3"
+ },
+ {
+  "case": "duplicate_versions",
+  "run": 2,
+  "incidents": 1,
+  "checks": {
+   "incident_as_expected": true,
+   "category_allowed": true,
+   "rca_produced": true
+  },
+  "judge": [
+   {
+    "id": "identify_1",
+    "kind": "identify",
+    "text": "the gap is confined to snapshot dates 2026-10-02 and 2026-10-03",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "Bronze row counts are lower than source on 2026\u201110\u201102 and 2026\u201110\u201103"
+   },
+   {
+    "id": "identify_2",
+    "kind": "identify",
+    "text": "same key and same updated_date appears twice in the source",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "rows in the source with duplicate business keys for the same `updated_date`"
+   },
+   {
+    "id": "identify_3",
+    "kind": "identify",
+    "text": "the ledger / fingerprint keys on distinct (key, date) pairs, so the second version is skipped",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "fingerprint (distinct (business_key, snapshot_date) pairs) does not change \u2013 the new rows share existing keys \u2013 the top\u2011up skips the day"
+   },
+   {
+    "id": "claim_1",
+    "kind": "claim",
+    "text": "the pipeline or ledger_check failed",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_2",
+    "kind": "claim",
+    "text": "rows were rejected by data quality rules",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_3",
+    "kind": "claim",
+    "text": "the source rows are exact duplicates (most differ)",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   }
+  ],
+  "reports": [
+   "Category: DATA_COMPLETENESS\nSummary: Recent runs show missing rows and same\u2011day duplicate counts in Bronze for several tables (certifications, memberships, transaction lines, transactions). Root cause: The daily generator is writing rows for a given `updated_date` after the ingestion job has already read that day\u2019s data, so those later rows are not picked up by the fingerprint/top\u2011up logic. Because the fingerprint (distinct (business_key, snapshot_date) pairs) does not change \u2013 the new rows share existing keys \u2013 the top\u2011up skips the day, leaving the Bronze layer with fewer rows than the source and creating apparent duplicate counts. (confidence medium)\nEvidence [compare_bronze_to_source]: For netsuite_certifications and netsuite_memberships, Bronze row counts are lower than source on 2026\u201110\u201102 and 2026\u201110\u201103, with matching \u2018same_day_extra\u2019 counts, classified as unexplained gaps.\nEvidence [get_table_health]: Bronze layer reports SUCCESS with rows_written matching the Bronze counts reported by compare_bronze_to_source; ledger status is OK, indicating ledger matches Bronze distinct pairs.\nEvidence [get_recent_job_runs (ingestion)]: Ingestion runs for 2026\u201110\u201102, 2026\u201110\u201103, 2026\u201110\u201104, and 2026\u201110\u201105 all completed successfully (PERIODIC trigger). No failures reported.\nEvidence [get_pipeline_errors]: No ERROR or WARN events in the ingestion pipeline in the last 48\u202fh; no failed run audit entries.\nEvidence [get_recent_deploys]: Recent deploy on 2026\u201110\u201101 introduced a change titled \u201cgenerator\u2011allow\u2011before\u2011wa\u2026\u201d, suggesting the generator was configured to allow rows dated before the current watermark.\nRuled out: Pipeline errors: No ERROR/WARN events or failed runs were logged, so a pipeline bug is unlikely.\nRuled out: Ledger mismatch: Ledger status is OK, confirming it matches Bronze distinct pairs.\nRuled out: Missed ingestion runs: All scheduled ingestion runs for the affected dates ran successfully; no missed schedules were recorded.\nRuled out: Guard WARN: The guard WARN with 2 event\u2011log reads is normal baseline and not indicative of failure.\nNot verified: Did the generator actually emit rows for 2026\u201110\u201102/03 after the 05:30 ingestion started? Generator logs would confirm timing.\nNot verified: Are there rows in the source with duplicate business keys for the same `updated_date` that the generator created? Inspect source table contents for duplicate keys.\nNot verified: Did the fingerprint for the affected dates change after ingestion? Running a fingerprint comparison would verify if the top\u2011up logic should have detected the new rows.\nNext step: Adjust the generator schedule or implementation so that all rows for a given `updated_date` are written before the ingestion job reads the source (e.g., run generator earlier or add a short delay before ingestion). Alternatively, modify the ingestion top\u2011up logic to recompute fingerprints after the run or to handle late\u2011arriving same\u2011day rows, ensuring they are not missed."
+  ],
+  "tool_calls": [
+   "get_recent_job_runs",
+   "compare_bronze_to_source",
+   "compare_bronze_to_source",
+   "get_table_health",
+   "get_recent_deploys",
+   "get_pipeline_errors",
+   "compare_bronze_to_source",
+   "get_table_health"
+  ],
+  "errors": [],
+  "usage": [
+   {
+    "input_tokens": 69917,
+    "output_tokens": 5069
+   }
+  ],
+  "tools_expected_hit": "3/3"
+ },
+ {
+  "case": "duplicate_versions",
+  "run": 3,
+  "incidents": 1,
+  "checks": {
+   "incident_as_expected": true,
+   "category_allowed": true,
+   "rca_produced": true
+  },
+  "judge": [
+   {
+    "id": "identify_1",
+    "kind": "identify",
+    "text": "the gap is confined to snapshot dates 2026-10-02 and 2026-10-03",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "Bronze layer is missing rows for several tables on 2026\u201110\u201102 and 2026\u201110\u201103"
+   },
+   {
+    "id": "identify_2",
+    "kind": "identify",
+    "text": "same key and same updated_date appears twice in the source",
+    "verdict": "no",
+    "pass": false,
+    "quote": ""
+   },
+   {
+    "id": "identify_3",
+    "kind": "identify",
+    "text": "the ledger / fingerprint keys on distinct (key, date) pairs, so the second version is skipped",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "pipeline\u2019s fingerprint\u2011based top\u2011up logic skips them"
+   },
+   {
+    "id": "claim_1",
+    "kind": "claim",
+    "text": "the pipeline or ledger_check failed",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_2",
+    "kind": "claim",
+    "text": "rows were rejected by data quality rules",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_3",
+    "kind": "claim",
+    "text": "the source rows are exact duplicates (most differ)",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   }
+  ],
+  "reports": [
+   "Category: DATA_COMPLETENESS\nSummary: Bronze layer is missing rows for several tables on 2026\u201110\u201102 and 2026\u201110\u201103. Root cause: A recent change to the NetSuite data generator (PR #26\u202f\u2018feat/generator-allow-before\u2011wa\u2026\u2019) enabled the generator to emit rows dated before the current watermark. Those rows are duplicates of already\u2011loaded (business_key, updated_date) pairs, so the pipeline\u2019s fingerprint\u2011based top\u2011up logic skips them, leaving them out of bronze. The result is missing rows (and same\u2011day duplicate counts) in bronze for the affected dates. (confidence high)\nEvidence [compare_bronze_to_source]: For netsuite_certifications, netsuite_memberships, netsuite_transactions, netsuite_transaction_lines the bronze row counts are lower than source on 2026\u201110\u201102 and 2026\u201110\u201103, with matching \u2018same_day_extra\u2019 numbers, classified as unexplained gaps.\nEvidence [get_recent_deploys]: Merge PR #26 (title contains \u2018generator\u2011allow\u2011before\u2011wa\u2026\u2019) was deployed on 2026\u201110\u201101 20:56 UTC, i.e., shortly before the dates with missing rows.\nEvidence [get_recent_job_runs]: Ingestion runs on 2026\u201110\u201102 and 2026\u201110\u201103 completed successfully, so the pipeline did not fail; the gaps are not due to a run failure.\nRuled out: Pipeline errors \u2013 get_pipeline_errors returned no ERROR/WARN events for the ingestion pipeline in the last 48\u202fh.\nRuled out: Missed schedule \u2013 the only unconfirmed missed schedule was 2026\u201110\u201101 05:30; gaps appear on later dates and the schedule itself ran on 02\u201104\u201105.\nRuled out: Ledger mismatches \u2013 ledger health shows status OK; no ledger rejections reported.\nNot verified: Confirm that the generator actually emitted duplicate rows for the affected dates (e.g., by inspecting the source Postgres table for duplicate (business_key, updated_date) pairs).\nNot verified: Verify whether the fingerprint comparison skipped those dates because the distinct\u2011pair count and hash were unchanged.\nNext step: Disable the \u2018allow\u2011before\u2011watermark\u2019 flag in the generator (or revert PR #26) until the top\u2011up logic is enhanced to detect and ingest duplicate rows with unchanged fingerprints. If the flag is needed, modify the pipeline to recompute fingerprints based on raw row counts or add a separate detection path for before\u2011watermark rows."
+  ],
+  "tool_calls": [
+   "get_recent_job_runs",
+   "get_table_health",
+   "compare_bronze_to_source",
+   "compare_bronze_to_source",
+   "compare_bronze_to_source",
+   "get_recent_deploys",
+   "get_table_health",
+   "get_pipeline_errors"
+  ],
+  "errors": [],
+  "usage": [
+   {
+    "input_tokens": 68472,
+    "output_tokens": 4906
+   }
+  ],
+  "tools_expected_hit": "3/3"
+ },
+ {
+  "case": "missed_runs",
+  "run": 1,
+  "incidents": 1,
+  "checks": {
+   "incident_as_expected": true,
+   "category_allowed": true,
+   "rca_produced": true
+  },
+  "judge": [
+   {
+    "id": "identify_1",
+    "kind": "identify",
+    "text": "no run was triggered (absence, not failure)",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "no runs started"
+   },
+   {
+    "id": "identify_2",
+    "kind": "identify",
+    "text": "schedules were UNPAUSED and unchanged",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "schedules remained UNPAUSED"
+   },
+   {
+    "id": "identify_3",
+    "kind": "identify",
+    "text": "no deploy or config change explains it, so it is outside the pipeline (platform)",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "No deploys or config changes affecting the jobs were recorded"
+   },
+   {
+    "id": "claim_1",
+    "kind": "claim",
+    "text": "deploy-dev paused the schedules",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_2",
+    "kind": "claim",
+    "text": "the job failed",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_3",
+    "kind": "claim",
+    "text": "a specific confirmed platform cause (it is suspected only)",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   }
+  ],
+  "reports": [
+   "Category: ORCHESTRATION\nSummary: Both the daily generator and ingestion jobs missed their scheduled runs on 2026-10-06 Root cause: A temporary outage or misfire in the job orchestration service prevented the scheduled runs from being launched at 05:00 and 05:30 UTC. (confidence medium)\nEvidence [get_recent_job_runs]: Both jobs show missed_schedules for 2026-10-06T05:00:00+00:00 and 2026-10-06T05:30:00+00:00 with no runs started.\nEvidence [get_recent_deploys]: No deploys or config changes affecting the jobs were recorded on or just before 2026-10-06, ruling out deployment\u2011related schedule changes.\nRuled out: Recent deploys on 2026-10-01 changed job ACLs and resets, but these occurred days earlier and the schedules remained UNPAUSED.\nRuled out: Pipeline error logs for the ingestion pipeline show no errors in the last 48 hours, so pipeline failures did not block runs.\nRuled out: Table health checks show bronze load succeeded for netsuite_customers after 2026-10-06, indicating data source is healthy.\nNot verified: Did the underlying job scheduler (e.g., Databricks Jobs service) report any incident or capacity limitation at 05:00\u201105:30 UTC on 2026-10-06?\nNot verified: Were there any transient compute quota limits or API throttling that could have prevented job launch?\nNot verified: Is there a monitoring alert for missed schedules that can be enabled to surface such issues earlier?\nNext step: Review the orchestration service health logs for the time window and, if an outage is confirmed, contact the platform provider. Implement a watchdog alert that detects missed scheduled runs and automatically retries or notifies the team."
+  ],
+  "tool_calls": [
+   "get_recent_job_runs",
+   "get_recent_deploys",
+   "get_pipeline_errors",
+   "get_table_health"
+  ],
+  "errors": [],
+  "usage": [
+   {
+    "input_tokens": 23668,
+    "output_tokens": 1658
+   }
+  ],
+  "tools_expected_hit": "2/2"
+ },
+ {
+  "case": "missed_runs",
+  "run": 2,
+  "incidents": 1,
+  "checks": {
+   "incident_as_expected": true,
+   "category_allowed": true,
+   "rca_produced": true
+  },
+  "judge": [
+   {
+    "id": "identify_1",
+    "kind": "identify",
+    "text": "no run was triggered (absence, not failure)",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "no corresponding run started"
+   },
+   {
+    "id": "identify_2",
+    "kind": "identify",
+    "text": "schedules were UNPAUSED and unchanged",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "schedules are UNPAUSED"
+   },
+   {
+    "id": "identify_3",
+    "kind": "identify",
+    "text": "no deploy or config change explains it, so it is outside the pipeline (platform)",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "No deploy or config change occurred"
+   },
+   {
+    "id": "claim_1",
+    "kind": "claim",
+    "text": "deploy-dev paused the schedules",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_2",
+    "kind": "claim",
+    "text": "the job failed",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_3",
+    "kind": "claim",
+    "text": "a specific confirmed platform cause (it is suspected only)",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   }
+  ],
+  "reports": [
+   "Category: ORCHESTRATION\nSummary: Both the daily generator and ingestion jobs failed to start at their scheduled times on 2026\u201110\u201106. Root cause: A transient orchestration/scheduler outage prevented the cron\u2011triggered jobs from being launched at 05:00\u202fUTC and 05:30\u202fUTC. (confidence medium)\nEvidence [get_recent_job_runs]: The generator and ingestion jobs each have a missed_schedule entry for 2026\u201110\u201106T05:00:00+00:00 and 2026\u201110\u201106T05:30:00+00:00 respectively, with no corresponding run started.\nEvidence [get_recent_job_runs]: Both jobs have a history of successful PERIODIC runs on 2026\u201110\u201105 and earlier, showing the schedules are UNPAUSED and functional.\nEvidence [get_recent_deploys]: No deploy or config change occurred on or immediately before 2026\u201110\u201106 that could have altered the schedules.\nEvidence [get_pipeline_errors]: No error or failure events were recorded in the last 24\u202fh for the ingestion or canary pipelines, indicating the pipelines themselves did not encounter internal failures.\nRuled out: Job paused: schedule status shows UNPAUSED for both jobs.\nRuled out: Job failed to start due to internal error: a failed run would appear in the job history with RESULT_STATE=FAILED, but no such run exists.\nRuled out: Source unavailable: the generator would still have attempted to run and recorded a FAILED run if the Postgres source were down; no run was recorded at all.\nRuled out: Recent deploy introduced a bug: the last deploy was on 2026\u201110\u201101 and all runs after that succeeded until the missed schedule.\nRuled out: Compute quota exceeded: no FAILED runs or quota\u2011related error messages were logged.\nNot verified: Were there any platform\u2011wide scheduler/orchestration service incidents reported around 05:00\u202fUTC on 2026\u201110\u201106?\nNot verified: Do infrastructure logs (e.g., Databricks job scheduler, Airflow, or equivalent) show outage or throttling at that time?\nNot verified: Is there any maintenance window or automated pause of the job service that coincides with the missed run?\nNext step: Check the orchestration service status and logs for the 05:00\u202fUTC window on 2026\u201110\u201106. If an outage is confirmed, work with the platform team to address the reliability of the scheduler and consider adding alerting for missed scheduled runs to catch future orchestration failures early."
+  ],
+  "tool_calls": [
+   "get_recent_job_runs",
+   "get_recent_deploys",
+   "get_pipeline_errors",
+   "get_recent_job_runs",
+   "get_recent_job_runs",
+   "get_table_health"
+  ],
+  "errors": [],
+  "usage": [
+   {
+    "input_tokens": 55566,
+    "output_tokens": 3365
+   }
+  ],
+  "tools_expected_hit": "2/2"
+ },
+ {
+  "case": "missed_runs",
+  "run": 3,
+  "incidents": 1,
+  "checks": {
+   "incident_as_expected": true,
+   "category_allowed": true,
+   "rca_produced": true
+  },
+  "judge": [
+   {
+    "id": "identify_1",
+    "kind": "identify",
+    "text": "no run was triggered (absence, not failure)",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "no run started within 15 minutes"
+   },
+   {
+    "id": "identify_2",
+    "kind": "identify",
+    "text": "schedules were UNPAUSED and unchanged",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "pause_status UNPAUSED"
+   },
+   {
+    "id": "identify_3",
+    "kind": "identify",
+    "text": "no deploy or config change explains it, so it is outside the pipeline (platform)",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "no recent change could have disabled the schedules"
+   },
+   {
+    "id": "claim_1",
+    "kind": "claim",
+    "text": "deploy-dev paused the schedules",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_2",
+    "kind": "claim",
+    "text": "the job failed",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_3",
+    "kind": "claim",
+    "text": "a specific confirmed platform cause (it is suspected only)",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   }
+  ],
+  "reports": [
+   "Category: ORCHESTRATION\nSummary: Both the daily generator and ingestion jobs missed their scheduled runs on 2026-10-06. Root cause: A temporary outage or unavailability of the Databricks Jobs scheduler prevented the periodic jobs from being launched at their scheduled times. (confidence medium)\nEvidence [get_recent_job_runs]: Both netsuite_daily_generator and netsuite_ingestion_daily show missed_schedules for 2026-10-06T05:00:00+00:00 and 2026-10-06T05:30:00+00:00 respectively, with no run started within 15 minutes.\nEvidence [get_recent_job_runs]: Job definitions report pause_status UNPAUSED and correct cron schedules, indicating they were not intentionally disabled.\nEvidence [get_recent_deploys]: No deploys or config changes occurred on or after 2026-10-05, so no recent change could have disabled the schedules.\nEvidence [get_pipeline_errors]: No ERROR/WARN events or failed run audits for the ingestion or generator pipelines in the prior 48 hours, so the jobs did not fail after starting.\nRuled out: Job pause status \u2013 jobs are UNPAUSED, so they were not manually paused.\nRuled out: Recent deploys \u2013 no deploys on 2026-10-05/06 that could have altered schedules.\nRuled out: Pipeline failures \u2013 no error events or failed runs indicating the jobs started and then crashed.\nNot verified: Was there an outage or degradation of the Databricks Jobs service on 2026-10-06?\nNot verified: Did the underlying job clusters become unavailable (e.g., auto\u2011paused) at the scheduled times?\nNot verified: Are there any platform\u2011wide alerts or incident logs from Databricks indicating scheduler issues on that date?\nNext step: Check Databricks status/incident logs for 2026-10-06 to confirm scheduler outage. If confirmed, file a support ticket. Consider adding monitoring/alerting for missed job schedules and enabling automatic retries or a fallback trigger to ensure critical daily jobs run even during brief service interruptions."
+  ],
+  "tool_calls": [
+   "get_recent_job_runs",
+   "get_recent_deploys",
+   "get_pipeline_errors",
+   "get_table_health"
+  ],
+  "errors": [],
+  "usage": [
+   {
+    "input_tokens": 37617,
+    "output_tokens": 2261
+   }
+  ],
+  "tools_expected_hit": "2/2"
+ }
+]

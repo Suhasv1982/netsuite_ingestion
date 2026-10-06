@@ -94,8 +94,15 @@ model client interface, so the choice is one config value plus its credentials.
 
 ## 9. Decisions (owner, 2026-10-06)
 
+Results: `evals/results/2026-10-06_databricks-gpt-oss-120b.md` (all targets met).
+
+
 1. Runtime: GitHub Actions workflow `monitor-dev.yml` (the workflow file itself is still shown before it is added, step D).
-2. Model: Anthropic API, `claude-opus-5-5` by default (configurable); GitHub secret `ANTHROPIC_API_KEY`, created
-   by the owner.
+2. Model: ~~Anthropic API~~ changed 2026-10-06: **a free model served on the workspace,
+   `databricks-gpt-oss-120b`**, for evals and production (no API key, no GitHub secret). `--model claude-opus-5-5`
+   still selects the Anthropic API. The judge in evals is a different free model (`databricks-qwen35-122b-a10b`).
+5. The agent gets `docs/platform_design_notes.md` (mechanisms only, never an incident's diagnosis) with its
+   instructions, the knowledge a person running the platform has; the five tools alone cannot show the ledger's
+   design (first eval: 0/3 on that item without the notes, 2/3 with them).
 3. Migration 005 with the `fingerprint` / `evidence` columns and the unique index on open fingerprints.
 4. ci-dev access: approved; none needed for metadata; the audit log degrades gracefully (section 5).

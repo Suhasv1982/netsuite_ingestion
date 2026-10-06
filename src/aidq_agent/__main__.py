@@ -14,6 +14,7 @@ import sys
 from aidq_mcp.config import env_config
 from aidq_mcp.reads import Reads
 
+from .dbx import DatabricksChat, DatabricksInvestigator
 from .graph import run
 from .investigate import AnthropicInvestigator
 from .store import DryRunStore, PgIncidentStore
@@ -23,7 +24,9 @@ from .toolbox import McpToolBox
 async def amain(args) -> int:
     store = PgIncidentStore(Reads(args.profile), env_config("dev").metadata_endpoint) if args.write else DryRunStore()
     async with McpToolBox(args.profile) as toolbox:
-        state = await run(toolbox, AnthropicInvestigator(model=args.model), store)
+        investigator = (DatabricksInvestigator(DatabricksChat(args.profile), args.model)
+                        if args.model.startswith("databricks-") else AnthropicInvestigator(model=args.model))
+        state = await run(toolbox, investigator, store)
     print(state["report"])
     if args.report_file:
         with open(args.report_file, "a", encoding="utf-8") as f:
@@ -37,9 +40,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(prog="python -m aidq_agent")
     ap.add_argument("--profile", default=os.environ.get("AIDQ_PROFILE"), help="Databricks CLI profile (or AIDQ_PROFILE)")
     ap.add_argument("--write", action="store_true", help="insert incidents (default: dry run)")
-    ap.add_argument("--model", default="claude-opus-5-5")
+    ap.add_argument("--model", default="databricks-gpt-oss-120b",
+                    help="claude-* (Anthropic API) or databricks-* (a model served on the workspace, e.g. "
+                         "databricks-gpt-oss-120b)")
     ap.add_argument("--report-file", help="append the markdown report here (e.g. $GITHUB_STEP_SUMMARY)")
     args = ap.parse_args()
+    sys.stdout.reconfigure(encoding="utf-8")   # model text may contain non-ASCII (Windows consoles default to cp1252)
     if not args.profile:
         ap.error("--profile or AIDQ_PROFILE is required (no profile is ever chosen automatically)")
     return asyncio.run(amain(args))
