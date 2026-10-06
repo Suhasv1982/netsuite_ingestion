@@ -38,7 +38,9 @@ def main() -> int:
     ap.add_argument("--smoke", action="store_true", help="call every tool once and print a summary")
     args = ap.parse_args()
     if not args.profile:
-        ap.error("--profile or AIDQ_PROFILE is required (no profile is ever chosen automatically)")
+        if not os.environ.get("DATABRICKS_HOST"):
+            ap.error("--profile, AIDQ_PROFILE or DATABRICKS_* variables are required (no profile is chosen automatically)")
+        args.profile = None   # environment auth (CI: ci-dev, OAuth M2M)
     tools = Tools(Reads(args.profile))
     if args.smoke:
         return smoke(tools)
