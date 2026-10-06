@@ -133,13 +133,39 @@ WRITE_CLI = {"update-endpoint", "create-endpoint", "run-now", "submit", "start",
 # "post" is allowed: SQL statements go through POST /api/2.0/sql/statements; WRITE_SQL keeps them read-only.
 
 
-def _string_constants(path):
-    return [n.value for n in ast.walk(ast.parse(path.read_text(encoding="utf-8"))) if isinstance(n, ast.Constant)
-            and isinstance(n.value, str)]
+def _tree(path):
+    return ast.parse(path.read_text(encoding="utf-8"))
+
+
+def _string_constants(tree):
+    return [n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+
+
+def _cli_arguments(tree):
+    """String arguments of every `<x>.cli(...)` call: the Databricks CLI verbs the package uses."""
+    return [a.value for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+            and n.func.attr == "cli" for a in n.args if isinstance(a, ast.Constant) and isinstance(a.value, str)]
+
+
+def _http_methods(tree):
+    """The value after every "-X" in a list literal (gh api / curl style method flags)."""
+    out = []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.List):
+            vals = [e.value if isinstance(e, ast.Constant) else None for e in n.elts]
+            out += [vals[i + 1] for i, v in enumerate(vals[:-1]) if v == "-X"]
+    return out
 
 
 @pytest.mark.parametrize("path", sorted(PKG.glob("*.py")), ids=lambda p: p.name)
 def test_package_contains_no_write_statements_or_mutating_cli_verbs(path):
-    strings = _string_constants(path)
-    assert not [s for s in strings if WRITE_SQL.search(s)]
-    assert not [s for s in strings if s.strip().lower() in WRITE_CLI]
+    tree = _tree(path)
+    assert not [s for s in _string_constants(tree) if WRITE_SQL.search(s)]
+    assert not [a for a in _cli_arguments(tree) if a.lower() in WRITE_CLI]
+    assert set(_http_methods(tree)) <= {"GET"}
+
+
+def test_cli_verb_check_sees_the_calls():
+    # guard against the check silently matching nothing
+    assert "list-runs" in _cli_arguments(_tree(PKG / "reads.py"))
+    assert _http_methods(_tree(PKG / "reads.py")) == ["GET"]
