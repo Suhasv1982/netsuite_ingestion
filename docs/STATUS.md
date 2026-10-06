@@ -141,6 +141,28 @@ step-1 backup); promote-prod now prunes them (below).
   platform cause (Free Edition, idle workspace suspected, not confirmed).
 * Prod job cron is `0 0 6 * * ?` (06:00 UTC), not 06:30 as planned: settle before step 8.
 
+## 0e. Phase 3: read-only MCP server (2026-10-06)
+
+* `src/aidq_mcp` (plan: `docs/phase3_mcp_plan.md`, PRs #29, #30): five read-only tools, dev only:
+  `get_table_health`, `get_recent_job_runs` (with `missed_schedules` / `missed_schedules_unconfirmed`),
+  `get_pipeline_errors`, `compare_bronze_to_source`, `get_recent_deploys`. Runs as the owner's CLI profile;
+  read-only enforced in code (read-only Postgres sessions, fixed SELECT templates, get/list CLI calls only,
+  tested). A disabled endpoint is reported `unavailable`, never enabled. `env="prod"` is refused.
+* Run: `PYTHONPATH=src .venv/Scripts/python -m aidq_mcp --profile DEFAULT [--smoke]`. Register for Claude Code
+  (local scope, not committed): `claude mcp add aidq-netsuite --scope local -e PYTHONPATH=<repo>/src --
+  <repo>/.venv/Scripts/python.exe -m aidq_mcp --profile DEFAULT`.
+* **Incident replay (step C):** fresh headless Claude Code sessions limited to these tools (`--strict-mcp-config`,
+  all built-in tools disallowed), started outside the repo so no STATUS/memory context. Both answers met every
+  `must_identify` and no `must_not_claim` of the fixtures. Incident 1: gap on 10-02/10-03 only, equal to the
+  same-day duplicates, ledger never loads them; it guessed (and flagged as unverified) that PR #27 should have
+  backfilled. Incident 2: no trigger on 10-06, schedules UNPAUSED and unchanged since 10-01, no deploy before
+  15:28; cause not found, platform listed as a possibility only.
+* Found by the replay and fixed: with a 7-day window `missed_schedules` flagged 09-30 and 10-01, before the
+  schedules existed. Misses before the first scheduled run in the window are now `missed_schedules_unconfirmed`.
+* Next: Phase 4 (LangGraph monitor + RCA after the dev daily job, these tools only, writes incidents). Needs:
+  migration 005 for incident categories `ORCHESTRATION` / `DATA_COMPLETENESS`, and (ask first) a read-only SP
+  `aidq-reader` with INSERT on `incidents`.
+
 ## 1a. First CI dev run (2026-09-30, deploy-dev run on the #11 merge: green)
 
 * Rebuild mode (poc_bronze was empty after `[dev suhasv]` was removed): migrations (003 applied by the previous,

@@ -118,7 +118,16 @@ def test_missed_schedules_on_10_06():
     assert by["generator"]["missed_schedules"] == ["2026-10-06T05:00:00+00:00"]
     assert by["ingestion"]["missed_schedules"] == ["2026-10-06T05:30:00+00:00"]
     assert by["generator"]["schedule"]["pause_status"] == "UNPAUSED"
+    assert by["generator"]["missed_schedules_unconfirmed"] == []
     assert by["canary"]["schedule"] is None and "missed_schedules" not in by["canary"]
+
+
+def test_misses_before_the_first_scheduled_run_are_unconfirmed():
+    by = {j["job"]: j for j in tools().get_recent_job_runs("dev", 7)["jobs"]}
+    # fake runs start 10-03: 09-29 .. 10-02 05:00 are unconfirmed, 10-06 confirmed
+    assert by["generator"]["missed_schedules"] == ["2026-10-06T05:00:00+00:00"]
+    assert by["generator"]["missed_schedules_unconfirmed"][0] == "2026-09-30T05:00:00+00:00"
+    assert by["generator"]["missed_schedules_unconfirmed"][-1] == "2026-10-02T05:00:00+00:00"
 
 
 def test_deploys_show_no_deploy_after_10_01_and_no_change_on_our_jobs():

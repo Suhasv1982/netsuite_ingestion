@@ -64,15 +64,24 @@ def cron_fire_times(quartz: str, start: dt.datetime, end: dt.datetime) -> list[d
 
 
 def missed_schedules(quartz: str, paused: bool, run_starts: Iterable[dt.datetime], start: dt.datetime,
-                     end: dt.datetime, tolerance: dt.timedelta = dt.timedelta(minutes=15)) -> list[dt.datetime]:
+                     end: dt.datetime, first_scheduled_run: dt.datetime | None = None,
+                     tolerance: dt.timedelta = dt.timedelta(minutes=15)) -> dict:
     """Scheduled fire times in the window with no run started within `tolerance` after them (incident 2026-10-06:
     an unpaused schedule that never triggered). A paused schedule misses nothing; a fire time whose tolerance has
-    not passed yet at `end` is not counted."""
+    not passed yet at `end` is not counted.
+
+    Current settings cannot say when the schedule was added or unpaused, so a miss counts as `confirmed` only
+    after `first_scheduled_run` (the earliest scheduled run seen, proof the schedule was active). Earlier ones
+    are `unconfirmed`: possibly before the schedule existed."""
     if paused:
-        return []
+        return {"confirmed": [], "unconfirmed": []}
     starts = sorted(run_starts)
-    return [f for f in cron_fire_times(quartz, start, end)
-            if f + tolerance <= end and not any(f <= s <= f + tolerance for s in starts)]
+    missed = [f for f in cron_fire_times(quartz, start, end)
+              if f + tolerance <= end and not any(f <= s <= f + tolerance for s in starts)]
+    if first_scheduled_run is None:
+        return {"confirmed": [], "unconfirmed": missed}
+    return {"confirmed": [f for f in missed if f > first_scheduled_run],
+            "unconfirmed": [f for f in missed if f < first_scheduled_run]}
 
 
 # -- output shaping -----------------------------------------------------------

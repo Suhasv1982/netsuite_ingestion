@@ -107,16 +107,22 @@ class Tools:
                     entry["missed_schedules_note"] = "only UTC schedules are checked"
                 else:
                     try:
+                        periodic = [logic.from_epoch_ms(r["start_time"]) for r in runs
+                                    if r.get("start_time") and r.get("trigger") == "PERIODIC"]
                         missed = logic.missed_schedules(
                             schedule["quartz_cron_expression"], schedule.get("pause_status") == "PAUSED",
-                            [logic.from_epoch_ms(r["start_time"]) for r in runs if r.get("start_time")], start, end)
-                        entry["missed_schedules"] = [_iso(m) for m in missed]
+                            [logic.from_epoch_ms(r["start_time"]) for r in runs if r.get("start_time")], start, end,
+                            first_scheduled_run=min(periodic, default=None))
+                        entry["missed_schedules"] = [_iso(m) for m in missed["confirmed"]]
+                        entry["missed_schedules_unconfirmed"] = [_iso(m) for m in missed["unconfirmed"]]
                     except ValueError as e:
                         entry["missed_schedules"] = None
                         entry["missed_schedules_note"] = str(e)
             out.append(entry)
         return {"env": env, "window": {"start": _iso(start), "end": _iso(end)}, "jobs": out,
-                "note": "missed_schedules = cron fire times with no run started within 15 minutes; "
+                "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the "
+                        "first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times "
+                        "before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); "
                         "a missed run sends no failure email"}
 
     # -- get_pipeline_errors ----------------------------------------------------------------
