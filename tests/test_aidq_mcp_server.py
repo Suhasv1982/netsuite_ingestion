@@ -24,8 +24,8 @@ def ms(day, h, m, s=10):
 
 
 class FakeReads:
-    def __init__(self, disabled=False):
-        self.disabled = disabled
+    def __init__(self, disabled=False, audit_denied=False):
+        self.disabled, self.audit_denied = disabled, audit_denied
         self.sql_calls = []
 
     def current_user(self):
@@ -78,6 +78,8 @@ class FakeReads:
     def sql(self, statement):
         self.sql_calls.append(statement)
         if "system.access.audit" in statement:
+            if self.audit_denied:
+                raise Unavailable("SQL warehouse statement FAILED: PERMISSION_DENIED on system.access.audit")
             return [{"t": "2026-10-04 07:16:40", "service": "jobs", "action": "changeJobAcl", "actor": "x-1",
                      "rc": "200", "params": '{"resourceId":"999"}'}]
         if "_snapshot_date" in statement:        # bronze: 07-11 batch duplicates loaded, 10-02 short by 3
@@ -136,6 +138,12 @@ def test_deploys_show_no_deploy_after_10_01_and_no_change_on_our_jobs():
     assert [d["created"] for d in out["deploys"]["items"]] == ["2026-10-01T20:56:18Z"]
     assert out["config_changes"]["items"][0]["resource"] is None       # ACL change on another job id
     assert out["config_changes"]["items"][0]["actor"] == "other"
+
+
+def test_deploys_still_reported_when_the_audit_log_is_not_readable():
+    out = tools(audit_denied=True).get_recent_deploys("dev", 7)
+    assert out["status"] == "ok" and out["deploys"]["total"] == 1
+    assert "PERMISSION_DENIED" in out["config_changes"]["unavailable"]
 
 
 def test_audit_query_is_scoped_to_this_envs_resources():
