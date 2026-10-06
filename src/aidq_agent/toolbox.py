@@ -59,3 +59,36 @@ class McpToolBox:
             return json.loads(text)
         except ValueError:
             return {"status": "error", "error": f"non-JSON tool result: {text[:300]}"}
+
+
+# the aidq_mcp tools' defaults, so {"days": 3} and an omitted days hit the same recording
+REPLAY_DEFAULTS = {"get_recent_job_runs": {"days": 3}, "get_pipeline_errors": {"hours": 24},
+                   "get_recent_deploys": {"days": 7}}
+
+
+class ReplayToolBox:
+    """Serves tool results recorded by evals/record_cassettes.py, keyed by (tool, canonical arguments). Arguments
+    that were not recorded get an error result listing the recorded variants, like a real bad-argument error."""
+
+    def __init__(self, cassette: dict):
+        self.tools = cassette["tools"]
+        self.calls: dict[str, dict] = {}
+        for rec in cassette["calls"]:
+            self.calls[self.key(rec["tool"], rec["arguments"])] = rec["result"]
+
+    @staticmethod
+    def key(name: str, arguments: dict) -> str:
+        args = {**REPLAY_DEFAULTS.get(name, {}), "env": "dev",
+                **{k: v for k, v in (arguments or {}).items() if v is not None}}
+        return name + json.dumps(args, sort_keys=True)
+
+    async def list_tools(self) -> list[dict]:
+        return self.tools
+
+    async def call(self, name: str, arguments: dict) -> dict:
+        hit = self.calls.get(self.key(name, arguments))
+        if hit is not None:
+            return hit
+        variants = sorted(k[len(name):] for k in self.calls if k.startswith(name + "{"))
+        return {"status": "error", "error": f"replay: arguments {json.dumps(arguments, sort_keys=True)} were not "
+                                            f"recorded for {name}; recorded: {variants[:12]}"}

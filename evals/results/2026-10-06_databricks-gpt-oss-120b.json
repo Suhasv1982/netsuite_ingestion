@@ -1,0 +1,470 @@
+[
+ {
+  "case": "healthy_2026-10-05",
+  "run": 1,
+  "incidents": 0,
+  "checks": {
+   "incident_as_expected": true
+  },
+  "judge": [],
+  "reports": [],
+  "tool_calls": [],
+  "errors": [],
+  "usage": []
+ },
+ {
+  "case": "healthy_2026-10-05",
+  "run": 2,
+  "incidents": 0,
+  "checks": {
+   "incident_as_expected": true
+  },
+  "judge": [],
+  "reports": [],
+  "tool_calls": [],
+  "errors": [],
+  "usage": []
+ },
+ {
+  "case": "healthy_2026-10-05",
+  "run": 3,
+  "incidents": 0,
+  "checks": {
+   "incident_as_expected": true
+  },
+  "judge": [],
+  "reports": [],
+  "tool_calls": [],
+  "errors": [],
+  "usage": []
+ },
+ {
+  "case": "duplicate_versions",
+  "run": 1,
+  "incidents": 1,
+  "checks": {
+   "incident_as_expected": true,
+   "category_allowed": true,
+   "rca_produced": true
+  },
+  "judge": [
+   {
+    "id": "identify_1",
+    "kind": "identify",
+    "text": "the gap is confined to snapshot dates 2026-10-02 and 2026-10-03",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "Bronze layer is missing rows for 2026-10-02 and 2026-10-03"
+   },
+   {
+    "id": "identify_2",
+    "kind": "identify",
+    "text": "same key and same updated_date appears twice in the source",
+    "verdict": "no",
+    "pass": false,
+    "quote": ""
+   },
+   {
+    "id": "identify_3",
+    "kind": "identify",
+    "text": "the ledger / fingerprint keys on distinct (key, date) pairs, so the second version is skipped",
+    "verdict": "no",
+    "pass": false,
+    "quote": ""
+   },
+   {
+    "id": "claim_1",
+    "kind": "claim",
+    "text": "the pipeline or ledger_check failed",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_2",
+    "kind": "claim",
+    "text": "rows were rejected by data quality rules",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_3",
+    "kind": "claim",
+    "text": "the source rows are exact duplicates (most differ)",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   }
+  ],
+  "reports": [
+   "Category: DATA_COMPLETENESS\nSummary: Bronze layer is missing rows for 2026-10-02 and 2026-10-03 across multiple tables. Root cause: The synthetic data generator produced duplicate primary\u2011key values for those dates, and the ingestion pipeline's deduplication step removed the extra records, leaving fewer rows in bronze than in the source. (confidence high)\nEvidence [compare_bronze_to_source]: netsuite_transactions 2026-10-02 missing 34, same_day_extra 34; 2026-10-03 missing 29, same_day_extra 29 (classification: unexplained).\nEvidence [compare_bronze_to_source]: netsuite_certifications 2026-10-02 missing 5, same_day_extra 5; 2026-10-03 missing 1, same_day_extra 1.\nEvidence [get_table_health]: bronze layer rows_written equals rows_read for netsuite_transactions, indicating no rejects; active_rules = 0.\nEvidence [get_table_health]: bronze layer rows_written equals rows_read for netsuite_certifications and netsuite_memberships; active_rules present but no rows rejected.\nEvidence [get_recent_job_runs]: Ingestion job runs for 2026-10-02, 2026-10-03, and 2026-10-04 completed successfully (RESULT SUCCESS).\nRuled out: Source_unavailable: the generator job ran (source row counts are higher than bronze).\nRuled out: ORCHESTRATION: ingestion jobs fired on schedule and succeeded; no missed runs for the affected dates.\nRuled out: REJECT_THRESHOLD: reject rates are below thresholds (e.g., 0.0 for transactions, 0.0155 for certifications).\nRuled out: COMPUTE_QUOTA: no evidence of compute failures or timeouts in job logs.\nRuled out: SCHEMA_DRIFT: table schemas appear consistent; no schema change errors reported.\nNot verified: Do the generator logs for 2026-10-02 and 2026-10-03 show duplicate primary\u2011key warnings or errors?\nNot verified: What is the exact deduplication logic applied in the bronze layer (e.g., primary\u2011key based, last\u2011write wins)?\nNot verified: Are there any recent changes to the generator code that could affect key generation (e.g., recent PRs before 2026-10-01)?\nNext step: Update the synthetic data generator to guarantee unique primary\u2011key values for each record (e.g., incorporate a UUID or a sequence per day), and review the bronze deduplication configuration to ensure it aligns with the expected data model. After fixing the generator, back\u2011fill the missing dates by re\u2011running the generator for those dates and re\u2011ingesting the data."
+  ],
+  "tool_calls": [
+   "get_recent_job_runs",
+   "get_table_health",
+   "compare_bronze_to_source",
+   "compare_bronze_to_source",
+   "get_table_health",
+   "get_table_health",
+   "get_recent_deploys",
+   "compare_bronze_to_source"
+  ],
+  "errors": [],
+  "usage": [
+   {
+    "input_tokens": 61526,
+    "output_tokens": 3890
+   }
+  ],
+  "tools_expected_hit": "3/3"
+ },
+ {
+  "case": "duplicate_versions",
+  "run": 2,
+  "incidents": 1,
+  "checks": {
+   "incident_as_expected": true,
+   "category_allowed": true,
+   "rca_produced": true
+  },
+  "judge": [
+   {
+    "id": "identify_1",
+    "kind": "identify",
+    "text": "the gap is confined to snapshot dates 2026-10-02 and 2026-10-03",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "missing rows for 2026\u201110\u201102 and 2026\u201110\u201103"
+   },
+   {
+    "id": "identify_2",
+    "kind": "identify",
+    "text": "same key and same updated_date appears twice in the source",
+    "verdict": "no",
+    "pass": false,
+    "quote": ""
+   },
+   {
+    "id": "identify_3",
+    "kind": "identify",
+    "text": "the ledger / fingerprint keys on distinct (key, date) pairs, so the second version is skipped",
+    "verdict": "no",
+    "pass": false,
+    "quote": ""
+   },
+   {
+    "id": "claim_1",
+    "kind": "claim",
+    "text": "the pipeline or ledger_check failed",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_2",
+    "kind": "claim",
+    "text": "rows were rejected by data quality rules",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_3",
+    "kind": "claim",
+    "text": "the source rows are exact duplicates (most differ)",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   }
+  ],
+  "reports": [
+   "Category: DATA_COMPLETENESS\nSummary: Bronze tables are missing rows for 2026\u201110\u201102 and 2026\u201110\u201103 across several NetSuite entities. Root cause: The ingestion pipeline\u2019s duplicate\u2011filtering logic is incorrectly discarding rows that should be kept, leading to missing rows (and matching same\u2011day duplicate counts) in bronze. (confidence medium)\nEvidence [compare_bronze_to_source]: For netsuite_transactions, netsuite_certifications, netsuite_memberships, netsuite_transaction_lines the bronze row count is lower than the source for 2026\u201110\u201102 and 2026\u201110\u201103, with missing rows equal to same\u2011day duplicate counts; classification is \"unexplained\".\nEvidence [get_recent_job_runs]: Generator jobs for 2026\u201110\u201102 and 2026\u201110\u201103 succeeded; ingestion jobs for those dates also succeeded with no reported failures.\nEvidence [get_pipeline_errors]: No ERROR or WARN events were recorded for the ingestion pipeline in the last 48 hours.\nEvidence [get_table_health]: Bronze layer shows SUCCESS status with rows_written equal to rows_read; no active data\u2011quality rules are recorded.\nRuled out: Source unavailable \u2013 source tables exist and row counts are reported.\nRuled out: Generator failures \u2013 occurred on 2026\u201110\u201101 only and did not affect the dates with gaps.\nRuled out: Reject threshold breach \u2013 no rejects reported and reject rate is 0.\nRuled out: Compute quota or orchestration errors \u2013 all jobs completed successfully.\nRuled out: Schema drift \u2013 table health reports no errors and schema is unchanged.\nNot verified: What code changes were deployed to the ingestion pipeline in the last week that could have altered duplicate handling?\nNot verified: Did the generator introduce same\u2011day duplicate rows that the ingestion pipeline now treats as duplicates to drop?\nNot verified: Is there a hidden deduplication rule or custom transform not reflected in the table\u2011health active_rules field?\nNext step: Review the recent commits to the ingestion pipeline, focusing on any changes to duplicate\u2011filtering or deduplication logic. If a stricter filter was unintentionally added, revert or adjust it so that rows matching source counts are retained. Add a unit test to verify that bronze row counts match source counts when no true duplicates exist."
+  ],
+  "tool_calls": [
+   "get_table_health",
+   "get_recent_job_runs",
+   "get_table_health",
+   "compare_bronze_to_source",
+   "compare_bronze_to_source",
+   "compare_bronze_to_source",
+   "get_pipeline_errors",
+   "compare_bronze_to_source"
+  ],
+  "errors": [],
+  "usage": [
+   {
+    "input_tokens": 64487,
+    "output_tokens": 3382
+   }
+  ],
+  "tools_expected_hit": "3/3"
+ },
+ {
+  "case": "duplicate_versions",
+  "run": 3,
+  "incidents": 1,
+  "checks": {
+   "incident_as_expected": true,
+   "category_allowed": true,
+   "rca_produced": false
+  },
+  "judge": [],
+  "reports": [
+   "Category: DATA_COMPLETENESS\nSummary: 8 signal(s): netsuite_certifications 2026-10-02: source 392, bronze 387 (missing 5, same-day duplicates 5); netsuite_certifications 2026-10-03: source 398, bronze 397 (missing 1, same-day duplicates 1); netsuite_memberships 2026-10-02: source 500, bronze 489 (missing 11, same-day duplicates 11); netsuite_memberships 2026-10-03: source 506, bronze 493 (missing 13, same-day duplicates 13); netsuite_transaction_lines 2026-10-02: source 5988, bronze 5898 (missing 90, same-day duplicates 90) [RCA failed: no submit_rca call; last text: ]"
+  ],
+  "tool_calls": [
+   "get_table_health",
+   "get_table_health",
+   "get_table_health",
+   "compare_bronze_to_source",
+   "compare_bronze_to_source",
+   "get_recent_deploys",
+   "get_recent_job_runs"
+  ],
+  "errors": [
+   "no submit_rca call; last text: "
+  ],
+  "usage": [
+   {
+    "input_tokens": 40398,
+    "output_tokens": 1823
+   }
+  ],
+  "tools_expected_hit": "3/3"
+ },
+ {
+  "case": "missed_runs",
+  "run": 1,
+  "incidents": 1,
+  "checks": {
+   "incident_as_expected": true,
+   "category_allowed": true,
+   "rca_produced": true
+  },
+  "judge": [
+   {
+    "id": "identify_1",
+    "kind": "identify",
+    "text": "no run was triggered (absence, not failure)",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "jobs did not start at their 05:00/05:30 UTC windows"
+   },
+   {
+    "id": "identify_2",
+    "kind": "identify",
+    "text": "schedules were UNPAUSED and unchanged",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "No deploys or config changes on 2026-10-06 that could have altered schedules"
+   },
+   {
+    "id": "identify_3",
+    "kind": "identify",
+    "text": "no deploy or config change explains it, so it is outside the pipeline (platform)",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "Root cause: A temporary orchestration failure"
+   },
+   {
+    "id": "claim_1",
+    "kind": "claim",
+    "text": "deploy-dev paused the schedules",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_2",
+    "kind": "claim",
+    "text": "the job failed",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_3",
+    "kind": "claim",
+    "text": "a specific confirmed platform cause (it is suspected only)",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   }
+  ],
+  "reports": [
+   "Category: ORCHESTRATION\nSummary: Scheduled generator and ingestion jobs did not start at their 05:00/05:30 UTC windows on 2026\u201110\u201106. Root cause: A temporary orchestration failure (likely scheduler service outage or cluster quota issue) prevented the periodic jobs from being launched at the scheduled time. (confidence medium)\nEvidence [get_recent_job_runs]: Both [dev ci_dev] netsuite_daily_generator and netsuite_ingestion_daily show missed_schedules for 2026-10-06 05:00 and 05:30 UTC respectively.\nEvidence [get_table_health]: A successful ingestion run occurred later on 2026-10-06 (bronze/silver/write succeeded), confirming the source data was available and the pipeline works when triggered.\nEvidence [get_pipeline_errors]: No ERROR or WARN events reported for the ingestion or canary pipelines in the preceding 48 hours.\nEvidence [get_recent_deploys]: No deploys or config changes on 2026-10-06 that could have altered schedules; last relevant changes were on 2026-10-01.\nRuled out: Source_unavailable \u2013 table health shows rows were read successfully later in the day.\nRuled out: Data_volume \u2013 row counts (~21k) are normal and did not trigger reject thresholds.\nRuled out: BAD_RULE_EXPR \u2013 no rule processing errors were reported.\nRuled out: REJECT_THRESHOLD \u2013 reject rate was 0.0 and threshold not breached.\nRuled out: SCHEMA_DRIFT \u2013 no schema\u2011related errors observed.\nRuled out: CREDENTIAL_EXPIRED \u2013 jobs ran successfully later, indicating credentials were valid.\nNot verified: Was there a Databricks scheduler or cluster provisioning outage around 05:00\u201105:30 UTC on 2026\u201110\u201106?\nNot verified: Did the platform hit a temporary compute\u2011quota limit that prevented cluster start at the scheduled time?\nNot verified: Did any hidden schedule modification (e.g., via API) occur after the Oct\u202f1 resets that is not captured in the deploy audit?\nNext step: Check Databricks scheduler and cluster provisioning logs for the 05:00\u201105:30 UTC window on 2026\u201110\u201106 to confirm the outage or quota issue. If a quota limit was hit, increase the quota or configure auto\u2011scaling. Set up an alert for missed scheduled runs so that future orchestration failures are detected early, and consider adding a retry/backfill step in the job definitions."
+  ],
+  "tool_calls": [
+   "get_recent_job_runs",
+   "get_recent_deploys",
+   "get_pipeline_errors",
+   "get_table_health",
+   "get_recent_job_runs"
+  ],
+  "errors": [],
+  "usage": [
+   {
+    "input_tokens": 39245,
+    "output_tokens": 3301
+   }
+  ],
+  "tools_expected_hit": "2/2"
+ },
+ {
+  "case": "missed_runs",
+  "run": 2,
+  "incidents": 1,
+  "checks": {
+   "incident_as_expected": true,
+   "category_allowed": true,
+   "rca_produced": true
+  },
+  "judge": [
+   {
+    "id": "identify_1",
+    "kind": "identify",
+    "text": "no run was triggered (absence, not failure)",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "jobs did not start"
+   },
+   {
+    "id": "identify_2",
+    "kind": "identify",
+    "text": "schedules were UNPAUSED and unchanged",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "No deployments or config changes in the prior 3 days that would have paused the schedules"
+   },
+   {
+    "id": "identify_3",
+    "kind": "identify",
+    "text": "no deploy or config change explains it, so it is outside the pipeline (platform)",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "failure within the ingestion pipeline itself is not responsible"
+   },
+   {
+    "id": "claim_1",
+    "kind": "claim",
+    "text": "deploy-dev paused the schedules",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_2",
+    "kind": "claim",
+    "text": "the job failed",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_3",
+    "kind": "claim",
+    "text": "a specific confirmed platform cause (it is suspected only)",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   }
+  ],
+  "reports": [
+   "Category: ORCHESTRATION\nSummary: Scheduled daily generator and ingestion jobs did not start at their 05:00 and 05:30 UTC times on 2026-10-06. Root cause: The orchestration scheduler failed to trigger the cron runs for both the NetSuite data generator and the ingestion pipeline on 2026-10-06, likely due to a scheduler service outage or glitch. (confidence medium)\nEvidence [get_recent_job_runs (generator)]: Missed schedule at 2026-10-06T05:00:00+00:00 with no run started within 15 minutes.\nEvidence [get_recent_job_runs (ingestion)]: Missed schedule at 2026-10-06T05:30:00+00:00 with no run started within 15 minutes.\nEvidence [get_recent_deploys]: No deployments or config changes in the prior 3 days that would have paused the schedules.\nEvidence [get_pipeline_errors]: No pipeline errors or failed run audits in the last 48 hours.\nEvidence [get_table_health]: Bronze/silver/ledger tables show successful runs later in the day (around 17:34 UTC), indicating the pipeline can run when manually triggered.\nRuled out: There were no recent deployments or config changes that would have paused or altered the schedules.\nRuled out: Pipeline logs show no errors, so a failure within the ingestion pipeline itself is not responsible.\nRuled out: The later successful runs prove the tables and pipeline are functional; the issue is not data volume or compute quota.\nNot verified: Did the scheduler service (e.g., Airflow, Cloud Scheduler) experience downtime or a restart around 05:00 UTC on 2026-10-06?\nNot verified: Are there any scheduler logs indicating missed cron dispatches or errors at that time?\nNot verified: Was there a maintenance window or automated pause that is not captured in deploy logs?\nNext step: Investigate the scheduler service's health and logs for the 05:00\u201105:30 UTC window on 2026-10-06, restart or redeploy the scheduler if it was down, and add monitoring/alerting for missed scheduled runs to catch future orchestrator outages promptly."
+  ],
+  "tool_calls": [
+   "get_recent_job_runs",
+   "get_recent_job_runs",
+   "get_recent_deploys",
+   "get_pipeline_errors",
+   "get_table_health"
+  ],
+  "errors": [],
+  "usage": [
+   {
+    "input_tokens": 13526,
+    "output_tokens": 1742
+   }
+  ],
+  "tools_expected_hit": "2/2"
+ },
+ {
+  "case": "missed_runs",
+  "run": 3,
+  "incidents": 1,
+  "checks": {
+   "incident_as_expected": true,
+   "category_allowed": true,
+   "rca_produced": true
+  },
+  "judge": [
+   {
+    "id": "identify_1",
+    "kind": "identify",
+    "text": "no run was triggered (absence, not failure)",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "jobs did not start"
+   },
+   {
+    "id": "identify_2",
+    "kind": "identify",
+    "text": "schedules were UNPAUSED and unchanged",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "No deployments or config changes occurred on 2026\u201110\u201106 that would explain a schedule pause or alteration"
+   },
+   {
+    "id": "identify_3",
+    "kind": "identify",
+    "text": "no deploy or config change explains it, so it is outside the pipeline (platform)",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "Root cause: A platform\u2011level scheduling outage"
+   },
+   {
+    "id": "claim_1",
+    "kind": "claim",
+    "text": "deploy-dev paused the schedules",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_2",
+    "kind": "claim",
+    "text": "the job failed",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_3",
+    "kind": "claim",
+    "text": "a specific confirmed platform cause (it is suspected only)",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   }
+  ],
+  "reports": [
+   "Category: ORCHESTRATION\nSummary: Scheduled generator and ingestion jobs did not start at their 05:00 and 05:30 UTC windows on 2026\u201110\u201106. Root cause: A platform\u2011level scheduling outage (or temporary inability of the job orchestrator to launch runs) prevented the generator and ingestion jobs from being triggered at their scheduled times. (confidence medium)\nEvidence [get_recent_job_runs]: Both '[dev ci_dev] netsuite_daily_generator' and '[dev ci_dev] netsuite_ingestion_daily' show a missed schedule for 2026\u201110\u201106T05:00:00Z and 2026\u201110\u201106T05:30:00Z respectively, with no runs started within 15 minutes.\nEvidence [get_pipeline_errors]: No ERROR or WARN events, and no FAILED run audits, were recorded for the ingestion pipeline in the preceding 48\u202fhours, indicating the pipelines themselves did not encounter internal failures.\nEvidence [get_table_health]: Bronze, silver, dq, and ledger layers for 'netsuite_transactions' completed successfully later in the day (\u224817:34\u202fUTC), showing the pipelines eventually ran, but not at the scheduled window.\nEvidence [get_recent_deploys]: No deployments or config changes occurred on 2026\u201110\u201106 that would explain a schedule pause or alteration; the last relevant job resets were on 2026\u201110\u201101.\nRuled out: A recent code change or deployment caused the miss \u2013 recent deploys show none on 2026\u201110\u201106.\nRuled out: Pipeline code errors \u2013 pipeline error logs are empty and runs later succeeded.\nRuled out: Source data unavailability \u2013 bronze run succeeded later, indicating source was reachable.\nRuled out: Credential expiration \u2013 runs later succeeded, implying credentials were valid.\nRuled out: Reject threshold breach \u2013 no rejects reported; reject rate was 0.\nNot verified: Were there any platform\u2011wide incidents (e.g., Databricks job scheduler outage, compute quota throttling) on 2026\u201110\u201106 around 05:00\u202fUTC?\nNot verified: Did the underlying compute cluster for these jobs fail to start or encounter a temporary resource limit at the scheduled time?\nNot verified: Are there any logs from the orchestration layer (e.g., Airflow, Databricks job service) that indicate why the launch request was not accepted?\nNext step: Check the orchestration platform\u2019s incident and audit logs for 05:00\u201106:00\u202fUTC on 2026\u201110\u201106 to identify any scheduler or resource failures. If an outage is confirmed, work with the platform team to address reliability (e.g., increase redundancy, adjust retry settings). Ensure alerts are configured for future missed\u2011schedule events so they can be investigated promptly."
+  ],
+  "tool_calls": [
+   "get_recent_job_runs",
+   "get_recent_deploys",
+   "get_pipeline_errors",
+   "get_table_health",
+   "compare_bronze_to_source"
+  ],
+  "errors": [],
+  "usage": [
+   {
+    "input_tokens": 26615,
+    "output_tokens": 3117
+   }
+  ],
+  "tools_expected_hit": "2/2"
+ }
+]

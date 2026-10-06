@@ -236,3 +236,61 @@ def test_failed_rca_still_records_the_signal():
 def test_dry_run_reports_but_exits_zero():
     state, _, store = graph_run(MISSED)
     assert len(store.inserted) == 1 and state["exit_code"] == 0 and "(not written)" in state["report"]
+
+
+# -- replay toolbox, free-model helpers, eval grading -------------------------------------
+
+def test_replay_toolbox_normalizes_defaults_and_reports_unrecorded_args():
+    from aidq_agent.toolbox import ReplayToolBox
+
+    tb = ReplayToolBox({"tools": [], "calls": [
+        {"tool": "get_recent_job_runs", "arguments": {"env": "dev", "days": 3}, "result": {"status": "ok", "n": 1}}]})
+    assert asyncio.run(tb.call("get_recent_job_runs", {})) == {"status": "ok", "n": 1}
+    assert asyncio.run(tb.call("get_recent_job_runs", {"env": "dev", "days": 3, "job": None}))["n"] == 1
+    miss = asyncio.run(tb.call("get_recent_job_runs", {"days": 9}))
+    assert miss["status"] == "error" and "not recorded" in miss["error"]
+
+
+def test_rca_from_text_accepts_only_complete_json():
+    from aidq_agent.dbx import _rca_from_text, _text
+
+    assert _rca_from_text("```json\n" + json.dumps(RCA) + "\n```") == RCA
+    assert _rca_from_text('{"summary": "x"}') is None and _rca_from_text("no json") is None
+    assert _text({"content": [{"type": "reasoning", "summary": []}, {"type": "text", "text": "hi"}]}) == "hi"
+
+
+def test_free_model_investigator_loop_with_a_fake_chat():
+    from aidq_agent.dbx import SUBMIT, DatabricksInvestigator
+
+    def call(name, args, i):
+        return {"id": f"c{i}", "type": "function", "function": {"name": name, "arguments": json.dumps(args)}}
+
+    class Chat:
+        def __init__(self):
+            self.n = 0
+
+        async def complete(self, model, messages, tools=None, max_tokens=4000):
+            self.n += 1
+            tc = [call("get_recent_deploys", {"env": "dev"}, 1)] if self.n == 1 else [call(SUBMIT, RCA, 2)]
+            return {"choices": [{"message": {"content": "", "tool_calls": tc}, "finish_reason": "tool_calls"}],
+                    "usage": {"prompt_tokens": 7, "completion_tokens": 3}}
+
+    tb = FakeToolBox(MISSED)
+    inv = asyncio.run(DatabricksInvestigator(Chat()).investigate("ORCHESTRATION", ["s"], [], "2026-10-06", tb))
+    assert inv.rca == RCA and [c["tool"] for c in inv.tool_calls] == ["get_recent_deploys"]
+    assert inv.usage == {"input_tokens": 14, "output_tokens": 6}
+
+
+def test_eval_verdicts_pass_rules():
+    import sys
+    import pathlib
+
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "evals"))
+    from run_agent_eval import apply_verdicts, grade_items
+
+    items = grade_items({"must_identify": ["a"], "must_not_claim": ["b"]})
+    got = apply_verdicts(items, {"items": [{"id": "identify_1", "verdict": "YES"}, {"id": "claim_1", "verdict": "no"}]})
+    assert [g["pass"] for g in got] == [True, True]
+    got = apply_verdicts(items, {"items": [{"id": "claim_1", "verdict": "yes"}]})
+    assert [(g["verdict"], g["pass"]) for g in got] == [("missing", False), ("yes", False)]
+    assert apply_verdicts(items, None) is None
