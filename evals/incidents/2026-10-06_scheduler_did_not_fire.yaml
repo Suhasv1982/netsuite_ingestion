@@ -1,0 +1,67 @@
+id: 2026-10-06_scheduler_did_not_fire
+title: Daily dev jobs did not run on 2026-10-06
+detected: 2026-10-06
+occurred: [2026-10-06]
+environment: dev
+category: orchestration
+severity: medium   # a whole day missed; no failure email because nothing ran
+
+symptoms:
+  - no run of netsuite_daily_generator (05:00 UTC) or dev netsuite_ingestion_daily (05:30 UTC) on 2026-10-06
+  - no failure notification (on_failure never fires for a run that never starts)
+  - Lakebase endpoints (source, dev metadata, prod metadata) found disabled; last active 10-05 about 05:32-05:37 UTC
+
+evidence:
+  - step: job runs
+    query: databricks jobs list-runs --job-id <id>   # both dev jobs
+    finding: scheduled SUCCESS runs 10-02..10-05; none on 10-06, not even a failed or skipped one
+  - step: schedule settings
+    query: databricks jobs get <id>   # settings.schedule
+    finding: both UNPAUSED, crons "0 0 5 * * ?" and "0 30 5 * * ?" (UTC)
+  - step: did anyone change the jobs?
+    query: |
+      SELECT event_time, action_name, user_identity.email FROM system.access.audit
+      WHERE service_name = 'jobs' AND event_date >= '2026-10-04'
+        AND action_name NOT IN ('runStart','runSucceeded','runTriggered','getRunOutput','listRuns','get','list','getRun');
+    finding: no update/reset/schedule change; only changeJobAcl on other job ids
+  - step: did deploy-dev run?
+    query: gh run list --workflow deploy-dev.yml
+    finding: last run 2026-10-01 20:56 UTC
+  - step: did the scheduler try?
+    query: |
+      SELECT action_name, min(event_time) FROM system.access.audit
+      WHERE service_name = 'jobs' AND to_json(request_params) RLIKE '<generator id>|<dev job id>'
+        AND event_date >= '2026-10-05' GROUP BY 1;
+    finding: 10-05 has runTriggered -> runStart -> runSucceeded for both; 10-06 has no event at all
+  - step: workspace activity
+    query: SELECT service_name, action_name, min(event_time), max(event_time) FROM system.access.audit WHERE event_time >= '2026-10-05 07:00' GROUP BY ALL;
+    finding: almost nothing from 10-05 13:44 until an interactive login 10-06 14:40
+
+root_cause: >
+  Platform cause (owner ruling 2026-10-06): the Databricks job scheduler did not trigger either job on 10-06.
+  The schedules were active and unchanged; there was no deploy and no config change. Free Edition suspending an
+  idle workspace is suspected (Lakebase endpoints were disabled in the same window, also with no audit event),
+  not confirmed.
+not_the_cause:
+  - "deploy-dev paused the dev schedules on 10-05 (no deploy-dev run after 10-01; schedules UNPAUSED; no job update in the audit log)"
+  - a failing job (there is no run at all, so no failure)
+  - the disabled Lakebase endpoints (a run that started would fail on them, but no run started)
+
+fix:
+  decision: none in code; record as platform cause
+  changes: []
+  follow_up:
+    - a missing scheduled run is a silent gap; the daily check (and the future monitor) must alert on "no run", not only on "failed run"
+    - verify the next scheduled 05:00 run fires
+  verification: pending, next scheduled runs after 2026-10-06
+
+grading:
+  must_identify:
+    - no run was triggered (absence, not failure)
+    - schedules were UNPAUSED and unchanged
+    - no deploy or config change explains it, so it is outside the pipeline (platform)
+  must_not_claim:
+    - deploy-dev paused the schedules
+    - the job failed
+    - a specific confirmed platform cause (it is suspected only)
+  tools_expected: [get_recent_job_runs, get_recent_deploys]
