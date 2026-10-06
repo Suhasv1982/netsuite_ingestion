@@ -1,0 +1,73 @@
+id: 2026-10-02_same_day_duplicate_versions
+title: Same-day duplicate versions never loaded into bronze
+detected: 2026-10-06
+occurred: [2026-10-02, 2026-10-03]
+environment: dev
+category: data_completeness
+severity: medium   # silent row loss; every job and ledger check reports success
+
+symptoms:
+  - daily_check.py FAILs "dev bronze vs source" on every date checked, with the same gap each time
+  - "gap: memberships -24, certifications -6, transactions -63, transaction_lines -194 (287 rows)"
+  - generator and dev netsuite_ingestion_daily SUCCESS every day; run_audit ledger OK for all 4 tables
+  - guard WARN (2 reads), unchanged from before the release (not related)
+
+evidence:
+  - step: locate the gap by snapshot date
+    query: |
+      -- source (Postgres, netsuite-sample/production), per table
+      SELECT updated_date::date AS d, count(*) FROM netsuite.<table> GROUP BY 1;
+      -- dev bronze (SQL warehouse)
+      SELECT _snapshot_date AS d, count(*) FROM workspace.poc_bronze.<table> GROUP BY 1;
+    finding: every difference is on 2026-10-02 and 2026-10-03; all other dates match exactly
+  - step: test for repeated keys on those dates
+    query: |
+      SELECT count(*) - count(DISTINCT <business_key>) FROM netsuite.<table>
+      WHERE updated_date::date = '2026-10-02';   -- and '2026-10-03'
+    finding: the per-date excess equals the gap exactly (e.g. memberships 11 + 13 = 24); updated_date is a plain date
+  - step: are the repeats copies?
+    query: |
+      SELECT <business_key>, updated_date, count(*), count(DISTINCT to_jsonb(x)) FROM netsuite.<table> x
+      WHERE updated_date::date IN ('2026-10-02','2026-10-03') GROUP BY 1, 2 HAVING count(*) > 1;
+    finding: 287 pairs; 267 differ in content (real second versions), 20 transaction_lines pairs are identical
+  - step: which version reached bronze
+    query: |
+      SELECT cast(_loaded_at AS date), count(*) FROM workspace.poc_bronze.<table>
+      WHERE <business_key> IN (<duplicate keys>) AND _snapshot_date IN ('2026-10-02','2026-10-03') GROUP BY 1;
+    finding: for every duplicate pair, bronze holds exactly one row, loaded 2026-10-01 (generator run 2's version)
+  - step: read the planning code
+    query: src/netsuite_ingestion/metadata.py source_fingerprint_sql; src/netsuite_ingestion/sync_ledger.py
+    finding: ledger and fingerprints are built on DISTINCT (business_key, date) pairs
+
+root_cause: >
+  The bronze key ledger and per-date fingerprints track distinct (business_key, snapshot_date) pairs. Generator
+  run 2 (2026-10-01) wrote versions dated 10-02 and 10-03; the 10-02 and 10-03 daily batches
+  (--allow-before-watermark, PR #26) then wrote a second version of some of the same keys with the same
+  updated_date. A second version adds no new pair, so the date's fingerprint is unchanged, the planner never
+  inspects the date again and no top-up flow loads the row. Bronze and silver keep the 10-01 version.
+contributing:
+  - updated_date has day precision, so silver could not order two same-day versions even if bronze had both
+  - daily_check compared table totals only, which hid where the gap was
+not_the_cause:
+  - ledger_check / sync_ledger failure (ledger OK every day; the ledger faithfully mirrors bronze)
+  - late-arriving rows on loaded dates (those are new keys and were topped up correctly)
+  - the 07-11 baseline duplicates (they arrived in one batch, were loaded, and match the source)
+
+fix:
+  decision: owner 2026-10-06, keep the 287 rows as a known defect; prevent new ones; make the check explain it
+  changes:
+    - "PR #27: generator skips an update whose (key, updated_date day) the source already holds"
+    - "PR #27: daily_check compares per table and snapshot date; a date short by exactly its same-day duplicates is WARN (known defect)"
+  not_done: row-level ledger (row hash in ledger and fingerprints); a source that updates a key twice a day still loses the second version
+  verification: daily_check --date 2026-10-05 PASSED with 8 known-defect WARNs, all on 10-02/10-03
+
+grading:
+  must_identify:
+    - the gap is confined to snapshot dates 2026-10-02 and 2026-10-03
+    - same key and same updated_date appears twice in the source
+    - the ledger / fingerprint keys on distinct (key, date) pairs, so the second version is skipped
+  must_not_claim:
+    - the pipeline or ledger_check failed
+    - rows were rejected by data quality rules
+    - the source rows are exact duplicates (most differ)
+  tools_expected: [compare_bronze_to_source, get_table_health, get_recent_job_runs]
