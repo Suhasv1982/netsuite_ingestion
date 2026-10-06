@@ -27,8 +27,9 @@ a disabled monitor is a silent gap). The agent checks its own last-run time and 
 ## 3. Graph (LangGraph)
 
 ```
-collect ──> triage ──(no signals)──> report_healthy ──> END
-                 └──(signals)──> investigate ──> dedupe ──> write_incidents ──> report ──> END
+collect ──> triage ──(no signals)──────────────────────────────> report ──> END
+                 └──(signals)──> dedupe ──(all already OPEN)──> report
+                                      └──> investigate ──> write ──> report
 ```
 
 | Node | LLM? | Does |
@@ -36,9 +37,9 @@ collect ──> triage ──(no signals)──> report_healthy ──> END
 | `collect` | no | calls all five tools once (env dev, default windows) through an MCP client session over stdio |
 | `triage` | no | deterministic signals with a fingerprint each: confirmed `missed_schedules`; a run whose result is not SUCCESS; pipeline ERROR events; FAILED `run_audit` rows; `threshold_breached`; `compare_bronze_to_source` verdict `unexplained_gaps`; a missing daily run of the monitor itself. Known defects (`known_defects_only`, guard WARN with 2 reads) are context, not signals |
 | `investigate` | yes | one bounded tool-use loop per signal group: the model may call the five MCP tools (max 8 calls, arguments validated by the server) and returns a structured RCA: `category`, `summary`, `root_cause`, `evidence[]`, `not_the_cause[]`, `confidence` (low/medium/high), `suggested_fix`. It is told to separate verified facts from hypotheses |
-| `dedupe` | no | drops an RCA whose fingerprint already has an OPEN incident |
-| `write_incidents` | no | INSERT into `aidq_metadata.incidents` (only write in the agent; skipped in `--dry-run`, the default for evals) |
-| `report` / `report_healthy` | no | GitHub job summary (markdown): signals, RCAs, incident ids; exit 1 when a new incident was written, so GitHub emails the failure |
+| `dedupe` | no | drops a signal group whose fingerprint already has an OPEN incident, before the model runs (no cost to see a known problem again) |
+| `write` | no | INSERT into `aidq_metadata.incidents` (only write in the agent; skipped in `--dry-run`, the default for evals) |
+| `report` | no | GitHub job summary (markdown): signals, RCAs, incident ids; exit 1 when a new incident was written, so GitHub emails the failure |
 
 The LLM never gets a write tool: writing is a fixed node after the model has finished.
 
