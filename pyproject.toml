@@ -6,6 +6,7 @@ version = "0.0.1"
 dev = [
     "pytest",
     "duckdb>=1.1",  # runs the gold SQL in tests (tests/test_gold_sql.py)
+    "mcp>=2.3,<3",  # src/aidq_mcp, the read-only MCP server (docs/phase3_mcp_plan.md)
 ]
 # tools/netsuite_gen.py -- synthetic data generator for the netsuite-sample
 # Lakebase project. Not needed by the pipeline itself.
@@ -16,4 +17,4 @@ tools = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["src/netsuite_ingestion", "tools"]
+pythonpath = ["src/netsuite_ingestion", "tools", "src"]
