@@ -226,6 +226,18 @@ class Tools:
         except Unavailable as e:
             deploy_out = {"unavailable": str(e)}
 
+        try:
+            changes_out = logic.bounded(self._config_changes(cfg, since), config.DEFAULT_LIMIT)
+        except Unavailable as e:
+            # e.g. a service principal without SELECT on system.access.audit (the system catalog cannot be granted
+            # on Free Edition): deploys are still reported; changes made outside CI are then not visible
+            changes_out = {"unavailable": str(e)}
+        return {"env": env, "since": _iso(since), "deploys": deploy_out,
+                "config_changes": changes_out,
+                "note": "config_changes come from system.access.audit, which lags by several minutes; 'unavailable' "
+                        "when this identity cannot read it (then only changes made through CI deploys are visible)"}
+
+    def _config_changes(self, cfg, since) -> list[dict]:
         ids = {}
         for alias, name in cfg.jobs.items():
             if (jid := self.reads.job_id(name)) is not None:
@@ -250,9 +262,7 @@ class Tools:
             resource = next((label for rid, label in ids.items() if rid in (r["params"] or "")), None)
             changes.append({"time": r["t"], "service": r["service"], "action": r["action"], "resource": resource,
                             "actor": logic.actor_role(r["actor"], roles), "status_code": r["rc"]})
-        return {"env": env, "since": _iso(since), "deploys": deploy_out,
-                "config_changes": logic.bounded(changes, config.DEFAULT_LIMIT),
-                "note": "config_changes come from system.access.audit, which lags by several minutes"}
+        return changes
 
 
 INSTRUCTIONS = (
