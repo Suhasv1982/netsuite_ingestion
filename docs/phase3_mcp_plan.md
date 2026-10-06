@@ -1,6 +1,6 @@
 # Phase 3 plan: read-only MCP server (minimal scope)
 
-Status: **approved 2026-10-06** (identity: the owner's DEFAULT profile for the local test; plan ships in PR A).
+Status: **approved 2026-10-06; steps A-C done 2026-10-06** (identity: the owner's DEFAULT profile for the local test; plan ships in PR A).
 
 ## 1. Goal and scope
 
@@ -82,7 +82,8 @@ owner's OK (prod metadata endpoint is currently disabled and step 8 is on hold).
    10-06 case), redaction, argument limits, tool schemas, the read-only grep.
 2. Live smoke (local, read-only): `python -m aidq_mcp --smoke` calls each tool once against dev and prints
    sizes and statuses.
-3. Claude Code as client:
+3. Claude Code as client (done 2026-10-06 with a temporary `--mcp-config` file instead of a registration; see
+   STATUS section 0e). For day-to-day use, register it once:
    `claude mcp add aidq-netsuite --scope local -- .venv/Scripts/python -m aidq_mcp --profile DEFAULT`
    (local scope: not committed). Then, in a fresh session, ask the two incident questions ("why is dev bronze
    short of the source?", "why did nothing run on 10-06?") and check the answers against each fixture's

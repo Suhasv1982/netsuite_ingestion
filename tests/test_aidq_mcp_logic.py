@@ -68,14 +68,29 @@ def test_unsupported_crons_raise(cron):
 def test_the_10_06_missed_runs_are_detected():
     # generator: 05:00 daily, ran 10-02..10-05, nothing on 10-06; checked at 14:45 on 10-06
     runs = [t(d, 5, 0) + dt.timedelta(seconds=13) for d in (2, 3, 4, 5)]
-    assert logic.missed_schedules("0 0 5 * * ?", False, runs, t(2, 0), t(6, 14, 45)) == [t(6, 5)]
+    assert logic.missed_schedules("0 0 5 * * ?", False, runs, t(2, 0), t(6, 14, 45), first_scheduled_run=runs[0]) == {
+        "confirmed": [t(6, 5)], "unconfirmed": []}
+
+
+def test_misses_before_the_first_scheduled_run_are_unconfirmed():
+    # schedule added on 10-01 evening: 09-30 and 10-01 05:00 have no run, but the schedule may not have existed
+    runs = [t(d, 5, 0) + dt.timedelta(seconds=13) for d in (2, 3)]
+    start = dt.datetime(2026, 9, 30, tzinfo=UTC)
+    out = logic.missed_schedules("0 0 5 * * ?", False, runs, start, t(4, 6), first_scheduled_run=runs[0])
+    assert out == {"confirmed": [t(4, 5)], "unconfirmed": [dt.datetime(2026, 9, 30, 5, tzinfo=UTC), t(1, 5)]}
+    # never ran on schedule: everything is unconfirmed
+    assert logic.missed_schedules("0 0 5 * * ?", False, [], t(2, 0), t(3, 6)) == {
+        "confirmed": [], "unconfirmed": [t(2, 5), t(3, 5)]}
 
 
 def test_no_miss_when_paused_or_inside_tolerance_or_not_due_yet():
-    assert logic.missed_schedules("0 0 5 * * ?", True, [], t(2, 0), t(6, 14)) == []
-    assert logic.missed_schedules("0 0 5 * * ?", False, [t(6, 5, 14)], t(6, 0), t(6, 14)) == []
-    assert logic.missed_schedules("0 0 5 * * ?", False, [t(6, 5, 16)], t(6, 0), t(6, 14)) == [t(6, 5)]
-    assert logic.missed_schedules("0 0 5 * * ?", False, [], t(6, 0), t(6, 5, 10)) == []  # tolerance not over
+    first = t(5, 5)
+    none = {"confirmed": [], "unconfirmed": []}
+    assert logic.missed_schedules("0 0 5 * * ?", True, [], t(2, 0), t(6, 14)) == none
+    assert logic.missed_schedules("0 0 5 * * ?", False, [first, t(6, 5, 14)], t(6, 0), t(6, 14), first) == none
+    assert logic.missed_schedules("0 0 5 * * ?", False, [first, t(6, 5, 16)], t(6, 0), t(6, 14), first) == {
+        "confirmed": [t(6, 5)], "unconfirmed": []}
+    assert logic.missed_schedules("0 0 5 * * ?", False, [first], t(6, 0), t(6, 5, 10), first) == none
 
 
 # -- output shaping -----------------------------------------------------------
@@ -133,13 +148,39 @@ WRITE_CLI = {"update-endpoint", "create-endpoint", "run-now", "submit", "start",
 # "post" is allowed: SQL statements go through POST /api/2.0/sql/statements; WRITE_SQL keeps them read-only.
 
 
-def _string_constants(path):
-    return [n.value for n in ast.walk(ast.parse(path.read_text(encoding="utf-8"))) if isinstance(n, ast.Constant)
-            and isinstance(n.value, str)]
+def _tree(path):
+    return ast.parse(path.read_text(encoding="utf-8"))
+
+
+def _string_constants(tree):
+    return [n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+
+
+def _cli_arguments(tree):
+    """String arguments of every `<x>.cli(...)` call: the Databricks CLI verbs the package uses."""
+    return [a.value for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+            and n.func.attr == "cli" for a in n.args if isinstance(a, ast.Constant) and isinstance(a.value, str)]
+
+
+def _http_methods(tree):
+    """The value after every "-X" in a list literal (gh api / curl style method flags)."""
+    out = []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.List):
+            vals = [e.value if isinstance(e, ast.Constant) else None for e in n.elts]
+            out += [vals[i + 1] for i, v in enumerate(vals[:-1]) if v == "-X"]
+    return out
 
 
 @pytest.mark.parametrize("path", sorted(PKG.glob("*.py")), ids=lambda p: p.name)
 def test_package_contains_no_write_statements_or_mutating_cli_verbs(path):
-    strings = _string_constants(path)
-    assert not [s for s in strings if WRITE_SQL.search(s)]
-    assert not [s for s in strings if s.strip().lower() in WRITE_CLI]
+    tree = _tree(path)
+    assert not [s for s in _string_constants(tree) if WRITE_SQL.search(s)]
+    assert not [a for a in _cli_arguments(tree) if a.lower() in WRITE_CLI]
+    assert set(_http_methods(tree)) <= {"GET"}
+
+
+def test_cli_verb_check_sees_the_calls():
+    # guard against the check silently matching nothing
+    assert "list-runs" in _cli_arguments(_tree(PKG / "reads.py"))
+    assert _http_methods(_tree(PKG / "reads.py")) == ["GET"]
