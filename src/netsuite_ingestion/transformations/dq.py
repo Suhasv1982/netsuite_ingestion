@@ -6,6 +6,9 @@ HARD data_quality_rules (true when there are none -- DQ rules are opt-in per
 table, not mandatory). Passing rows become the streaming view "<table>_valid"
 (feeds Silver). Failing rows are collected into poc_reject.rejected_rows.
 
+HARD rules are NULL-safe: a rule that evaluates to NULL fails (metadata.null_safe), so every bronze row is
+either valid or rejected (with that rule named in `reason`); none is silently dropped.
+
 SOFT rules never reject rows: they are attached to "<table>_valid" as
 dp.expect_all expectations, so violations show up as event-log metrics only.
 

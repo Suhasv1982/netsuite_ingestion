@@ -92,28 +92,28 @@ class TestBuildDqPredicate:
 
     def test_single_hard_rule(self):
         rules = [{"severity": "HARD", "rule_expr": "amount > 0"}]
-        assert build_dq_predicate(rules) == "(amount > 0)"
+        assert build_dq_predicate(rules) == "coalesce((amount > 0), false)"
 
     def test_multiple_hard_rules_anded(self):
         rules = [
             {"severity": "HARD", "rule_expr": "amount > 0"},
             {"severity": "HARD", "rule_expr": "status IS NOT NULL"},
         ]
-        assert build_dq_predicate(rules) == "(amount > 0) AND (status IS NOT NULL)"
+        assert build_dq_predicate(rules) == "coalesce((amount > 0), false) AND coalesce((status IS NOT NULL), false)"
 
     def test_mixed_severity_only_hard_included(self):
         rules = [
             {"severity": "HARD", "rule_expr": "amount > 0"},
             {"severity": "SOFT", "rule_expr": "note IS NOT NULL"},
         ]
-        assert build_dq_predicate(rules) == "(amount > 0)"
+        assert build_dq_predicate(rules) == "coalesce((amount > 0), false)"
 
     def test_blank_rule_expr_is_skipped(self):
         rules = [
             {"severity": "HARD", "rule_expr": ""},
             {"severity": "HARD", "rule_expr": "amount > 0"},
         ]
-        assert build_dq_predicate(rules) == "(amount > 0)"
+        assert build_dq_predicate(rules) == "coalesce((amount > 0), false)"
 
     def test_matches_real_certification_rules(self):
         # Mirrors the current HARD rules for table_id=3 (netsuite_certifications).
@@ -122,8 +122,8 @@ class TestBuildDqPredicate:
             {"severity": "HARD", "rule_expr": "certification_start_date < DATE '2027-01-01'"},
         ]
         assert build_dq_predicate(rules) == (
-            "(certification_type in ('SCP','CP')) AND "
-            "(certification_start_date < DATE '2027-01-01')"
+            "coalesce((certification_type in ('SCP','CP')), false) AND "
+            "coalesce((certification_start_date < DATE '2027-01-01'), false)"
         )
 
 
@@ -134,7 +134,7 @@ class TestBuildDqReasonExpr:
     def test_single_hard_rule_produces_case_expr(self):
         rules = [{"severity": "HARD", "rule_name": "Positive Amount", "rule_expr": "amount > 0"}]
         expr = build_dq_reason_expr(rules)
-        assert "CASE WHEN NOT (amount > 0) THEN 'Positive Amount' END" in expr
+        assert "CASE WHEN NOT coalesce((amount > 0), false) THEN 'Positive Amount' END" in expr
         assert expr.startswith("array_join(array_compact(array(")
 
     def test_ignores_non_hard_rules(self):
@@ -222,7 +222,7 @@ class TestFilterActiveRules:
             {"severity": "SOFT", "rule_name": "S", "rule_expr": "b > 0", "is_active": False},
             {"severity": "HARD", "rule_name": "K", "rule_expr": "c > 0", "is_active": True},
         ])
-        assert build_dq_predicate(rules) == "(c > 0)"
+        assert build_dq_predicate(rules) == "coalesce((c > 0), false)"
         assert build_soft_expectations(rules) == {}
         assert "'H'" not in build_dq_reason_expr(rules)
 
