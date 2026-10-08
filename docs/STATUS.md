@@ -1,4 +1,4 @@
-# STATUS (updated 2026-10-06)
+# STATUS (updated 2026-10-08)
 
 Read this first, then run `git status` and check open PRs. Updated after every Phase 2 step.
 
@@ -181,6 +181,64 @@ step-1 backup); promote-prod now prunes them (below).
   in its 3-day window). Manual run: Actions -> Monitor dev, `write` off for a dry run.
 * Local: `PYTHONPATH=src .venv/Scripts/python -m aidq_agent --profile DEFAULT [--write]`.
 
+## 0g. Same-day versions fix (2026-10-08, branch `fix/same-day-versions`)
+
+**Dev only until the owner says otherwise (owner, 2026-10-08):** no promote-prod, no prod grants, no prod endpoint
+changes; the prod schedule stays PAUSED.
+
+* **What changed.** Every incremental bronze row has `_row_hash` = md5 of the table's **active** `source_columns`
+  (in `source_columns` order), computed by Postgres only (`metadata.row_hash_sql`, `json_build_array(...)::text`:
+  ISO dates whatever the session DateStyle/TimeZone, verified by `tests/test_fingerprint_integration.py`). Raw
+  source columns outside `source_columns` (e.g. `netsuite_transactions.custbody_region`) are neither read nor
+  hashed. The ledger (`ledger.bronze_keys`) and the per-date fingerprints are keyed on (key, date, row_hash), so a
+  second version of a key on a loaded date changes the fingerprint and a top-up loads exactly that row
+  (`row_hash_filter`). An exact copy of a loaded row adds no entry and is not loaded again.
+* **Silver tiebreaker (owner decision):** AUTO CDC `sequence_by = struct(updated_date, _row_hash)`: content only,
+  so every environment keeps the same version of a key whatever the load order; the kept version is deterministic,
+  not necessarily the newer one (the source has no finer timestamp).
+* **Fail closed on a column-set change.** `sync_ledger --bronze-rebuild true` records the hashed columns per table
+  in `ledger.row_hash_columns` (only when bronze's columns equal the active `source_columns`; a normal run never
+  writes it). At graph build, `bronze.py` refuses a normal run when the record is missing or differs, with an error
+  that names the table and the change (added / removed / reordered) and the rebuild commands
+  (`metadata.row_hash_guard_error`). A `bronze_rebuild` run is always allowed.
+* **The 287 rows** (incident 1, 10-02/10-03) are no longer a known defect: a rebuild loads them. `daily_check.py`
+  FAILs on any per-date count difference again and prints an INFO line with the business keys that have several
+  same-day versions; `compare_bronze_to_source` has verdict `identical` / `gaps` plus `same_day_versions` (info);
+  triage turns every gap into a signal and passes the same-day versions as a context note. The incident fixture
+  `evals/incidents/2026-10-02_same_day_duplicate_versions.yaml` is kept; its eval case replays with the design
+  notes of the time (`evals/design_notes/2026-10-06.md`).
+* **Prod cron** pinned to 06:30 UTC in the prod target (`daily_cron`, test in `test_bundle_targets.py`). Config
+  only: the deployed prod job keeps 06:00 and stays PAUSED until an approved promote-prod.
+* **Rollout on dev (owner: merge when green and the next dev daily check is clean):**
+  1. PR checks green.
+  2. deploy-dev from the branch with `bronze_rebuild=true` (full refresh of the whole pipeline: bronze re-extracted
+     with `_row_hash`, silver rebuilt with the new `sequence_by`, ledger and `row_hash_columns` rebuilt).
+  3. Check: bronze = source per table and date (the 287 loaded), `ledger_check` OK, hashed columns recorded.
+  4. Next scheduled cycle (generator 05:00, dev 05:30) on the branch deployment, then
+     `python tools/daily_check.py --date <that day> --profile DEFAULT` with no FAIL.
+  5. Re-record the eval cassettes `2026-10-06_afternoon` and `2026-10-09_after_daily_run` (post-fix state), point
+     the healthy eval case at the latter, re-run the eval; then merge (deploy-dev on main runs a normal smoke run).
+* **Note for Phase 4/5 (rule recommender):** an `ADD_COLUMN` proposal on an incremental table must say that
+  approving it requires a bronze rebuild (the row hash covers the active columns; the guard blocks normal runs).
+
+### Prod rebuild: deferred (preconditions for the future prod release)
+
+Prod bronze has no `_row_hash`, so the first prod run with this code is blocked by the guard until prod bronze is
+rebuilt. That rebuild is part of a future, owner-approved prod release, not of this change. Preconditions:
+
+1. **A clean dev cycle** with this code: rebuild run, then at least one scheduled generator + dev run with a clean
+   `daily_check` (no FAIL).
+2. **A fresh prod backup** before the rebuild: a Lakebase backup branch of prod metadata (promote-prod does this)
+   and a copy of the prod tables like `poc_netsuite.backup_pre_release_202610010127` (CTAS, counts verified).
+3. **Dev-vs-prod comparison on the same source state:** after the prod rebuild (promote-prod with
+   `bronze_rebuild=true`, then the full refresh by hand, schedule PAUSED), compare dev and prod with no generator
+   run in between: bronze per table and date, ledger entries and fingerprints, silver (same kept version per key),
+   rejects, gold.
+4. **Then a normal prod run that loads 0 rows** (promote-prod with `bronze_rebuild=false`, one run): no new bronze
+   rows, `ledger_check` OK, hashed columns recorded for all four tables.
+
+Only after that: step 8 (unpause, cron 06:30) as its own decision.
+
 ## 1a. First CI dev run (2026-09-30, deploy-dev run on the #11 merge: green)
 
 * Rebuild mode (poc_bronze was empty after `[dev suhasv]` was removed): migrations (003 applied by the previous,
@@ -355,7 +413,9 @@ copy that holds the owner's bundle state.
 
 ## 3. Decisions waiting for the owner
 
-1. Step 8 (unpause prod): on hold until the daily checks are clean (section 0d); also settle the prod cron (06:00 vs 06:30).
+0. **Dev only until the owner says otherwise** (2026-10-08): no promote-prod, prod grants or prod endpoint changes.
+1. Step 8 (unpause prod): after the same-day versions fix and the deferred prod rebuild (section 0g); prod cron is
+   06:30 UTC in config (settled 2026-10-08).
 2. After step 8 plus three good scheduled prod runs: drop `poc_netsuite.backup_pre_release_202610010127` (ask).
 
 ## 4. Gotchas

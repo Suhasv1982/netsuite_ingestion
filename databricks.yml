@@ -172,5 +172,8 @@ targets:
       service_principal_name: ${workspace.current_user.userName}
     variables:
       schedule_pause_status: "UNPAUSED"
+      # 06:30 UTC, one hour after dev (owner decision 2026-10-08). The deployed prod job keeps its old 06:00 cron
+      # until the next approved promote-prod; the prod schedule stays PAUSED until then.
+      daily_cron: "0 30 6 * * ?"
       # one scope per environment (plan section 3a); ci-prod has WRITE on it and nothing else
       secret_scope: netsuite_ingestion_prod

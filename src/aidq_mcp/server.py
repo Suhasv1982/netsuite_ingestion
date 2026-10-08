@@ -176,7 +176,7 @@ class Tools:
                 since_d = dt.date.fromisoformat(since)
             except ValueError:
                 raise config.ConfigError("since must be a date YYYY-MM-DD") from None
-        source, extra, bronze = {}, {}, {}
+        source, extra, bronze, versions = {}, {}, {}, []
         for t in tables:
             if t in cfg.full_load_tables:
                 [row] = self.reads.pg_query(cfg.source_endpoint, f"SELECT count(*) AS n FROM netsuite.{t}")
@@ -193,19 +193,24 @@ class Tools:
                 source[(t, r["d"])] = r["n"]
                 if r["n"] > r["k"]:
                     extra[(t, r["d"])] = r["n"] - r["k"]
+            if any(tt == t for tt, _ in extra):
+                versions += [{"table": t, **r} for r in self.reads.pg_query(
+                    cfg.source_endpoint,
+                    f"SELECT updated_date::date::text AS d, {key}::text AS k FROM netsuite.{t} {where} "
+                    "GROUP BY 1, 2 HAVING count(*) > 1", (since_d,) if since_d else ())]
             bwhere = f"WHERE _snapshot_date >= DATE'{since_d.isoformat()}'" if since_d else ""
             for r in self.reads.sql(f"SELECT cast(_snapshot_date AS string) AS d, count(*) AS n "
                                     f"FROM {cfg.catalog}.poc_bronze.{t} {bwhere} GROUP BY 1"):
                 bronze[(t, r["d"])] = int(r["n"])
-        gaps = logic.classify_date_gaps(source, bronze, extra)
+        gaps = logic.date_gaps(source, bronze, extra)
         totals = [{"table": t, "source": sum(n for (tt, _), n in source.items() if tt == t),
                    "bronze": sum(n for (tt, _), n in bronze.items() if tt == t)} for t in tables]
-        unexplained = [g for g in gaps if g["classification"] == logic.UNEXPLAINED]
-        verdict = "unexplained_gaps" if unexplained else ("known_defects_only" if gaps else "identical")
-        return {"env": env, "since": since, "verdict": verdict, "totals": totals,
+        return {"env": env, "since": since, "verdict": "gaps" if gaps else "identical", "totals": totals,
                 "gaps": logic.bounded(gaps, config.HARD_LIMIT),
-                "note": f"{logic.KNOWN_DEFECT}: a date short by exactly its same-day duplicate versions (same key, "
-                        "same updated_date day), which the bronze key ledger never loads"}
+                "same_day_versions": logic.bounded(logic.same_day_versions(versions), config.HARD_LIMIT),
+                "note": "gaps: every (table, date) whose bronze row count differs from the source. same_day_versions "
+                        "(info, not a problem): business keys with several source rows on one updated_date day; "
+                        "bronze loads every version (rows are keyed by content), silver keeps one per key"}
 
     # -- get_recent_deploys ---------------------------------------------------------------------
 
@@ -300,8 +305,8 @@ def build_server(tools: Tools) -> MCPServer:
     @server.tool(annotations=READ_ONLY)
     def compare_bronze_to_source(env: str = "dev", table: str | None = None, since: str | None = None) -> dict:
         """Row counts of dev bronze against the source per table and snapshot date (updated_date day). Lists every
-        date that differs, classified as known_defect_same_day_duplicates or unexplained; verdict identical /
-        known_defects_only / unexplained_gaps. `since` (YYYY-MM-DD) limits the dates compared."""
+        date that differs (verdict identical / gaps), plus, for information, the business keys that have several
+        versions on one day in the source. `since` (YYYY-MM-DD) limits the dates compared."""
         return tools.compare_bronze_to_source(env, table, since)
 
     @server.tool(annotations=READ_ONLY)

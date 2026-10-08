@@ -35,7 +35,7 @@ collect ──> triage ──(no signals)─────────────
 | Node | LLM? | Does |
 |---|---|---|
 | `collect` | no | calls all five tools once (env dev, default windows) through an MCP client session over stdio |
-| `triage` | no | deterministic signals with a fingerprint each: confirmed `missed_schedules`; a run whose result is not SUCCESS; pipeline ERROR events; FAILED `run_audit` rows; `threshold_breached`; `compare_bronze_to_source` verdict `unexplained_gaps`; a missing daily run of the monitor itself. Known defects (`known_defects_only`, guard WARN with 2 reads) are context, not signals |
+| `triage` | no | deterministic signals with a fingerprint each: confirmed `missed_schedules`; a run whose result is not SUCCESS; pipeline ERROR events; FAILED `run_audit` rows; `threshold_breached`; `compare_bronze_to_source` verdict `unexplained_gaps` (since the row-hash fix of 2026-10-08: verdict `gaps`, every gap is a signal); a missing daily run of the monitor itself. Known defects (`known_defects_only`, guard WARN with 2 reads) are context, not signals (since 2026-10-08: same-day versions are info only) |
 | `investigate` | yes | one bounded tool-use loop per signal group: the model may call the five MCP tools (max 8 calls, arguments validated by the server) and returns a structured RCA: `category`, `summary`, `root_cause`, `evidence[]`, `not_the_cause[]`, `confidence` (low/medium/high), `suggested_fix`. It is told to separate verified facts from hypotheses |
 | `dedupe` | no | drops a signal group whose fingerprint already has an OPEN incident, before the model runs (no cost to see a known problem again) |
 | `write` | no | INSERT into `aidq_metadata.incidents` (only write in the agent; skipped in `--dry-run`, the default for evals) |

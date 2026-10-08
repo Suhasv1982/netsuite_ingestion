@@ -161,26 +161,40 @@ def filter_active_rules(rules: list[dict]) -> list[dict]:
 #     the floor stored in source_table_def.bronze_watermark. Flow names are
 #     derived from the date, so a flow that already ran is never run again
 #     (verified on the runtime: baseline/once_flow_experiments.md).
-#   * a "topup" flow for source (business_key, date) pairs that are missing
-#     from the key ledger although their date is already loaded (late rows).
-#     Named from a hash of the pending key set, so a stale ledger reproduces
-#     the same name and the flow does not run twice.
+#   * a "topup" flow for source rows whose (business_key, date, row hash) entry
+#     is missing from the key ledger although their date is already loaded:
+#     late rows, and a second version of a key on a loaded date (same key and
+#     updated_date day, different content). Named from a hash of the pending
+#     entry set, so a stale ledger reproduces the same name and the flow does
+#     not run twice.
+#
+# The row hash (`_row_hash`) is md5 over the ACTIVE source_columns of the
+# table, in source_columns order, computed by Postgres only (row_hash_sql):
+# bronze stores it, the ledger copies it from bronze, Spark never recomputes
+# it. Raw source columns that are not active in source_columns are not hashed.
+# Changing the active column set changes every hash, so bronze.py refuses a
+# normal run until bronze is rebuilt (row_hash_guard_error).
 #
 # The ledger (<catalog>.ledger.bronze_keys) is a plain Delta table OUTSIDE the
-# pipeline, keyed on (table_name, business_key, snapshot_date). A pipeline
-# cannot read its own tables at graph build or inside a flow, so the ledger is
-# maintained by the sync_ledger job task from what bronze really holds.
+# pipeline, keyed on (table_name, business_key, snapshot_date, row_hash). A
+# pipeline cannot read its own tables at graph build or inside a flow, so the
+# ledger is maintained by the sync_ledger job task from what bronze really
+# holds. Exact copies of a row (same content, same day) form one entry: a late
+# exact copy of an already-loaded row adds no entry and is not loaded.
 # --------------------------------------------------------------------------
 
 DEFAULT_FLOOR = datetime.date(1900, 1, 1)
 NULL_KEY = "<NULL>"  # how a NULL business key is written in the ledger / pending sets
+ROW_HASH_COL = "_row_hash"  # bronze column: md5 of the active source columns (row_hash_sql)
+METADATA_COLS = (ROW_HASH_COL, "_snapshot_date", "_loaded_at")  # bronze columns that are not source columns
+PG_MAX_FUNCTION_ARGS = 100  # json_build_array takes at most 100 arguments; larger column sets are nested
 DEFAULT_MAX_PENDING_KEYS = 200_000
 SCOPES = ("all_dates", "pending_only")
 DEFAULT_SCOPE = "pending_only"  # 1,600 once-flows cost ~12 min of planning per update; pending_only ~1 min (baseline/once_flow_experiments.md)
 
 
 class TooManyPendingKeys(Exception):
-    """More late (key, date) pairs than the graph-build cap: fail loudly instead of collecting them all."""
+    """More late (key, date, row hash) entries than the graph-build cap: fail loudly instead of collecting them all."""
 
 
 def is_incremental(table_def: dict) -> bool:
@@ -188,15 +202,13 @@ def is_incremental(table_def: dict) -> bool:
     return (table_def.get("load_mode") or "").strip().lower() == "incremental"
 
 
-def key_filter(key_col: str, keys):
-    """Spark condition selecting the given business keys (strings; NULL_KEY matches NULL)."""
+def row_hash_filter(entries):
+    """Spark condition selecting the rows of the given (key, row hash) entries. The row hash covers every hashed
+    column, the business key included, so the hash alone identifies the entry."""
     from pyspark.sql import functions as F
 
-    real = [k for k in keys if k != NULL_KEY]
-    cond = F.col(key_col).cast("string").isin(real) if real else F.lit(False)
-    if NULL_KEY in keys:
-        cond = cond | F.col(key_col).isNull()
-    return cond
+    hashes = sorted({h for _, h in entries})
+    return F.col(ROW_HASH_COL).isin(hashes) if hashes else F.lit(False)
 
 
 def bronze_table_name(source_table: str) -> str:
@@ -229,14 +241,14 @@ def snapshot_flow_name(source_table: str, day: datetime.date) -> str:
     return f"{source_table}__{day:%Y%m%d}"
 
 
-def pending_key_hash(keys) -> str:
-    """Short, order-independent hash of a pending key set."""
-    joined = "\n".join(sorted(ledger_key(k) for k in keys))
+def pending_key_hash(entries) -> str:
+    """Short, order-independent hash of a pending (key, row hash) entry set."""
+    joined = "\n".join(sorted(f"{ledger_key(k)}|{h}" for k, h in entries))
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:10]
 
 
-def topup_flow_name(source_table: str, day: datetime.date, keys) -> str:
-    return f"{source_table}__{day:%Y%m%d}__topup_{pending_key_hash(keys)}"
+def topup_flow_name(source_table: str, day: datetime.date, entries) -> str:
+    return f"{source_table}__{day:%Y%m%d}__topup_{pending_key_hash(entries)}"
 
 
 def anchor_flow_name(source_table: str) -> str:
@@ -249,38 +261,44 @@ class FlowSpec:
     name: str
     snapshot_date: datetime.date
     kind: str  # "snapshot" | "topup" | "anchor"
-    keys: tuple = ()  # topup only: the business keys (as strings) to extract for that date
+    entries: tuple = ()  # topup only: the (business key as string, row hash) entries to extract for that date
 
 
-def find_pending_pairs(source_pairs, ledger_pairs) -> set:
-    """(key, date) pairs present in the source but not in the ledger.
+def _entry(key, day, row_hash) -> tuple:
+    return ledger_key(key), day, row_hash
 
-    Compares pairs, never counts: an update can move one row out of a date and
-    a late row into it, leaving the count unchanged. Pure model of the Spark
-    anti-join in collect_plan_inputs().
+
+def find_pending_entries(source_entries, ledger_entries) -> set:
+    """(key, date, row hash) entries present in the source but not in the ledger.
+
+    Compares entries, never counts: an update can move one row out of a date and
+    a late row into it, leaving the count unchanged; and a second version of a key
+    on the same date differs from the first only in its row hash (incident
+    2026-10-02). Pure model of the Spark anti-join in collect_plan_inputs().
     """
-    ledger = {(ledger_key(k), d) for k, d in ledger_pairs}
-    return {(ledger_key(k), d) for k, d in source_pairs} - ledger
+    ledger = {_entry(*e) for e in ledger_entries}
+    return {_entry(*e) for e in source_entries} - ledger
 
 
-def group_pending_by_date(pairs) -> dict:
+def group_pending_by_date(entries) -> dict:
+    """{date: sorted [(key, row hash), ...]} from (key, date, row hash) entries."""
     grouped: dict = {}
-    for key, day in pairs:
-        grouped.setdefault(day, []).append(key)
-    return {day: sorted(keys) for day, keys in sorted(grouped.items())}
+    for key, day, row_hash in entries:
+        grouped.setdefault(day, []).append((ledger_key(key), row_hash))
+    return {day: sorted(set(es)) for day, es in sorted(grouped.items())}
 
 
-def ledger_diff(bronze_pairs, ledger_pairs) -> tuple[set, set]:
+def ledger_diff(bronze_entries, ledger_entries) -> tuple[set, set]:
     """(missing_from_ledger, extra_in_ledger) between what bronze holds and the ledger."""
-    bronze = {(ledger_key(k), d) for k, d in bronze_pairs}
-    ledger = {(ledger_key(k), d) for k, d in ledger_pairs}
+    bronze = {_entry(*e) for e in bronze_entries}
+    ledger = {_entry(*e) for e in ledger_entries}
     return bronze - ledger, ledger - bronze
 
 
 def enforce_pending_cap(count: int, cap: int = DEFAULT_MAX_PENDING_KEYS) -> None:
     if count > cap:
         raise TooManyPendingKeys(
-            f"{count} late (key, date) pairs exceed the graph-build cap of {cap}; "
+            f"{count} late (key, date, row hash) entries exceed the graph-build cap of {cap}; "
             "run a bronze_rebuild full refresh instead of a top-up"
         )
 
@@ -289,7 +307,7 @@ def plan_flows(
     source_table: str,
     src_dates,
     ledger_dates,
-    topup_keys_by_date: dict,
+    topup_entries_by_date: dict,
     scope: str = DEFAULT_SCOPE,
     rebuild: bool = False,
 ) -> list[FlowSpec]:
@@ -303,7 +321,7 @@ def plan_flows(
       * scope "all_dates": a snapshot flow for every source date (loaded ones
         do not re-run because their names are unchanged);
       * scope "pending_only": snapshot flows only for dates not in the ledger;
-      * plus one top-up flow per already-loaded date that has pending keys.
+      * plus one top-up flow per already-loaded date that has pending entries.
 
     A streaming table with no flow at all fails the update ("No query found for
     dataset", measured on the runtime), so when nothing else would be defined
@@ -323,10 +341,10 @@ def plan_flows(
         if scope == "all_dates" or d not in ledger_dates:
             flows.append(FlowSpec(snapshot_flow_name(source_table, d), d, "snapshot"))
     in_source = set(src_dates)
-    for d, keys in sorted(topup_keys_by_date.items()):
-        if d in ledger_dates and d in in_source and keys:
-            keys = tuple(sorted(keys))
-            flows.append(FlowSpec(topup_flow_name(source_table, d, keys), d, "topup", keys))
+    for d, entries in sorted(topup_entries_by_date.items()):
+        if d in ledger_dates and d in in_source and entries:
+            entries = tuple(sorted(entries))
+            flows.append(FlowSpec(topup_flow_name(source_table, d, entries), d, "topup", entries))
     return flows or [_anchor(source_table)]
 
 
@@ -395,6 +413,45 @@ def refresh_guard_error(create_update, bronze_tables: list[str], rebuild: bool, 
             + _rebuild_commands(target)
         )
     return None
+
+
+def describe_column_change(recorded: list[str], current: list[str]) -> str:
+    """One line: which hashed columns were added, removed, or only reordered."""
+    added = [c for c in current if c not in recorded]
+    removed = [c for c in recorded if c not in current]
+    parts = []
+    if added:
+        parts.append("added " + ", ".join(added))
+    if removed:
+        parts.append("removed " + ", ".join(removed))
+    if not parts:
+        parts.append(f"order changed from ({', '.join(recorded)}) to ({', '.join(current)})")
+    return "; ".join(parts)
+
+
+def row_hash_guard_error(table: str, recorded: list[str] | None, current: list[str], rebuild: bool,
+                         target: str | None = None) -> str | None:
+    """Fail-closed guard for the row hash: the active source_columns that bronze hashed must still be the active
+    source_columns now. `recorded` is the column list bronze was built with (ledger.row_hash_columns, written by
+    sync_ledger after a rebuild), None when nothing is recorded. A bronze_rebuild run is always allowed: it
+    re-extracts every date with the new hash. Returns an error message, or None when the run may proceed."""
+    if rebuild:
+        return None
+    target = target or "<TARGET>"
+    if recorded is None:
+        what = (f"no row-hash column set is recorded for {table}: bronze has not been rebuilt since rows were keyed by "
+                "content (_row_hash), so its ledger cannot be compared with the source")
+    elif list(recorded) == list(current):
+        return None
+    else:
+        what = (f"the hashed column set of {table} changed in source_columns ({describe_column_change(recorded, current)}). "
+                "Every row hash of this table would change, so every loaded date would look different from the source "
+                "and be loaded again")
+    return (
+        f"BLOCKED: {what}.\n"
+        "Approving a column change for an incremental table requires a bronze rebuild. TO REBUILD (dev: run the "
+        "deploy-dev workflow with bronze_rebuild=true; prod: only in an approved release):\n" + _rebuild_commands(target)
+    )
 
 
 _UUID = re.compile(r"[0-9a-fA-F-]{36}")
@@ -497,8 +554,42 @@ def guard_audit_row(guard: dict | None, expected_update_id: str | None, run_id: 
     return {**base, "status": status, "rows_read": reads, "error": None if status == "OK" else detail}
 
 
-def source_pairs_df(src_df, key_col: str, watermark_col: str, floor: datetime.date):
-    """Distinct (k, d) pairs in the source: business key as string, watermark as a date."""
+def row_hash_sql(columns: list[str]) -> str:
+    """Postgres expression: md5 of the row's hashed columns, as text (the bronze `_row_hash`).
+
+    `columns` are the table's ACTIVE source_columns in source_columns order (build_column_list), never raw source
+    columns. json_build_array gives one canonical text per row whatever the session settings: dates and timestamps
+    are ISO 8601 in JSON output (DateStyle does not apply), numbers and NULLs are unambiguous, strings are escaped.
+    timestamptz columns would follow the session TimeZone (the JDBC session is UTC); the source has none.
+    Postgres functions take at most 100 arguments, so larger column sets are nested in chunks.
+    """
+    if not columns:
+        raise ValueError("row_hash_sql needs at least one column")
+    quoted = [_quote(c) for c in columns]
+    if len(quoted) <= PG_MAX_FUNCTION_ARGS:
+        arr = f"json_build_array({', '.join(quoted)})"
+    else:
+        chunks = [quoted[i:i + PG_MAX_FUNCTION_ARGS] for i in range(0, len(quoted), PG_MAX_FUNCTION_ARGS)]
+        if len(chunks) > PG_MAX_FUNCTION_ARGS:
+            raise ValueError(f"too many columns to hash ({len(columns)})")
+        arr = "json_build_array(" + ", ".join(f"json_build_array({', '.join(c)})" for c in chunks) + ")"
+    return f"md5({arr}::text)"
+
+
+def hashed_source_query(schema: str, table: str, columns: list[str]) -> str:
+    """JDBC `dbtable` subquery: the hashed columns plus `_row_hash`. Filters Spark adds (the watermark day) are pushed
+    down around it."""
+    cols = ", ".join(_quote(c) for c in columns)
+    return f"(SELECT {cols}, {row_hash_sql(columns)} AS {ROW_HASH_COL} FROM {_quote(schema)}.{_quote(table)}) src"
+
+
+def read_hashed_source(spark, conn: PgConn, schema: str, table: str, columns: list[str]):
+    """Batch-read one source table's hashed columns plus `_row_hash` (bronze extracts and top-up planning)."""
+    return read_jdbc_query(spark, conn, hashed_source_query(schema, table, columns))
+
+
+def source_entries_df(src_df, key_col: str, watermark_col: str, floor: datetime.date):
+    """Distinct (k, d, h) entries of hashed source rows: business key as string, watermark as a date, row hash."""
     from pyspark.sql import functions as F
 
     return (
@@ -506,56 +597,57 @@ def source_pairs_df(src_df, key_col: str, watermark_col: str, floor: datetime.da
         .select(
             F.coalesce(F.col(key_col).cast("string"), F.lit(NULL_KEY)).alias("k"),
             F.to_date(F.col(watermark_col)).alias("d"),
+            F.col(ROW_HASH_COL).alias("h"),
         )
         .distinct()
     )
 
 
-def read_ledger_pairs_df(spark, ledger_table: str, source_table: str):
-    """Ledger rows for one source as (k, d). A missing ledger table means nothing has been loaded yet."""
+def read_ledger_entries_df(spark, ledger_table: str, source_table: str):
+    """Ledger rows for one source as (k, d, h). A missing ledger table means nothing has been loaded yet."""
     from pyspark.sql import functions as F
 
     try:
         df = spark.read.table(ledger_table)
     except Exception:  # AnalysisException: ledger not created yet (first ever run)
-        return spark.createDataFrame([], "k STRING, d DATE")
+        return spark.createDataFrame([], "k STRING, d DATE, h STRING")
     return df.where(F.col("table_name") == source_table).select(
-        F.col("business_key").alias("k"), F.col("snapshot_date").alias("d")
+        F.col("business_key").alias("k"), F.col("snapshot_date").alias("d"), F.col("row_hash").alias("h")
     )
 
 
 # --------------------------------------------------------------------------
 # Per-date fingerprints
 #
-# Comparing every (business_key, date) pair of a large source on every run is
-# expensive. Instead each side computes, per date, over the DISTINCT
-# (business_key, date) pairs: the pair count and the sum of a 60-bit
-# md5-derived bigint per pair. Postgres computes the source side server-side
-# and returns one row per date; the ledger stores the same numbers. Pairs are
-# fetched only for dates whose fingerprint differs. A moved row changes the
-# sum even when the count is unchanged.
+# Comparing every (business_key, date, row hash) entry of a large source on
+# every run is expensive. Instead each side computes, per date, over the
+# DISTINCT entries: the entry count and the sum of a 60-bit md5-derived bigint
+# per entry. Postgres computes the source side server-side and returns one row
+# per date; the ledger stores the same numbers. Entries are fetched only for
+# dates whose fingerprint differs. A moved row changes the sum even when the
+# count is unchanged, and so does a second version of a key on the same date.
 #
-# hash(pair) = int(first 15 hex chars of md5("<key>|<YYYY-MM-DD>"), 16); a NULL
-# key is written as NULL_KEY. The sum is kept as an exact integer (Postgres
-# numeric, Spark decimal(38,0), Python int) and compared as a string.
+# hash(entry) = int(first 15 hex chars of md5("<key>|<YYYY-MM-DD>|<row hash>"), 16);
+# a NULL key is written as NULL_KEY. The sum is kept as an exact integer
+# (Postgres numeric, Spark decimal(38,0), Python int) and compared as a string.
 # --------------------------------------------------------------------------
 
-FP_HEX_CHARS = 15  # 60 bits: fits a non-negative bigint per pair
+FP_HEX_CHARS = 15  # 60 bits: fits a non-negative bigint per entry
 
 
-def pair_hash(key, day: datetime.date) -> int:
-    """Python reference for the per-pair hash (must equal the Postgres and Spark expressions)."""
-    digest = hashlib.md5(f"{ledger_key(key)}|{day.isoformat()}".encode("utf-8")).hexdigest()
+def entry_hash(key, day: datetime.date, row_hash: str) -> int:
+    """Python reference for the per-entry hash (must equal the Postgres and Spark expressions)."""
+    digest = hashlib.md5(f"{ledger_key(key)}|{day.isoformat()}|{row_hash}".encode("utf-8")).hexdigest()
     return int(digest[:FP_HEX_CHARS], 16)
 
 
-def date_fingerprints(pairs) -> dict:
-    """{date: (distinct pair count, sum of pair hashes as a decimal string)} -- the Python reference."""
-    distinct = {(ledger_key(k), d) for k, d in pairs}
+def date_fingerprints(entries) -> dict:
+    """{date: (distinct entry count, sum of entry hashes as a decimal string)} -- the Python reference."""
+    distinct = {_entry(*e) for e in entries}
     grouped: dict = {}
-    for k, d in distinct:
+    for k, d, h in distinct:
         n, total = grouped.get(d, (0, 0))
-        grouped[d] = (n + 1, total + pair_hash(k, d))
+        grouped[d] = (n + 1, total + entry_hash(k, d, h))
     return {d: (n, str(total)) for d, (n, total) in sorted(grouped.items())}
 
 
@@ -568,26 +660,29 @@ def _quote(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
-def source_fingerprint_sql(schema: str, table: str, key_col: str, watermark_col: str, floor: datetime.date) -> str:
+def source_fingerprint_sql(schema: str, table: str, key_col: str, watermark_col: str, floor: datetime.date,
+                           columns: list[str]) -> str:
     """Postgres subquery (usable as a JDBC `dbtable`) returning one row per date:
-    snapshot_date, row_count (distinct pairs), fp_sum (text)."""
+    snapshot_date, row_count (distinct entries), fp_sum (text). `columns` are the hashed (active) columns."""
     bits = FP_HEX_CHARS * 4
     return (
-        "(SELECT d AS snapshot_date, count(*) AS row_count, sum(h)::text AS fp_sum FROM ("
-        f"SELECT d, ('x' || substr(md5(k || '|' || to_char(d, 'YYYY-MM-DD')), 1, {FP_HEX_CHARS}))::bit({bits})::bigint AS h FROM ("
-        f"SELECT DISTINCT coalesce({_quote(key_col)}::text, '{NULL_KEY}') AS k, {_quote(watermark_col)}::date AS d "
+        "(SELECT d AS snapshot_date, count(*) AS row_count, sum(x)::text AS fp_sum FROM ("
+        f"SELECT d, ('x' || substr(md5(k || '|' || to_char(d, 'YYYY-MM-DD') || '|' || h), 1, {FP_HEX_CHARS}))"
+        f"::bit({bits})::bigint AS x FROM ("
+        f"SELECT DISTINCT coalesce({_quote(key_col)}::text, '{NULL_KEY}') AS k, {_quote(watermark_col)}::date AS d, "
+        f"{row_hash_sql(columns)} AS h "
         f"FROM {_quote(schema)}.{_quote(table)} WHERE {_quote(watermark_col)} >= DATE '{floor.isoformat()}'"
-        ") pairs) hashed GROUP BY d) fp"
+        ") entries) hashed GROUP BY d) fp"
     )
 
 
-# The same fingerprint in Spark SQL, over a relation with columns (k STRING, d DATE).
+# The same fingerprint in Spark SQL, over a relation with columns (k STRING, d DATE, h STRING).
 SPARK_FINGERPRINT_SQL = (
     "SELECT d AS snapshot_date, count(*) AS row_count, "
-    "cast(sum(cast(cast(conv(substring(md5(concat(k, '|', date_format(d, 'yyyy-MM-dd'))), 1, "
+    "cast(sum(cast(cast(conv(substring(md5(concat(k, '|', date_format(d, 'yyyy-MM-dd'), '|', h)), 1, "
     + str(FP_HEX_CHARS)
     + "), 16, 10) AS bigint) AS decimal(38, 0))) AS string) AS fp_sum "
-    "FROM (SELECT DISTINCT k, d FROM {relation}) GROUP BY d"
+    "FROM (SELECT DISTINCT k, d, h FROM {relation}) GROUP BY d"
 )
 
 
@@ -595,14 +690,18 @@ def spark_fingerprint_sql(relation: str) -> str:
     return SPARK_FINGERPRINT_SQL.format(relation=relation)
 
 
-def fingerprints_df(spark, pairs_df):
-    """Per-date fingerprints of a (k, d) DataFrame: columns snapshot_date, row_count, fp_sum."""
-    pairs_df.createOrReplaceTempView("_fp_pairs")
-    return spark.sql(spark_fingerprint_sql("_fp_pairs"))
+def fingerprints_df(spark, entries_df):
+    """Per-date fingerprints of a (k, d, h) DataFrame: columns snapshot_date, row_count, fp_sum."""
+    entries_df.createOrReplaceTempView("_fp_entries")
+    return spark.sql(spark_fingerprint_sql("_fp_entries"))
 
 
 def fingerprint_table_name(catalog: str) -> str:
     return f"{catalog}.ledger.bronze_fingerprints"
+
+
+def row_hash_spec_table_name(catalog: str) -> str:
+    return f"{catalog}.ledger.row_hash_columns"
 
 
 def read_jdbc_query(spark, conn: PgConn, query: str):
@@ -617,8 +716,8 @@ def read_jdbc_query(spark, conn: PgConn, query: str):
     )
 
 
-def read_source_fingerprints(spark, conn: PgConn, schema, table, key_col, watermark_col, floor) -> dict:
-    df = read_jdbc_query(spark, conn, source_fingerprint_sql(schema, table, key_col, watermark_col, floor))
+def read_source_fingerprints(spark, conn: PgConn, schema, table, key_col, watermark_col, floor, columns) -> dict:
+    df = read_jdbc_query(spark, conn, source_fingerprint_sql(schema, table, key_col, watermark_col, floor, columns))
     return {r["snapshot_date"]: (int(r["row_count"]), str(r["fp_sum"])) for r in df.collect()}
 
 
@@ -634,16 +733,25 @@ def read_ledger_fingerprints(spark, fingerprint_table: str, source_table: str) -
     return {r["snapshot_date"]: (int(r["row_count"]), str(r["fp_sum"])) for r in rows}
 
 
+def read_row_hash_specs(spark, spec_table: str) -> dict:
+    """{table_name: [hashed columns]} as recorded after the last bronze rebuild ({} if nothing is recorded)."""
+    try:
+        rows = spark.read.table(spec_table).collect()
+    except Exception:  # table not created yet: nothing recorded
+        return {}
+    return {r["table_name"]: json.loads(r["columns"]) for r in rows}
+
+
 def collect_plan_inputs(
-    spark, conn: PgConn, table_def: dict, ledger_table: str, fingerprint_table: str,
+    spark, conn: PgConn, table_def: dict, columns: list[str], ledger_table: str, fingerprint_table: str,
     rebuild: bool = False, max_pending: int = DEFAULT_MAX_PENDING_KEYS,
 ):
-    """Graph-build inputs for plan_flows: (source dates, ledger dates, pending keys by loaded date).
+    """Graph-build inputs for plan_flows: (source dates, ledger dates, pending entries by loaded date).
 
-    1. Postgres returns one fingerprint row per source date (no pairs cross the wire).
+    1. Postgres returns one fingerprint row per source date (no entries cross the wire).
     2. Dates missing from the ledger are new: their snapshot flow loads them whole.
     3. Only dates on both sides whose fingerprints differ are examined further: their source
-       pairs are fetched and anti-joined with the ledger's pairs; the missing pairs become top-ups.
+       entries are fetched and anti-joined with the ledger's entries; the missing ones become top-ups.
     With rebuild=True the ledger is ignored and only the source dates are returned.
     """
     from pyspark.sql import functions as F
@@ -652,7 +760,7 @@ def collect_plan_inputs(
     key_col, wm_col = table_def["business_key"].strip(), table_def["watermark_col"].strip()
     floor = floor_date(table_def)
 
-    source_fp = read_source_fingerprints(spark, conn, schema, table, key_col, wm_col, floor)
+    source_fp = read_source_fingerprints(spark, conn, schema, table, key_col, wm_col, floor, columns)
     src_dates = sorted(source_fp)
     if rebuild:
         return src_dates, set(), {}
@@ -665,11 +773,12 @@ def collect_plan_inputs(
         for d in bad:
             cond = (F.col(wm_col) >= F.lit(d)) & (F.col(wm_col) < F.lit(d + datetime.timedelta(days=1)))
             in_dates = cond if in_dates is None else in_dates | cond
-        src_pairs = source_pairs_df(read_jdbc_table(spark, conn, schema, table).where(in_dates), key_col, wm_col, floor)
-        ledger_pairs = read_ledger_pairs_df(spark, ledger_table, table).where(F.col("d").isin(bad))
-        rows = src_pairs.join(ledger_pairs, ["k", "d"], "left_anti").limit(max_pending + 1).collect()
+        src = source_entries_df(read_hashed_source(spark, conn, schema, table, columns).where(in_dates), key_col,
+                                wm_col, floor)
+        ledger = read_ledger_entries_df(spark, ledger_table, table).where(F.col("d").isin(bad))
+        rows = src.join(ledger, ["k", "d", "h"], "left_anti").limit(max_pending + 1).collect()
         enforce_pending_cap(len(rows), max_pending)
-        topups = group_pending_by_date((r["k"], r["d"]) for r in rows)
+        topups = group_pending_by_date((r["k"], r["d"], r["h"]) for r in rows)
     return src_dates, set(ledger_fp), topups
 
 def ledger_table_name(catalog: str) -> str:
@@ -677,23 +786,36 @@ def ledger_table_name(catalog: str) -> str:
 
 
 def ensure_ledger_table(spark, catalog: str) -> str:
-    """Create the key ledger (outside the pipeline) if it does not exist yet."""
+    """Create the key ledger, its fingerprints and the row-hash column record (outside the pipeline) if missing.
+    A ledger created before rows were keyed by content gets its row_hash column added (NULL until a rebuild)."""
     name = ledger_table_name(catalog)
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS {catalog}.ledger")
     spark.sql(
-        f"CREATE TABLE IF NOT EXISTS {name} (table_name STRING, business_key STRING, snapshot_date DATE) "
-        "COMMENT 'Distinct (business_key, _snapshot_date) pairs loaded into poc_bronze; maintained by the sync_ledger job task'"
+        f"CREATE TABLE IF NOT EXISTS {name} (table_name STRING, business_key STRING, snapshot_date DATE, row_hash STRING) "
+        "COMMENT 'Distinct (business_key, _snapshot_date, _row_hash) entries loaded into poc_bronze; maintained by the sync_ledger job task'"
     )
+    if "row_hash" not in [f.name for f in spark.table(name).schema.fields]:
+        spark.sql(f"ALTER TABLE {name} ADD COLUMNS (row_hash STRING)")
     spark.sql(
         f"CREATE TABLE IF NOT EXISTS {fingerprint_table_name(catalog)} "
         "(table_name STRING, snapshot_date DATE, row_count BIGINT, fp_sum STRING) "
-        "COMMENT 'Per-date fingerprint (distinct pair count, sum of md5-derived bigints) of bronze_keys; maintained by sync_ledger'"
+        "COMMENT 'Per-date fingerprint (distinct entry count, sum of md5-derived bigints) of bronze_keys; maintained by sync_ledger'"
+    )
+    spark.sql(
+        f"CREATE TABLE IF NOT EXISTS {row_hash_spec_table_name(catalog)} "
+        "(table_name STRING, columns STRING, recorded_at TIMESTAMP) "
+        "COMMENT 'Active source_columns (JSON list) that bronze _row_hash covers, recorded by sync_ledger after a bronze rebuild; bronze.py refuses normal runs when they change'"
     )
     return name
 
 
-def bronze_pairs_df(spark, catalog: str, table_def: dict):
-    """Distinct (table_name, business_key, snapshot_date) pairs bronze actually holds for one incremental table."""
+def bronze_source_columns(bronze_columns: list[str]) -> list[str]:
+    """The source columns of a bronze table, in table order (bronze adds _row_hash, _snapshot_date, _loaded_at)."""
+    return [c for c in bronze_columns if c not in METADATA_COLS]
+
+
+def bronze_entries_df(spark, catalog: str, table_def: dict):
+    """Distinct (table_name, business_key, snapshot_date, row_hash) entries bronze holds for one incremental table."""
     from pyspark.sql import functions as F
 
     table = table_def["source_table"]
@@ -704,6 +826,7 @@ def bronze_pairs_df(spark, catalog: str, table_def: dict):
             F.lit(table).alias("table_name"),
             F.coalesce(F.col(key).cast("string"), F.lit(NULL_KEY)).alias("business_key"),
             F.col("_snapshot_date").alias("snapshot_date"),
+            F.col(ROW_HASH_COL).alias("row_hash"),
         )
         .distinct()
     )

@@ -94,13 +94,13 @@ def openai_tools(tools: list[dict]) -> list[dict]:
 
 
 class DatabricksInvestigator:
-    def __init__(self, chat: DatabricksChat, model: str = DEFAULT_MODEL):
-        self.chat, self.model = chat, model
+    def __init__(self, chat: DatabricksChat, model: str = DEFAULT_MODEL, design_notes=None):
+        self.chat, self.model, self.design_notes = chat, model, design_notes
 
     async def investigate(self, category: str, signals: list[str], notes: list[str], today: str,
                           toolbox: ToolBox) -> Investigation:
         tools = openai_tools(await toolbox.list_tools())
-        system = system_prompt() + f"\n\nWhen you are done, call {SUBMIT} with the analysis (do not answer in plain text)."
+        system = system_prompt(self.design_notes) + f"\n\nWhen you are done, call {SUBMIT} with the analysis (do not answer in plain text)."
         messages = [{"role": "system", "content": system},
                     {"role": "user", "content": _user_prompt(category, signals, notes, today)}]
         calls: list[dict] = []

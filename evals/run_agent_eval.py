@@ -98,8 +98,10 @@ async def judge(chat: DatabricksChat, model: str, report: str, grading: dict) ->
 async def run_case(case: dict, r: int, chat: DatabricksChat, model: str, judge_model: str) -> dict:
     cassette = json.loads((ROOT / "evals" / "cassettes" / f"{case['cassette']}.json").read_text(encoding="utf-8"))
     now = dt.datetime.fromisoformat(case["now"])
-    state = await run(ReplayToolBox(cassette), DatabricksInvestigator(chat, model), DryRunStore(), now=lambda: now,
-                      trace_id=f"eval-{case['id']}-{r}")
+    # a case recorded before a design change replays with the design notes of its time (evals/design_notes/)
+    notes = ROOT / case["design_notes"] if case.get("design_notes") else None
+    state = await run(ReplayToolBox(cassette), DatabricksInvestigator(chat, model, design_notes=notes), DryRunStore(),
+                      now=lambda: now, trace_id=f"eval-{case['id']}-{r}")
     incidents = state.get("incidents") or []
     checks = {"incident_as_expected": bool(incidents) == case["expect_incident"]}
     result = {"case": case["id"], "run": r, "incidents": len(incidents), "checks": checks, "judge": [],

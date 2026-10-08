@@ -1,7 +1,8 @@
 """Deterministic triage: turn the five tool results into signals, grouped into investigations. No model involved.
 
-A signal is something a person should look at. Known defects (same-day duplicate versions, guard WARN with 2
-event-log reads) are context, not signals. Each group has a stable fingerprint, so the same problem found again
+A signal is something a person should look at. Every bronze-vs-source gap is one. Context, not signals: business
+keys with several same-day versions (loaded since bronze keys rows by content) and the guard WARN with 2 event-log
+reads. Each group has a stable fingerprint, so the same problem found again
 the next day maps to the same OPEN incident (migration 005: one OPEN incident per fingerprint).
 """
 
@@ -85,10 +86,9 @@ def signals_from(results: dict[str, dict]) -> list[Signal]:
     cmp_ = results.get("compare_bronze_to_source", {})
     if cmp_.get("status") == "ok":
         for g in _items(cmp_.get("gaps")):
-            if g.get("classification") != "known_defect_same_day_duplicates":
-                out.append(Signal("bronze_gap", "DATA_COMPLETENESS", f"{g['table']}@{g['date']}",
-                                  f"{g['table']} {g['date']}: source {g['source']}, bronze {g['bronze']} "
-                                  f"(missing {g['missing']}, same-day duplicates {g['same_day_extra']})"))
+            out.append(Signal("bronze_gap", "DATA_COMPLETENESS", f"{g['table']}@{g['date']}",
+                              f"{g['table']} {g['date']}: source {g['source']}, bronze {g['bronze']} "
+                              f"(missing {g['missing']}, same-day versions {g.get('same_day_extra', 0)})"))
     return out
 
 
@@ -104,10 +104,11 @@ def context_notes(results: dict[str, dict]) -> list[str]:
     """Known, non-signal facts worth telling the model (so it does not rediscover them as causes)."""
     notes = []
     cmp_ = results.get("compare_bronze_to_source", {})
-    known = [g for g in _items(cmp_.get("gaps")) if g.get("classification") == "known_defect_same_day_duplicates"]
-    if known:
-        notes.append("known defect (not a signal): same-day duplicate versions on "
-                     + ", ".join(sorted({str(g["date"]) for g in known})))
+    versions = _items(cmp_.get("same_day_versions"))
+    if versions:
+        notes.append("info (not a signal): business keys with several versions on the same day, all loaded into "
+                     "bronze, silver keeps one per key: "
+                     + ", ".join(f"{v['table']}@{v['date']} ({v['keys_with_several_versions']})" for v in versions))
     guard = (results.get("get_table_health", {}) or {}).get("latest_guard") or {}
     if guard.get("status") == "WARN" and guard.get("event_log_reads") == 2:
         notes.append("guard WARN with 2 event-log reads is the normal baseline (not a signal)")

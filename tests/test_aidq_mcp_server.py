@@ -73,6 +73,9 @@ class FakeReads:
             return []
         if "count(DISTINCT" in statement:       # source per date: 10-02 has 3 same-day duplicate versions
             return [{"d": "2026-07-11", "n": 50, "k": 45}, {"d": "2026-10-02", "n": 40, "k": 37}]
+        if "HAVING count(*) > 1" in statement:  # the keys with several versions on one day
+            return [{"d": "2026-07-11", "k": str(k)} for k in range(5)] + [
+                {"d": "2026-10-02", "k": str(k)} for k in (101, 102, 103)]
         return [{"n": 10}]                       # full-load count
 
     def sql(self, statement):
@@ -155,13 +158,14 @@ def test_audit_query_is_scoped_to_this_envs_resources():
 
 # -- incident 2026-10-02: same-day duplicate versions ---------------------------------
 
-def test_gap_classified_as_known_defect_and_batch_duplicates_ignored():
+def test_a_date_short_by_its_same_day_versions_is_a_gap_and_the_versions_are_listed_as_info():
     out = tools().compare_bronze_to_source("dev", "netsuite_transactions")
-    assert out["verdict"] == "known_defects_only"
+    assert out["verdict"] == "gaps"
     assert out["gaps"]["items"] == [{"table": "netsuite_transactions", "date": "2026-10-02", "source": 40,
-                                     "bronze": 37, "missing": 3, "same_day_extra": 3,
-                                     "classification": logic.KNOWN_DEFECT}]
+                                     "bronze": 37, "missing": 3, "same_day_extra": 3}]
     assert out["totals"] == [{"table": "netsuite_transactions", "source": 90, "bronze": 87}]
+    assert [(v["date"], v["keys_with_several_versions"]) for v in out["same_day_versions"]["items"]] == [
+        ("2026-07-11", 5), ("2026-10-02", 3)]
 
 
 def test_full_load_table_compares_totals():

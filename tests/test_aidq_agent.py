@@ -38,9 +38,10 @@ HEALTHY = {
                          "latest_guard": {"status": "WARN", "event_log_reads": 2}},
     "get_pipeline_errors": {"status": "ok", "pipelines": [{"pipeline": "ingestion", "name": "p", "events": {"items": []}}],
                             "failed_run_audit": {"items": []}},
-    "compare_bronze_to_source": {"status": "ok", "verdict": "known_defects_only", "gaps": {"items": [
-        {"table": "netsuite_transactions", "date": "2026-10-02", "source": 40, "bronze": 37, "missing": 3,
-         "same_day_extra": 3, "classification": "known_defect_same_day_duplicates"}]}},
+    "compare_bronze_to_source": {"status": "ok", "verdict": "identical", "gaps": {"items": []},
+                                 "same_day_versions": {"items": [
+                                     {"table": "netsuite_transactions", "date": "2026-10-02",
+                                      "keys_with_several_versions": 3, "keys": ["101", "102", "103"]}]}},
     "get_recent_deploys": {"status": "ok", "deploys": {"items": []}, "config_changes": {"unavailable": "no access"}},
 }
 
@@ -61,7 +62,7 @@ MISSED = with_(get_recent_job_runs={"status": "ok", "jobs": [
 def test_healthy_day_has_no_signals_but_context_notes():
     assert triage.signals_from(HEALTHY) == []
     notes = triage.context_notes(HEALTHY)
-    assert any("same-day duplicate versions on 2026-10-02" in n for n in notes)
+    assert any("several versions on the same day" in n and "netsuite_transactions@2026-10-02 (3)" in n for n in notes)
     assert any("normal baseline" in n for n in notes)
 
 
@@ -76,7 +77,7 @@ def test_unexplained_gap_failed_run_unavailable_tool_and_threshold_are_signals()
     r = with_(
         compare_bronze_to_source={"status": "ok", "gaps": {"items": [
             {"table": "netsuite_memberships", "date": "2026-10-04", "source": 10, "bronze": 8, "missing": 2,
-             "same_day_extra": 0, "classification": "unexplained"}]}},
+             "same_day_extra": 0}]}},
         get_recent_job_runs={"status": "ok", "jobs": [job("ingestion", runs=[run_(9, "FAILED")])]},
         get_pipeline_errors={"status": "unavailable", "reason": "endpoint disabled"},
         get_table_health={"status": "ok", "tables": [{"source_table": "netsuite_certifications", "layer": "silver",

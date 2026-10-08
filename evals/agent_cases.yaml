@@ -13,6 +13,7 @@ cases:
     expect_incident: true
     categories: [DATA_COMPLETENESS]
     fixture: 2026-10-02_same_day_duplicate_versions
+    design_notes: evals/design_notes/2026-10-06.md   # the platform as it was then: ledger keyed on (key, date)
     note: the same state as seen before PR #27 (every gap unexplained)
 
   - id: missed_runs

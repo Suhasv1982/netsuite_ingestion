@@ -2,15 +2,15 @@
 
 Runs after sync_ledger, when the two should be identical. For every
 incremental table it checks
-  * pairs (business_key, snapshot_date) bronze holds but the ledger lacks (missing:
-    a top-up could re-load them) and pairs the ledger holds but bronze lacks (extra:
-    bronze was rebuilt or rows were lost);
+  * entries (business_key, snapshot_date, row_hash) bronze holds but the ledger lacks
+    (missing: a top-up could re-load them) and entries the ledger holds but bronze lacks
+    (extra: bronze was rebuilt or rows were lost);
   * the stored per-date fingerprints against fingerprints recomputed from bronze
     (a wrong fingerprint makes bronze.py miss late rows or examine dates needlessly).
 
 A mismatch never fails the job. It is printed as a WARN line and logged as a
 `ledger` layer row in aidq_metadata.run_audit (status OK / WARN, rows_read =
-ledger pairs, rows_written = bronze pairs, rows_rejected = pair mismatches +
+ledger entries, rows_written = bronze entries, rows_rejected = entry mismatches +
 fingerprint mismatches, error = the details). Recovery is `sync_ledger
 --bronze-rebuild true`.
 """
@@ -23,7 +23,8 @@ from pyspark.sql import functions as F
 
 from log_run_audit import RUN_AUDIT_SCHEMA
 from metadata import (
-    bronze_pairs_df,
+    ROW_HASH_COL,
+    bronze_entries_df,
     ensure_ledger_table,
     fingerprint_table_name,
     fingerprints_df,
@@ -33,7 +34,7 @@ from metadata import (
     write_pg_rows,
 )
 
-KEY_COLUMNS = ["table_name", "business_key", "snapshot_date"]
+KEY_COLUMNS = ["table_name", "business_key", "snapshot_date", "row_hash"]
 
 
 def check_table(spark, catalog: str, ledger: str, table_def: dict) -> dict:
@@ -41,14 +42,18 @@ def check_table(spark, catalog: str, ledger: str, table_def: dict) -> dict:
     if not spark.catalog.tableExists(f"{catalog}.poc_bronze.{table}"):
         return {"table": table, "status": "WARN", "bronze": 0, "ledger": 0, "missing": 0, "extra": 0, "fp_bad": 0,
                 "note": "bronze table does not exist yet"}
-    bronze = bronze_pairs_df(spark, catalog, table_def).select(*KEY_COLUMNS)
+    if ROW_HASH_COL not in [f.name for f in spark.table(f"{catalog}.poc_bronze.{table}").schema.fields]:
+        return {"table": table, "status": "WARN", "bronze": 0, "ledger": 0, "missing": 0, "extra": 0, "fp_bad": 0,
+                "note": f"bronze has no {ROW_HASH_COL}: rebuild bronze (bronze_rebuild=true)"}
+    bronze = bronze_entries_df(spark, catalog, table_def).select(*KEY_COLUMNS)
     ledger_df = spark.table(ledger).where(f"table_name = '{table}'").select(*KEY_COLUMNS)
     missing = bronze.join(ledger_df, KEY_COLUMNS, "left_anti").count()
     extra = ledger_df.join(bronze, KEY_COLUMNS, "left_anti").count()
 
     # fingerprints: recomputed from bronze vs the stored ones (a date on only one side counts as a mismatch)
     actual = fingerprints_df(
-        spark, bronze.select(F.col("business_key").alias("k"), F.col("snapshot_date").alias("d"))
+        spark, bronze.select(F.col("business_key").alias("k"), F.col("snapshot_date").alias("d"),
+                             F.col("row_hash").alias("h"))
     ).select("snapshot_date", "row_count", "fp_sum")
     stored = (
         spark.table(fingerprint_table_name(catalog))
@@ -84,7 +89,7 @@ def main() -> None:
         r = check_table(spark, args.catalog, ledger, table_def)
         detail = r["note"] or (
             "" if r["status"] == "OK"
-            else f"{r['missing']} pairs in bronze not in ledger, {r['extra']} pairs in ledger not in bronze, "
+            else f"{r['missing']} entries in bronze not in ledger, {r['extra']} entries in ledger not in bronze, "
                  f"{r['fp_bad']} dates whose stored fingerprint differs from bronze; "
                  "recover with sync_ledger --bronze-rebuild true"
         )

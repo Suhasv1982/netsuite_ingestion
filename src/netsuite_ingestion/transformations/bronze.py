@@ -16,11 +16,14 @@ FullLoad, a non-blank one means Incremental):
       * a snapshot flow per distinct watermark date at or above the floor
         (source_table_def.bronze_watermark). Names come from the date, so a
         date that already loaded is never re-extracted;
-      * a top-up flow for (business_key, date) pairs the source has but the
-        key ledger does not, on an already-loaded date (late rows). Postgres
-        first returns one fingerprint (pair count + sum of md5-derived bigints)
-        per date; pairs are fetched only for dates whose fingerprint differs
-        from the ledger's. Named from a hash of the pending key set.
+      * a top-up flow for (business_key, date, row hash) entries the source
+        has but the key ledger does not, on an already-loaded date: late rows,
+        and a second version of a key on a loaded date. Postgres first returns
+        one fingerprint (entry count + sum of md5-derived bigints) per date;
+        entries are fetched only for dates whose fingerprint differs from the
+        ledger's. Named from a hash of the pending entry set.
+    Every incremental bronze row carries `_row_hash` (md5 of the active
+    source_columns, computed by Postgres: metadata.row_hash_sql).
     Silver therefore always has a single streaming source.
 
 The key ledger (<catalog>.ledger.bronze_keys, `ledger_table` configuration)
@@ -35,6 +38,11 @@ Operating rules
     build reads the update's `create_update` event from the pipeline event log
     and raises if it is a full refresh (or a selection naming a bronze table)
     without bronze_rebuild.
+  - Row-hash guard: a normal run is refused when an incremental table's active
+    source_columns differ from the column set bronze was hashed with
+    (ledger.row_hash_columns, recorded by sync_ledger after a rebuild), or when
+    nothing is recorded. The error names the table and the change; recovery is
+    a bronze_rebuild (metadata.row_hash_guard_error).
   - `flow_scope` defaults to "pending_only": flows are defined only for dates
     missing from the ledger (plus top-ups), because defining a flow for every
     date costs ~0.45 s at graph planning (1,600 flows = ~12 min).
@@ -55,16 +63,20 @@ from metadata import (
     collect_plan_inputs,
     floor_date,
     is_incremental,
-    key_filter,
     pg_conn_from_conf,
     plan_flows,
+    ROW_HASH_COL,
     GUARD_READS_TABLE,
     guard_reads_row,
     read_jdbc_table,
     read_create_update_attempts,
+    read_hashed_source,
+    read_row_hash_specs,
     refresh_guard_error,
     read_source_columns,
     read_table_defs,
+    row_hash_filter,
+    row_hash_guard_error,
 )
 
 source_conn = pg_conn_from_conf(spark, dbutils, "source")
@@ -73,6 +85,7 @@ bronze_rebuild = (spark.conf.get("bronze_rebuild", "false") or "false").strip().
 flow_scope = (spark.conf.get("flow_scope", DEFAULT_SCOPE) or DEFAULT_SCOPE).strip()
 ledger_table = spark.conf.get("ledger_table")
 ledger_fingerprint_table = spark.conf.get("ledger_fingerprint_table")
+row_hash_spec_table = spark.conf.get("row_hash_spec_table")
 
 table_defs = read_table_defs(spark, meta_conn)
 columns_by_table = read_source_columns(spark, meta_conn)
@@ -94,6 +107,26 @@ _guard_error = refresh_guard_error(
 )
 if _guard_error:
     raise RuntimeError(f"{_guard_error}\n(guard event-log reads: {_guard_reads})")
+
+# Hard guard: each incremental table must be hashed over the active columns bronze was built with.
+_recorded_hash_columns = read_row_hash_specs(spark, row_hash_spec_table)
+_hash_errors = [
+    err
+    for t in table_defs
+    if is_incremental(t)
+    for err in [
+        row_hash_guard_error(
+            t["source_table"],
+            _recorded_hash_columns.get(t["source_table"]),
+            build_column_list(columns_by_table.get(t["table_id"], [])),
+            bronze_rebuild,
+            spark.conf.get("bundle_target", None),
+        )
+    ]
+    if err
+]
+if _hash_errors:
+    raise RuntimeError("\n\n".join(_hash_errors))
 
 
 @dp.table(
@@ -123,22 +156,22 @@ def _register_full_load_bronze(table_def: dict, column_list: list[str]) -> None:
         return read_jdbc_table(spark, source_conn, source_schema, source_table).select(*column_list)
 
 
-def _register_extract_flow(target, spec, source_schema, source_table, watermark_col, key_col, column_list) -> None:
+def _register_extract_flow(target, spec, source_schema, source_table, watermark_col, column_list) -> None:
     """One `once` append flow. A factory so each loop iteration's spec is captured correctly."""
     day = spec.snapshot_date
     next_day = day + datetime.timedelta(days=1)
 
     @dp.append_flow(target=target, name=spec.name, once=True)
     def _flow():
-        df = read_jdbc_table(spark, source_conn, source_schema, source_table).where(
+        df = read_hashed_source(spark, source_conn, source_schema, source_table, column_list).where(
             (F.col(watermark_col) >= F.lit(day)) & (F.col(watermark_col) < F.lit(next_day))
         )
-        if spec.keys:  # top-up: only the pending keys of an already-loaded date
-            df = df.where(key_filter(key_col, spec.keys))
+        if spec.entries:  # top-up: only the pending (key, row hash) entries of an already-loaded date
+            df = df.where(row_hash_filter(spec.entries))
         if spec.kind == "anchor":  # placeholder so the streaming table always has a flow; appends nothing
             df = df.where(F.lit(False))
         return (
-            df.select(*column_list)
+            df.select(*column_list, ROW_HASH_COL)
             .withColumn("_snapshot_date", F.lit(day))
             .withColumn("_loaded_at", F.current_timestamp())
         )
@@ -148,7 +181,6 @@ def _register_incremental_bronze(table_def: dict, column_list: list[str]) -> Non
     source_table = table_def["source_table"]
     source_schema = table_def["dest_schema"]
     watermark_col = table_def["watermark_col"].strip()
-    key_col = table_def["business_key"].strip()
     target = bronze_table_name(source_table)
 
     dp.create_streaming_table(
@@ -160,11 +192,11 @@ def _register_incremental_bronze(table_def: dict, column_list: list[str]) -> Non
     )
 
     src_dates, ledger_dates, topups = collect_plan_inputs(
-        spark, source_conn, table_def, ledger_table, ledger_fingerprint_table, rebuild=bronze_rebuild
+        spark, source_conn, table_def, column_list, ledger_table, ledger_fingerprint_table, rebuild=bronze_rebuild
     )
 
     for spec in plan_flows(source_table, src_dates, ledger_dates, topups, flow_scope, bronze_rebuild):
-        _register_extract_flow(target, spec, source_schema, source_table, watermark_col, key_col, column_list)
+        _register_extract_flow(target, spec, source_schema, source_table, watermark_col, column_list)
 
 
 def _register_bronze_table(table_def: dict, columns: list[dict]) -> None:

@@ -24,30 +24,31 @@ SRC = {("netsuite_customers", None): 10, ("netsuite_transactions", "2026-07-11")
 
 
 def test_no_gaps_when_counts_match():
-    assert logic.classify_date_gaps(SRC, dict(SRC), {("netsuite_transactions", "2026-07-11"): 5}) == []
+    assert logic.date_gaps(SRC, dict(SRC), {("netsuite_transactions", "2026-07-11"): 5}) == []
 
 
-def test_gap_equal_to_that_dates_duplicates_is_a_known_defect():
-    gaps = logic.classify_date_gaps(SRC, {**SRC, ("netsuite_transactions", "2026-10-02"): 37},
-                                    {("netsuite_transactions", "2026-10-02"): 3})
+def test_a_date_short_by_its_same_day_versions_is_a_gap():
+    # before the row-hash fix this was classified as a known defect (incident 2026-10-02); now every version loads
+    gaps = logic.date_gaps(SRC, {**SRC, ("netsuite_transactions", "2026-10-02"): 37},
+                           {("netsuite_transactions", "2026-10-02"): 3})
     assert gaps == [{"table": "netsuite_transactions", "date": "2026-10-02", "source": 40, "bronze": 37,
-                     "missing": 3, "same_day_extra": 3, "classification": logic.KNOWN_DEFECT}]
+                     "missing": 3, "same_day_extra": 3}]
 
 
-def test_duplicates_elsewhere_or_a_different_size_do_not_explain_a_gap():
-    short = {**SRC, ("netsuite_transactions", "2026-10-02"): 37}
-    [g] = logic.classify_date_gaps(SRC, short, {("netsuite_transactions", "2026-07-11"): 3})
-    assert g["classification"] == logic.UNEXPLAINED
-    [g] = logic.classify_date_gaps(SRC, short, {("netsuite_transactions", "2026-10-02"): 2})
-    assert g["classification"] == logic.UNEXPLAINED
+def test_extra_bronze_rows_and_full_load_gaps_are_gaps():
+    gaps = logic.date_gaps(SRC, {**SRC, ("netsuite_customers", None): 9,
+                                 ("netsuite_transactions", "2026-10-09"): 1}, {})
+    assert [(g["table"], g["date"], g["missing"]) for g in gaps] == [
+        ("netsuite_customers", None, 1), ("netsuite_transactions", "2026-10-09", -1)]
 
 
-def test_extra_bronze_rows_and_full_load_gaps_are_unexplained():
-    gaps = logic.classify_date_gaps(SRC, {**SRC, ("netsuite_customers", None): 9,
-                                          ("netsuite_transactions", "2026-10-09"): 1}, {})
-    assert [(g["table"], g["date"], g["missing"], g["classification"]) for g in gaps] == [
-        ("netsuite_customers", None, 1, logic.UNEXPLAINED),
-        ("netsuite_transactions", "2026-10-09", -1, logic.UNEXPLAINED)]
+def test_same_day_versions_groups_keys_per_table_and_date():
+    rows = [{"table": "netsuite_transactions", "d": "2026-10-02", "k": "9"},
+            {"table": "netsuite_transactions", "d": "2026-10-02", "k": "10"},
+            {"table": "netsuite_memberships", "d": "2026-10-03", "k": "4"}]
+    assert logic.same_day_versions(rows, max_keys=1) == [
+        {"table": "netsuite_memberships", "date": "2026-10-03", "keys_with_several_versions": 1, "keys": ["4"]},
+        {"table": "netsuite_transactions", "date": "2026-10-02", "keys_with_several_versions": 2, "keys": ["10"]}]
 
 
 # -- schedules ----------------------------------------------------------------

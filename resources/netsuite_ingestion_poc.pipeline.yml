@@ -22,3 +22,4 @@ resources:
         flow_scope: ${var.flow_scope}
         ledger_table: ${var.catalog}.ledger.bronze_keys
         ledger_fingerprint_table: ${var.catalog}.ledger.bronze_fingerprints
+        row_hash_spec_table: ${var.catalog}.ledger.row_hash_columns

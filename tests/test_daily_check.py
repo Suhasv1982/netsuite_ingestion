@@ -2,7 +2,7 @@
 
 import datetime as dt
 
-from daily_check import audit_findings, classify_generator_log, explain_count_gaps, runs_on_date
+from daily_check import audit_findings, classify_generator_log, count_gaps, same_day_version_lines, runs_on_date
 
 D = dt.date(2026, 10, 4)
 
@@ -27,31 +27,27 @@ SRC = {("netsuite_customers", None): 10, ("netsuite_transactions", "2026-07-11")
        ("netsuite_transactions", "2026-10-02"): 40}
 
 
-def test_explain_count_gaps():
-    assert explain_count_gaps(SRC, dict(SRC), {}) == ([], [])
-    fails, warns = explain_count_gaps(SRC, {**SRC, ("netsuite_transactions", "2026-10-02"): 37}, {})
-    assert fails == ["netsuite_transactions@2026-10-02: source=40 dev=37"] and warns == []
-    fails, _ = explain_count_gaps(SRC, {**SRC, ("netsuite_customers", None): 9}, {})
-    assert fails == ["netsuite_customers: source=10 dev=9"]
-    fails, _ = explain_count_gaps(SRC, {**SRC, ("netsuite_transactions", "2026-10-09"): 1}, {})
-    assert fails == ["netsuite_transactions@2026-10-09: source=0 dev=1"]
+def test_count_gaps():
+    assert count_gaps(SRC, dict(SRC)) == []
+    assert count_gaps(SRC, {**SRC, ("netsuite_transactions", "2026-10-02"): 37}) == [
+        "netsuite_transactions@2026-10-02: source=40 dev=37"]
+    assert count_gaps(SRC, {**SRC, ("netsuite_customers", None): 9}) == ["netsuite_customers: source=10 dev=9"]
+    assert count_gaps(SRC, {**SRC, ("netsuite_transactions", "2026-10-09"): 1}) == [
+        "netsuite_transactions@2026-10-09: source=0 dev=1"]
 
 
-def test_date_short_by_its_same_day_duplicates_is_a_known_defect():
-    extra = {("netsuite_transactions", "2026-07-11"): 5, ("netsuite_transactions", "2026-10-02"): 3}
-    fails, warns = explain_count_gaps(SRC, {**SRC, ("netsuite_transactions", "2026-10-02"): 37}, extra)
-    assert fails == []
-    assert warns == ["netsuite_transactions@2026-10-02: source=40 dev=37, the 3 missing rows are same-day duplicate versions"]
+def test_a_date_short_by_its_same_day_versions_is_a_failure_now():
+    # before the row-hash fix this was a known-defect WARN (incident 2026-10-02); every version is loaded now
+    assert count_gaps(SRC, {**SRC, ("netsuite_transactions", "2026-10-02"): 37}) != []
 
 
-def test_duplicates_on_another_date_do_not_explain_a_gap():
-    # 07-11 duplicates arrived in one batch and are in bronze; they must not cover a gap elsewhere
-    extra = {("netsuite_transactions", "2026-07-11"): 3}
-    fails, warns = explain_count_gaps(SRC, {**SRC, ("netsuite_transactions", "2026-10-02"): 37}, extra)
-    assert fails == ["netsuite_transactions@2026-10-02: source=40 dev=37"] and warns == []
-    fails, _ = explain_count_gaps(SRC, {**SRC, ("netsuite_transactions", "2026-10-02"): 36},
-                                  {("netsuite_transactions", "2026-10-02"): 3})
-    assert fails == ["netsuite_transactions@2026-10-02: source=40 dev=36"]
+def test_same_day_version_lines_are_info_with_the_keys():
+    lines = same_day_version_lines({("netsuite_transactions", "2026-10-02"): [12, 3],
+                                    ("netsuite_memberships", "2026-10-03"): list(range(12))})
+    assert lines == [
+        "memberships@2026-10-03: 12 key(s) with several versions: 0, 1, 10, 11, 2, 3, 4, 5, 6, 7 (+2 more)",
+        "transactions@2026-10-02: 2 key(s) with several versions: 12, 3"]
+    assert same_day_version_lines({}) == []
 
 
 def _audit(ledger="OK", guard="OK", reads=1, failed=False):

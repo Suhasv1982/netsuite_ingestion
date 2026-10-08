@@ -1,10 +1,14 @@
 """Record the aidq_mcp tool results an agent eval case replays (evals/cassettes/<case>.json).
 
-    PYTHONPATH=src python evals/record_cassettes.py --profile DEFAULT
+    PYTHONPATH=src python evals/record_cassettes.py --profile DEFAULT [--case NAME ...]
 
 Read-only. Calls the real tools with the clock fixed at each case's time; job runs, workflow runs, pipeline events
 and audit rows after that time are filtered out (table health and bronze-vs-source counts are current state:
 see each case's note). Ids are replaced with stable placeholders so no environment identifier is committed.
+
+`2026-10-05_pre_fix` is frozen: it was derived from the 10-05 recording while dev bronze still lacked the
+same-day versions (before the row-hash fix of 2026-10-08). Re-recording now would show no gaps, so it is never
+regenerated; `--pre-fix` rebuilds it from a fresh 10-05 recording only on explicit request.
 """
 
 from __future__ import annotations
@@ -111,20 +115,29 @@ def pre_fix(cassette: dict) -> dict:
     return c
 
 
+CASES = {
+    "2026-10-05_after_daily_run": dt.datetime(2026, 10, 5, 12, 0, tzinfo=UTC),
+    "2026-10-06_afternoon": dt.datetime(2026, 10, 6, 14, 45, tzinfo=UTC),
+    # first healthy day after the row-hash fix (bronze rebuilt on dev, then one scheduled cycle)
+    "2026-10-09_after_daily_run": dt.datetime(2026, 10, 9, 12, 0, tzinfo=UTC),
+}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--profile", required=True)
+    ap.add_argument("--case", action="append", choices=sorted(CASES), help="record only these (default: all)")
+    ap.add_argument("--pre-fix", action="store_true", help="also rebuild the frozen 2026-10-05_pre_fix cassette")
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
-    cases = {
-        "2026-10-05_after_daily_run": dt.datetime(2026, 10, 5, 12, 0, tzinfo=UTC),
-        "2026-10-06_afternoon": dt.datetime(2026, 10, 6, 14, 45, tzinfo=UTC),
-    }
     recorded = {}
-    for name, now in cases.items():
+    for name in args.case or sorted(CASES):
+        now = CASES[name]
         print(f"recording {name} (now {now.isoformat()})", file=sys.stderr)
         recorded[name] = record(args.profile, now)
-    recorded["2026-10-05_pre_fix"] = pre_fix(recorded["2026-10-05_after_daily_run"])
+    if args.pre_fix:
+        base = recorded.get("2026-10-05_after_daily_run") or record(args.profile, CASES["2026-10-05_after_daily_run"])
+        recorded["2026-10-05_pre_fix"] = pre_fix(base)
     for name, cassette in recorded.items():
         mapping: dict = {}
         cassette = scrub(cassette, mapping)

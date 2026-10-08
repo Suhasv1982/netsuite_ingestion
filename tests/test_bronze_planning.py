@@ -1,8 +1,9 @@
 """Unit tests for the incremental-bronze planning logic in metadata.py (no Spark needed).
 
-Covers: the floor date, flow names (incl. the pending-key hash), ledger keying,
-key-based pending detection (not counts), and which `once` flows are defined
-for a normal run, a late-row top-up, and a bronze_rebuild full refresh.
+Covers: the floor date, flow names (incl. the pending-entry hash), ledger keying,
+entry-based pending detection (not counts; a second version of a key on the same
+date is pending), which `once` flows are defined for a normal run, a late-row
+top-up, and a bronze_rebuild full refresh, and the row-hash column-set guard.
 """
 
 import datetime as dt
@@ -14,8 +15,10 @@ from metadata import (
     NULL_KEY,
     TooManyPendingKeys,
     anchor_flow_name,
+    bronze_source_columns,
+    describe_column_change,
     enforce_pending_cap,
-    find_pending_pairs,
+    find_pending_entries,
     floor_date,
     group_pending_by_date,
     is_incremental,
@@ -29,6 +32,7 @@ from metadata import (
     read_create_update_attempts,
     read_create_update_detail,
     refresh_guard_error,
+    row_hash_guard_error,
     snapshot_flow_name,
     topup_flow_name,
 )
@@ -69,68 +73,91 @@ class TestFlowNames:
         assert snapshot_flow_name(T, D1) == "netsuite_memberships__20260711"
 
     def test_hash_is_short_and_order_independent(self):
-        assert pending_key_hash(["b", "a", "c"]) == pending_key_hash(["c", "a", "b"])
-        assert len(pending_key_hash(["a"])) == 10
+        assert pending_key_hash([("b", "h"), ("a", "h"), ("c", "h")]) == pending_key_hash([("c", "h"), ("a", "h"), ("b", "h")])
+        assert len(pending_key_hash([("a", "h")])) == 10
 
-    def test_different_key_sets_get_different_names(self):
-        assert topup_flow_name(T, D1, ["1", "2"]) != topup_flow_name(T, D1, ["1", "2", "3"])
+    def test_different_entry_sets_get_different_names(self):
+        assert topup_flow_name(T, D1, [("1", "h1"), ("2", "h2")]) != topup_flow_name(T, D1, [("1", "h1"), ("2", "h2"), ("3", "h3")])
 
-    def test_same_key_set_reproduces_the_same_name(self):
-        assert topup_flow_name(T, D1, ["2", "1"]) == topup_flow_name(T, D1, ["1", "2"])
-        assert topup_flow_name(T, D1, ["1"]).startswith("netsuite_memberships__20260711__topup_")
+    def test_a_second_version_of_the_same_key_gets_a_different_name(self):
+        assert topup_flow_name(T, D1, [("1", "h1")]) != topup_flow_name(T, D1, [("1", "h2")])
 
-    def test_name_does_not_depend_on_counts(self):
-        # the name comes from the pending keys only, never from how many rows the source or ledger holds
-        assert topup_flow_name(T, D1, ["7"]) == topup_flow_name(T, D1, ["7"])
+    def test_same_entry_set_reproduces_the_same_name(self):
+        assert topup_flow_name(T, D1, [("2", "b"), ("1", "a")]) == topup_flow_name(T, D1, [("1", "a"), ("2", "b")])
+        assert topup_flow_name(T, D1, [("1", "a")]).startswith("netsuite_memberships__20260711__topup_")
 
     def test_null_key_is_hashable(self):
         assert ledger_key(None) == NULL_KEY
-        assert pending_key_hash([None]) == pending_key_hash([NULL_KEY])
+        assert pending_key_hash([(None, "h")]) == pending_key_hash([(NULL_KEY, "h")])
 
 
-class TestFindPendingPairs:
-    def test_pairs_missing_from_the_ledger(self):
-        assert find_pending_pairs([(1, D1), (2, D1)], [(1, D1)]) == {("2", D1)}
+class TestFindPendingEntries:
+    def test_entries_missing_from_the_ledger(self):
+        assert find_pending_entries([(1, D1, "a"), (2, D1, "b")], [(1, D1, "a")]) == {("2", D1, "b")}
 
     def test_nothing_pending_when_ledger_is_complete(self):
-        assert find_pending_pairs([(1, D1)], [("1", D1)]) == set()
+        assert find_pending_entries([(1, D1, "a")], [("1", D1, "a")]) == set()
 
     def test_keys_compare_as_strings_so_int_and_text_keys_match(self):
-        assert find_pending_pairs([(90001, D1)], [("90001", D1)]) == set()
+        assert find_pending_entries([(90001, D1, "a")], [("90001", D1, "a")]) == set()
 
     def test_null_business_keys_are_matched_not_always_pending(self):
-        assert find_pending_pairs([(None, D1)], [(NULL_KEY, D1)]) == set()
+        assert find_pending_entries([(None, D1, "a")], [(NULL_KEY, D1, "a")]) == set()
 
     def test_late_update_backdated_to_a_loaded_date_is_not_excluded(self):
         # key 5 was loaded on D2; a later update for key 5 is backdated to D1, which is already
-        # loaded for other keys. Keyed on (key, date) it is pending; keyed on key alone it would be hidden.
-        ledger = [(1, D1), (2, D1), (5, D2)]
-        source = [(1, D1), (2, D1), (5, D1)]
-        assert find_pending_pairs(source, ledger) == {("5", D1)}
+        # loaded for other keys. Keyed on (key, date, hash) it is pending; keyed on key alone it would be hidden.
+        ledger = [(1, D1, "a"), (2, D1, "b"), (5, D2, "e")]
+        source = [(1, D1, "a"), (2, D1, "b"), (5, D1, "e2")]
+        assert find_pending_entries(source, ledger) == {("5", D1, "e2")}
+
+    def test_exact_copy_of_a_loaded_row_is_not_pending(self):
+        # same key, day and content: one entry; a late exact copy carries nothing new
+        assert find_pending_entries([(1, D1, "a"), (1, D1, "a")], [(1, D1, "a")]) == set()
+
+
+class TestIncident20261002SecondVersionSameDay:
+    """Generator run 2 (10-01) wrote key 7 dated D1; the D1 batch later wrote a second version of key 7, also dated
+    D1. Keyed on (key, date) both versions are one pair and the second never loaded. Keyed on content it is pending
+    and its top-up loads only that version."""
+
+    ledger = [("6", D1, "v6"), ("7", D1, "v7_first")]
+    source = [("6", D1, "v6"), ("7", D1, "v7_first"), ("7", D1, "v7_second")]
+
+    def test_the_pairs_alone_look_complete(self):
+        assert {(k, d) for k, d, _ in self.source} == {(k, d) for k, d, _ in self.ledger}
+
+    def test_the_second_version_is_pending(self):
+        assert find_pending_entries(self.source, self.ledger) == {("7", D1, "v7_second")}
+
+    def test_the_topup_carries_only_the_second_version(self):
+        pending = group_pending_by_date(find_pending_entries(self.source, self.ledger))
+        (f,) = plan_flows(T, [D1], {D1}, pending, scope="pending_only")
+        assert f.kind == "topup" and f.entries == (("7", "v7_second"),)
 
 
 class TestMovedRowsWithEqualCounts:
     """One row moves OUT of date D (updated to a later date), one late row moves IN to D.
-    The number of rows on D is unchanged, so a count comparison sees nothing; a key comparison does."""
+    The number of rows on D is unchanged, so a count comparison sees nothing; an entry comparison does."""
 
-    ledger = [(1, D1), (2, D1), (3, D2)]          # D1 holds keys 1, 2 (2 rows)
-    source = [(2, D1), (9, D1), (1, D3), (3, D2)]  # key 1 moved to D3; late key 9 arrived on D1 (still 2 rows)
+    ledger = [(1, D1, "a"), (2, D1, "b"), (3, D2, "c")]                 # D1 holds keys 1, 2 (2 rows)
+    source = [(2, D1, "b"), (9, D1, "i"), (1, D3, "a3"), (3, D2, "c")]  # key 1 moved to D3; late key 9 on D1
 
     def test_the_counts_are_equal(self):
-        assert sum(1 for _, d in self.ledger if d == D1) == sum(1 for _, d in self.source if d == D1) == 2
+        assert sum(1 for _, d, _ in self.ledger if d == D1) == sum(1 for _, d, _ in self.source if d == D1) == 2
 
-    def test_key_comparison_still_finds_the_late_row_and_the_moved_row(self):
-        assert find_pending_pairs(self.source, self.ledger) == {("9", D1), ("1", D3)}
+    def test_entry_comparison_still_finds_the_late_row_and_the_moved_row(self):
+        assert find_pending_entries(self.source, self.ledger) == {("9", D1, "i"), ("1", D3, "a3")}
 
     def test_plan_defines_a_topup_for_the_loaded_date_and_a_snapshot_flow_for_the_new_date(self):
-        pending = group_pending_by_date(find_pending_pairs(self.source, self.ledger))
-        ledger_dates = {d for _, d in self.ledger}
-        src_dates = sorted({d for _, d in self.source})
-        flows = plan_flows(T, src_dates, ledger_dates, {d: k for d, k in pending.items() if d in ledger_dates})
-        assert names(flows, "topup") == [topup_flow_name(T, D1, ["9"])]
+        pending = group_pending_by_date(find_pending_entries(self.source, self.ledger))
+        ledger_dates = {d for _, d, _ in self.ledger}
+        src_dates = sorted({d for _, d, _ in self.source})
+        flows = plan_flows(T, src_dates, ledger_dates, {d: e for d, e in pending.items() if d in ledger_dates})
+        assert names(flows, "topup") == [topup_flow_name(T, D1, [("9", "i")])]
         assert snapshot_flow_name(T, D3) in names(flows, "snapshot")
         (topup,) = [f for f in flows if f.kind == "topup"]
-        assert topup.keys == ("9",) and topup.snapshot_date == D1
+        assert topup.entries == (("9", "i"),) and topup.snapshot_date == D1
 
 
 class TestPlanFlows:
@@ -168,25 +195,27 @@ class TestPlanFlows:
         assert names(flows) == [snapshot_flow_name(T, old)]
 
     def test_late_rows_on_a_loaded_date_get_a_topup(self):
-        flows = plan_flows(T, [D1], {D1}, {D1: ["9", "3"]}, scope="pending_only")
+        flows = plan_flows(T, [D1], {D1}, {D1: [("9", "i"), ("3", "c")]}, scope="pending_only")
         (f,) = flows
-        assert f.kind == "topup" and f.keys == ("3", "9") and f.name == topup_flow_name(T, D1, ["3", "9"])
+        assert f.kind == "topup" and f.entries == (("3", "c"), ("9", "i"))
+        assert f.name == topup_flow_name(T, D1, [("3", "c"), ("9", "i")])
 
     def test_topup_for_a_date_missing_from_the_source_is_dropped(self):
-        assert plan_flows(T, [D1], {D1, D2}, {D2: ["1"]}) == [plan_flows(T, [D1], {D1, D2}, {})[0]]
+        assert plan_flows(T, [D1], {D1, D2}, {D2: [("1", "a")]}) == [plan_flows(T, [D1], {D1, D2}, {})[0]]
 
     def test_topup_for_a_date_that_is_not_loaded_is_not_defined(self):
         # a brand-new date is loaded whole by its snapshot flow, never by a top-up
-        flows = plan_flows(T, [D1, D3], {D1}, {D3: ["1"]}, scope="all_dates")
+        flows = plan_flows(T, [D1, D3], {D1}, {D3: [("1", "a")]}, scope="all_dates")
         assert names(flows, "topup") == []
 
     def test_stale_ledger_reproduces_the_same_topup_name(self):
-        first = plan_flows(T, [D1], {D1}, {D1: ["9"]})
-        again = plan_flows(T, [D1], {D1}, {D1: ["9"]})  # ledger was not updated between runs
+        first = plan_flows(T, [D1], {D1}, {D1: [("9", "i")]})
+        again = plan_flows(T, [D1], {D1}, {D1: [("9", "i")]})  # ledger was not updated between runs
         assert names(first, "topup") == names(again, "topup")
 
     def test_a_grown_pending_set_gets_a_new_name(self):
-        assert names(plan_flows(T, [D1], {D1}, {D1: ["9"]}), "topup") != names(plan_flows(T, [D1], {D1}, {D1: ["9", "10"]}), "topup")
+        assert names(plan_flows(T, [D1], {D1}, {D1: [("9", "i")]}), "topup") != names(
+            plan_flows(T, [D1], {D1}, {D1: [("9", "i"), ("10", "j")]}), "topup")
 
     def test_dates_are_planned_in_order(self):
         assert names(plan_flows(T, [D3, D1, D2], set(), {})) == [snapshot_flow_name(T, d) for d in (D1, D2, D3)]
@@ -197,8 +226,8 @@ class TestPlanFlows:
 
 
 class TestRebuild:
-    def test_rebuild_defines_every_date_and_no_topups_even_with_pending_keys(self):
-        flows = plan_flows(T, [D1, D2], {D1, D2}, {D1: ["9"]}, scope="pending_only", rebuild=True)
+    def test_rebuild_defines_every_date_and_no_topups_even_with_pending_entries(self):
+        flows = plan_flows(T, [D1, D2], {D1, D2}, {D1: [("9", "i")]}, scope="pending_only", rebuild=True)
         assert names(flows) == [snapshot_flow_name(T, D1), snapshot_flow_name(T, D2)]
         assert all(f.kind == "snapshot" for f in flows)
 
@@ -208,16 +237,25 @@ class TestRebuild:
 
 class TestGroupPendingByDate:
     def test_groups_and_sorts(self):
-        assert group_pending_by_date([("b", D2), ("a", D2), ("z", D1)]) == {D1: ["z"], D2: ["a", "b"]}
+        assert group_pending_by_date([("b", D2, "y"), ("a", D2, "x"), ("z", D1, "w")]) == {
+            D1: [("z", "w")], D2: [("a", "x"), ("b", "y")]}
+
+    def test_two_versions_of_one_key_stay_apart(self):
+        assert group_pending_by_date([("7", D1, "v2"), ("7", D1, "v1")]) == {D1: [("7", "v1"), ("7", "v2")]}
 
 
 class TestLedgerDiff:
     def test_missing_and_extra(self):
-        missing, extra = ledger_diff([(1, D1), (2, D1)], [("2", D1), ("3", D1)])
-        assert missing == {("1", D1)} and extra == {("3", D1)}
+        missing, extra = ledger_diff([(1, D1, "a"), (2, D1, "b")], [("2", D1, "b"), ("3", D1, "c")])
+        assert missing == {("1", D1, "a")} and extra == {("3", D1, "c")}
 
     def test_identical_sets_have_no_difference(self):
-        assert ledger_diff([(1, D1), (None, D2)], [("1", D1), (NULL_KEY, D2)]) == (set(), set())
+        assert ledger_diff([(1, D1, "a"), (None, D2, "n")], [("1", D1, "a"), (NULL_KEY, D2, "n")]) == (set(), set())
+
+    def test_a_ledger_without_row_hashes_differs_from_bronze(self):
+        # an old ledger row (row_hash NULL) never matches a hashed bronze entry: ledger_check reports it
+        missing, extra = ledger_diff([(1, D1, "a")], [("1", D1, None)])
+        assert missing == {("1", D1, "a")} and extra == {("1", D1, None)}
 
 
 class TestPendingCap:
@@ -227,6 +265,43 @@ class TestPendingCap:
     def test_over_cap_fails_loudly(self):
         with pytest.raises(TooManyPendingKeys, match="bronze_rebuild"):
             enforce_pending_cap(11, 10)
+
+
+COLS = ["membership_internal_id", "customer_internal_id", "membership_status", "updated_date"]
+
+
+class TestRowHashGuard:
+    def test_same_column_set_passes(self):
+        assert row_hash_guard_error(T, list(COLS), list(COLS), rebuild=False) is None
+
+    def test_nothing_recorded_fails_closed_and_names_the_table(self):
+        msg = row_hash_guard_error(T, None, COLS, rebuild=False, target="dev")
+        assert msg.startswith("BLOCKED") and T in msg and "no row-hash column set is recorded" in msg
+        assert 'bronze_rebuild=true' in msg and "-t dev" in msg
+
+    def test_added_column_is_named(self):
+        msg = row_hash_guard_error(T, COLS, COLS + ["end_date"], rebuild=False)
+        assert T in msg and "added end_date" in msg and "requires a bronze rebuild" in msg
+
+    def test_removed_column_is_named(self):
+        msg = row_hash_guard_error(T, COLS, COLS[:-1], rebuild=False)
+        assert "removed updated_date" in msg
+
+    def test_reorder_alone_is_a_change(self):
+        msg = row_hash_guard_error(T, COLS, list(reversed(COLS)), rebuild=False)
+        assert msg and "order changed" in msg
+
+    def test_rebuild_is_always_allowed(self):
+        assert row_hash_guard_error(T, None, COLS, rebuild=True) is None
+        assert row_hash_guard_error(T, COLS, COLS + ["x"], rebuild=True) is None
+
+    def test_describe_column_change(self):
+        assert describe_column_change(["a", "b"], ["a", "c"]) == "added c; removed b"
+
+
+class TestBronzeSourceColumns:
+    def test_metadata_columns_are_dropped_and_order_kept(self):
+        assert bronze_source_columns(["b", "a", "_row_hash", "_snapshot_date", "_loaded_at"]) == ["b", "a"]
 
 
 BRONZE = ["poc_bronze.netsuite_memberships", "poc_bronze.netsuite_certifications"]
