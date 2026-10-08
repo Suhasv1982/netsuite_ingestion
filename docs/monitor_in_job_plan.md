@@ -29,8 +29,8 @@ Recommendation: ship A, plan B with the DQ recommender's identities.
    * (a) the `monitor` task fails, and triage and `daily_check` ignore a run whose only failed task is `monitor`, or
    * (b) a separate `monitor_dev` job (option B's job) with its own `on_failure` email, started by `run_job_task` with the daily job not waiting on its result.
    Recommendation: (b) when B ships; (a) until then.
-5. **Missed runs need a watchdog outside the job.** If the scheduler does not fire (incident 2026-10-06), a monitor inside the job does not run either, so the ORCHESTRATION signal disappears. Keep one external check: either the GitHub schedule (only `get_recent_job_runs`, deterministic, no model) or `tools/daily_check.py` on a GitHub cron. **Decision for the owner**: "GitHub for manual runs only" would drop this.
-6. **Rollout.** Deploy to dev through a PR (deploy-dev); first run dry (`--write` off) for one cycle; then `--write`; then remove the GitHub `schedule` (keep `workflow_dispatch`), except the watchdog of point 5.
+5. **No watchdog outside the job (owner decision 2026-10-08).** If the scheduler does not fire (incident 2026-10-06), the monitor inside the job does not run that day either. The next day's run still reports it: `get_recent_job_runs` looks back 3 days and lists the missed fire time (`missed_schedules`), so a skipped day is caught one day late. **Accepted risk:** while the scheduler stays down, nothing reports. Someone has to notice the missing daily email or reports, or run the workflow by hand.
+6. **Rollout.** Deploy to dev through a PR (deploy-dev); first run dry (`--write` off) for one cycle; then `--write`; then remove the GitHub `schedule` (keep `workflow_dispatch` only).
 
 ## Tests and checks
 
