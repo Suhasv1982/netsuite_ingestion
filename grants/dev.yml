@@ -21,3 +21,37 @@ grants:
     catalog_privileges: [USE_CATALOG]
     schemas: [generator]
     privileges: [USE_SCHEMA, CREATE_TABLE, SELECT, MODIFY]
+
+  # dq-agent, the DQ recommender's service principal (docs/dq_recommender_design_v2.md section 3): read bronze, silver
+  # and rejects, use the SQL warehouse for profiling. Owner-applied (tools/setup_dq_roles.sh): CI can grant neither
+  # USE CATALOG nor without the principal. No grant on the databricks-gpt-oss-120b endpoint: it is a pay-per-token
+  # foundation-model endpoint with no permissions object, open to every workspace user (checked 2026-10-08).
+  - principal: agent
+    applied_by: owner
+    optional: true
+    catalog_privileges: [USE_CATALOG]
+    schemas: [poc_bronze, poc_silver, poc_reject]
+    privileges: [USE_SCHEMA, SELECT]
+    warehouses:
+      - {name: Serverless Starter Warehouse, level: CAN_USE}
+
+# Postgres group roles on the dev metadata branch (aidq-metadata/dev, schema aidq_metadata) for the DQ recommender.
+# Not in a migration: migrations are schema only and also run on prod. Created and granted by the owner
+# (tools/dq_roles.py --apply, run by tools/setup_dq_roles.sh); tools/dq_roles.py --check verifies the exact set.
+# Members use the principal types above. None of these roles is a member of aidq_owner.
+metadata_roles:
+  aidq_agent:          # the LLM-driven agent: read, and propose; never update
+    members: [agent]
+    select_all: true
+    insert: [config_proposals, incidents]
+  aidq_validator:      # the validator job runs as ci-dev and does SET ROLE aidq_validator before any work
+    members: [ci]
+    select_all: true
+    update:
+      config_proposals: [status, validation_result]
+  aidq_reviewer:       # tools/review.py, run by a person
+    members: [owner]
+    select_all: true
+    update:
+      config_proposals: [status, reviewed_by, reviewed_at, review_comment, approved_severity]
+    execute: ["apply_proposal(bigint, text)"]
