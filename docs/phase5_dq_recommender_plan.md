@@ -15,12 +15,13 @@ section 13). Dev only. Every step below is a separate PR. The owner merges them,
 
 ## 1. Conflicts between design v2 and the current code
 
-Found while preparing #36 and #37; each has a resolution below. Items marked **decide** need the owner.
+Found while preparing #36 and #37; each has a resolution below. Owner decisions of 2026-10-08 are marked
+**decided**.
 
-1. **NULL predicates in `dq.py` (confirmed).** The valid view keeps `WHERE pred` and the rejects keep `WHERE NOT pred`, so a row whose predicate is NULL goes **nowhere**: not to silver, not to `rejected_rows`, and with no reason (the reason expression is `CASE WHEN NOT pred`). Today's three HARD rules give 0 NULL rows on dev bronze (checked 2026-10-08), so nothing is lost now. v2 handles it in the validator (step 6 fails NULL-returning rules). That doesn't protect rules written by hand. **Decide:** also make `dq.py` NULL-safe (`coalesce(pred, false)`, a NULL predicate is a reject with its reason), as a separate PR with a silver-only refresh. Recommended. Not yet verified: how a SOFT expectation counts a NULL result in the event log. Step 6 checks this on dev with a test rule before the validator relies on it.
+1. **NULL predicates in `dq.py` (confirmed).** The valid view keeps `WHERE pred` and the rejects keep `WHERE NOT pred`, so a row whose predicate is NULL goes **nowhere**: not to silver, not to `rejected_rows`, and with no reason (the reason expression is `CASE WHEN NOT pred`). Today's three HARD rules give 0 NULL rows on dev bronze (checked 2026-10-08), so nothing is lost now. v2 handles it in the validator (step 6 fails NULL-returning rules). That doesn't protect rules written by hand. **Decided: both.** `dq.py` is NULL-safe (PR #40: each HARD rule is `coalesce((expr), false)`, so a NULL result is a reject with its reason). The validator still fails NULL-returning rules. No silver refresh is needed: 0 rows are affected today. Not yet verified: how a SOFT expectation counts a NULL result in the event log. Step 6 checks this on dev with a test rule before the validator relies on it.
 2. **`CAN_QUERY` on `databricks-gpt-oss-120b` cannot be granted.** It is a pay-per-token foundation-model endpoint with no endpoint id or permissions object, and it is open to every workspace user (checked 2026-10-08). #37 records this in `grants/dev.yml` instead of a grant.
 3. **The validator's role is enforced by our code, not by the database.** It runs as ci-dev and does `SET ROLE aidq_validator`, but ci-dev is also in `aidq_owner`. v2 accepts this for dev. For prod the validator would need its own identity.
-4. **Running the agent as dq-agent needs no OAuth secret if it runs as a Databricks job** with `run_as: dq-agent` (as the generator runs as data-generator). That needs ci-dev to hold "Service Principal User" on dq-agent so it can deploy the job (owner action, like data-generator). A GitHub-hosted agent would need an OAuth secret and GitHub secrets (ask first). **Decide; recommended: the Databricks job**, consistent with moving the monitor into the dev job (PR #38).
+4. **Running the agent as dq-agent needs no OAuth secret if it runs as a Databricks job** with `run_as: dq-agent` (as the generator runs as data-generator). That needs ci-dev to hold "Service Principal User" on dq-agent so it can deploy the job (owner action, like data-generator). A GitHub-hosted agent would need an OAuth secret and GitHub secrets (ask first). **Decided: a Databricks job with `run_as: dq-agent`**, consistent with moving the monitor into the dev job (PR #38). No OAuth secret or GitHub secret for dq-agent.
 5. **Prompt location.** v2 says `agents/prompts/dq_recommender_v1.md`; the repo keeps agents under `src/` (`src/aidq_agent`). Planned: `src/aidq_dq_agent/prompts/dq_recommender_v1.md`, so the job deploys it with the code.
 6. **Ground truth covers only some defect types.**
    * The daily batches inject 4 types: `late_arriving`, `invalid_enum`, `end_before_start`, `amount_mismatch`.
@@ -73,6 +74,6 @@ Found while preparing #36 and #37; each has a resolution below. Items marked **d
 
 ## 3. Asks before implementation
 
-* The decisions in conflicts 1 (NULL-safe `dq.py`) and 4 (Databricks job vs GitHub).
-* "Service Principal User" on dq-agent for ci-dev (owner action), if the job route is chosen.
+* "Service Principal User" on dq-agent for ci-dev (owner action): needed for the decided job route. It can be added to
+  `tools/setup_dq_roles.sh` (#37) on request.
 * Any new secret (none planned with the job route).
