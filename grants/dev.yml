@@ -10,3 +10,14 @@ grants:
   - principal: owner
     schemas: [poc_bronze, poc_silver, poc_reject, poc_gold, ledger, canary]
     privileges: [USE_SCHEMA, SELECT]
+
+  # Generator defect manifests (ground truth for the DQ recommender eval, docs/dq_recommender_design_v2.md section 9):
+  # the daily generator job, as data-generator, writes workspace.generator.manifests. The owner creates the schema
+  # and applies this entry (tools/apply_grants.py --owner-applied): ci-dev can grant neither on the catalog nor on
+  # a schema it does not own.
+  - principal: data_generator
+    applied_by: owner
+    optional: true
+    catalog_privileges: [USE_CATALOG]
+    schemas: [generator]
+    privileges: [USE_SCHEMA, CREATE_TABLE, SELECT, MODIFY]

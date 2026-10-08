@@ -135,6 +135,9 @@ targets:
                   - "--skip-if-batch-exists"
                   - "--manifest"
                   - "/tmp/netsuite_daily_manifest.json"
+                  # ground truth for the DQ recommender eval (tools/manifest_table.py); the /tmp file is discarded
+                  - "--manifest-table"
+                  - "workspace.generator.manifests"
               environment_key: generator
           environments:
             - environment_key: generator
