@@ -7,9 +7,10 @@ Changes nothing. For the given date it reports, with OK / WARN / FAIL per line:
      increment; source rows with that updated_date; rows dated after it; daily backup schemas of that day.
   2. dev job (`[dev ci_dev] netsuite_ingestion_daily`) and prod job (`netsuite_ingestion_daily`): runs that day and
      their result; for each, the run_audit rows of that run (ledger status per table, guard status and reads).
-  3. dev bronze now: exact row counts against the source per table and snapshot date (FAIL on any difference,
-     except a WARN when a date is short by exactly the source's same-day duplicate versions on that date, which the
-     bronze key ledger never loads); rows loaded into dev bronze that day, per table and _snapshot_date.
+  3. dev bronze now: exact row counts against the source per table and snapshot date (FAIL on any difference:
+     since bronze keys rows by content, every version of a key on a day is loaded); an INFO line with the business
+     keys that have several versions on one day in the source; rows loaded into dev bronze that day, per table and
+     _snapshot_date.
   4. rejects (dev, now) per table and per reason; gold row counts and as_of_date.
 Exit 1 if any line is FAIL. Needs: Databricks CLI (profile), psycopg, a SQL warehouse (starts it if stopped).
 """
@@ -55,23 +56,27 @@ def classify_generator_log(log: str) -> str:
     return "unknown"
 
 
-def explain_count_gaps(source: dict[tuple, int], target: dict[tuple, int],
-                       same_day_extra: dict[tuple, int]) -> tuple[list[str], list[str]]:
-    """(fails, warns) for dev bronze vs source, both keyed by (table, snapshot date) (date None for a full-load
-    table). A date short by exactly the source's same-day duplicate versions on that date (rows minus distinct
-    keys) is a known defect (WARN): the bronze key ledger tracks distinct (key, date) pairs, so a second version of a
-    key on a date that was already loaded never reaches bronze. Duplicates that arrived in one batch are loaded."""
-    fails, warns = [], []
+def count_gaps(source: dict[tuple, int], target: dict[tuple, int]) -> list[str]:
+    """One FAIL line per (table, snapshot date) whose dev bronze row count differs from the source (date None for a
+    full-load table). Since bronze keys rows by (key, date, row hash) a second version of a key on a loaded date is
+    loaded too (incident 2026-10-02), so a same-day version no longer explains a shortfall."""
+    fails = []
     for t, d in sorted(set(source) | set(target), key=lambda k: (k[0], str(k[1]))):
-        s, n, extra = source.get((t, d), 0), target.get((t, d), 0), same_day_extra.get((t, d), 0)
-        if s == n:
-            continue
-        where = t if d is None else f"{t}@{d}"
-        if extra and s - n == extra:
-            warns.append(f"{where}: source={s} dev={n}, the {extra} missing rows are same-day duplicate versions")
-        else:
-            fails.append(f"{where}: source={s} dev={n}")
-    return fails, warns
+        s, n = source.get((t, d), 0), target.get((t, d), 0)
+        if s != n:
+            fails.append(f"{t if d is None else f'{t}@{d}'}: source={s} dev={n}")
+    return fails
+
+
+def same_day_version_lines(keys: dict[tuple, list], max_keys: int = 10) -> list[str]:
+    """INFO lines: per (table, date), the business keys with several source rows on that updated_date day."""
+    lines = []
+    for (t, d), ks in sorted(keys.items(), key=lambda x: (x[0][0], str(x[0][1]))):
+        ks = sorted(ks, key=str)
+        more = f" (+{len(ks) - max_keys} more)" if len(ks) > max_keys else ""
+        lines.append(f"{t.replace('netsuite_', '')}@{d}: {len(ks)} key(s) with several versions: "
+                     + ", ".join(str(k) for k in ks[:max_keys]) + more)
+    return lines
 
 
 def audit_findings(rows: list[dict]) -> tuple[list[str], list[str]]:
@@ -213,13 +218,13 @@ def main(argv: list[str] | None = None) -> int:
                  for t in INCREMENTAL}
         future = {t: c.execute(f"SELECT count(*) FROM netsuite.{t} WHERE updated_date::date > %s", (day,)).fetchone()[0]
                   for t in INCREMENTAL}
-        src_by_day, extra = {("netsuite_customers", None): source["netsuite_customers"]}, {}
+        src_by_day, versions = {("netsuite_customers", None): source["netsuite_customers"]}, {}
         for t in INCREMENTAL:
-            for d, n, k in c.execute(f"SELECT updated_date::date, count(*), count(DISTINCT {BUSINESS_KEY[t]}) "
-                                     f"FROM netsuite.{t} GROUP BY 1").fetchall():
+            for d, n in c.execute(f"SELECT updated_date::date, count(*) FROM netsuite.{t} GROUP BY 1").fetchall():
                 src_by_day[(t, str(d))] = n
-                if n > k:
-                    extra[(t, str(d))] = n - k
+            for d, k in c.execute(f"SELECT updated_date::date, {BUSINESS_KEY[t]} FROM netsuite.{t} "
+                                  "GROUP BY 1, 2 HAVING count(*) > 1").fetchall():
+                versions.setdefault((t, str(d)), []).append(k)
         backups = [r[0] for r in c.execute("SELECT nspname FROM pg_namespace WHERE nspname LIKE %s ORDER BY 1",
                                            ("netsuite_backup_daily_%",)).fetchall()]
         c.rollback()
@@ -244,13 +249,13 @@ def main(argv: list[str] | None = None) -> int:
     dev_by_day = {(r["t"], r["d"]): int(r["n"]) for r in sql(prof, wh, q)}
     dev_by_day[("netsuite_customers", None)] = int(
         sql(prof, wh, "SELECT count(*) n FROM workspace.poc_bronze.netsuite_customers")[0]["n"])
-    fails, warns = explain_count_gaps(src_by_day, dev_by_day, extra)
+    fails = count_gaps(src_by_day, dev_by_day)
     for msg in fails:
         rep.line("FAIL", f"dev bronze vs source (now): {msg}")
-    for msg in warns:
-        rep.line("WARN", f"dev bronze vs source (now): {msg} (known defect)")
-    if not fails and not warns:
+    if not fails:
         rep.line("OK", "dev bronze vs source (now): identical counts per table and snapshot date")
+    for msg in same_day_version_lines(versions):
+        rep.line("INFO", f"source keys with several same-day versions (all loaded; silver keeps one): {msg}")
     q = " UNION ALL ".join(
         f"SELECT '{t}' t, cast(_snapshot_date AS string) d, count(*) n FROM workspace.poc_bronze.{t} "
         f"WHERE cast(_loaded_at AS date) = DATE'{day}' GROUP BY _snapshot_date" for t in INCREMENTAL)

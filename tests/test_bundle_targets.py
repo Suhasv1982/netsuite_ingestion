@@ -50,6 +50,7 @@ class TestLedgerLocation:
         ]["configuration"]
         assert conf["ledger_table"] == "${var.catalog}.ledger.bronze_keys"
         assert conf["ledger_fingerprint_table"] == "${var.catalog}.ledger.bronze_fingerprints"
+        assert conf["row_hash_spec_table"] == "${var.catalog}.ledger.row_hash_columns"
 
     @pytest.mark.parametrize("task", LEDGER_TASKS)
     def test_ledger_tasks_take_the_catalog_variable(self, job_tasks, task):
@@ -95,6 +96,10 @@ class TestDeployIdentity:
         # bundle permissions would change the pipeline owner, which only a metastore admin may do (Free Edition)
         assert "permissions" not in bundle["targets"]["prod"]
         assert "permissions" not in bundle
+
+    def test_daily_crons(self, bundle):
+        assert _resolved_var(bundle, "dev", "daily_cron") == "0 30 5 * * ?"   # after the 05:00 generator
+        assert _resolved_var(bundle, "prod", "daily_cron") == "0 30 6 * * ?"  # 06:30 UTC (owner decision 2026-10-08)
 
     def test_prod_uses_its_own_scope(self, bundle):
         assert _resolved_var(bundle, "prod", "secret_scope") == "netsuite_ingestion_prod"

@@ -59,10 +59,11 @@ reason. Do not repeat the context notes back as findings."""
 DESIGN_NOTES = pathlib.Path(__file__).resolve().parents[2] / "docs" / "platform_design_notes.md"
 
 
-def system_prompt() -> str:
-    """SYSTEM plus the maintained platform design notes (mechanisms only, no incident diagnoses)."""
+def system_prompt(design_notes: pathlib.Path | None = None) -> str:
+    """SYSTEM plus the maintained platform design notes (mechanisms only, no incident diagnoses). An eval case may
+    pass the notes as they were when its tool outputs were recorded (evals/design_notes/)."""
     try:
-        notes = DESIGN_NOTES.read_text(encoding="utf-8")
+        notes = (design_notes or DESIGN_NOTES).read_text(encoding="utf-8")
     except OSError:
         return SYSTEM
     return f"{SYSTEM}\n\n<platform_design_notes>\n{notes}\n</platform_design_notes>"
@@ -87,9 +88,9 @@ def _user_prompt(category: str, signals: list[str], notes: list[str], today: str
 
 
 class AnthropicInvestigator:
-    def __init__(self, client=None, model: str = MODEL, effort: str = "high"):
+    def __init__(self, client=None, model: str = MODEL, effort: str = "high", design_notes: pathlib.Path | None = None):
         self.client = client or anthropic.AsyncAnthropic()
-        self.model, self.effort = model, effort
+        self.model, self.effort, self.design_notes = model, effort, design_notes
 
     async def investigate(self, category: str, signals: list[str], notes: list[str], today: str,
                           toolbox: ToolBox) -> Investigation:
@@ -100,7 +101,7 @@ class AnthropicInvestigator:
         for _ in range(MAX_TOOL_CALLS + 4):          # tool turns + the final answer, with slack for pause_turn
             try:
                 resp = await self.client.beta.messages.create(
-                    model=self.model, max_tokens=16000, system=system_prompt(), tools=tools, messages=messages,
+                    model=self.model, max_tokens=16000, system=system_prompt(self.design_notes), tools=tools, messages=messages,
                     output_config={"effort": self.effort, "format": {"type": "json_schema", "schema": RCA_SCHEMA}},
                     betas=["server-side-fallback-2026-07-01"], fallbacks="default")
             except anthropic.RateLimitError as e:

@@ -10,25 +10,27 @@ UTC = dt.timezone.utc
 
 # -- bronze vs source ---------------------------------------------------------
 
-KNOWN_DEFECT = "known_defect_same_day_duplicates"
-UNEXPLAINED = "unexplained"
-
-
-def classify_date_gaps(source: dict[tuple, int], bronze: dict[tuple, int],
-                       same_day_extra: dict[tuple, int]) -> list[dict]:
-    """Per (table, date) where bronze and the source differ (date None for a full-load table).
-
-    A date short by exactly the source's same-day duplicate versions on that date (rows minus distinct keys) is a
-    known defect: the bronze key ledger tracks distinct (key, date) pairs, so a second version of a key on an
-    already-loaded date never reaches bronze (incident 2026-10-02). Same rule as tools/daily_check.py."""
+def date_gaps(source: dict[tuple, int], bronze: dict[tuple, int], same_day_extra: dict[tuple, int]) -> list[dict]:
+    """Per (table, date) where bronze and the source differ (date None for a full-load table). Every gap is a gap:
+    since the bronze ledger keys rows by content (key, date, row hash; fix for incident 2026-10-02), a second version
+    of a key on a loaded date is loaded too, so same-day versions no longer explain a shortfall. `same_day_extra`
+    (rows minus distinct keys on that date) is reported for context. Same rule as tools/daily_check.py."""
     out = []
     for t, d in sorted(set(source) | set(bronze), key=lambda k: (k[0], str(k[1]))):
         s, b, extra = source.get((t, d), 0), bronze.get((t, d), 0), same_day_extra.get((t, d), 0)
-        if s == b:
-            continue
-        out.append({"table": t, "date": d, "source": s, "bronze": b, "missing": s - b, "same_day_extra": extra,
-                    "classification": KNOWN_DEFECT if extra and s - b == extra else UNEXPLAINED})
+        if s != b:
+            out.append({"table": t, "date": d, "source": s, "bronze": b, "missing": s - b, "same_day_extra": extra})
     return out
+
+
+def same_day_versions(rows: Iterable[dict], max_keys: int = 20) -> list[dict]:
+    """Info, not a problem: business keys with several source rows on one updated_date day, per (table, date).
+    `rows` are {table, d, k}, one row per such key. At most `max_keys` keys are listed per date."""
+    grouped: dict[tuple, list] = {}
+    for r in rows:
+        grouped.setdefault((r["table"], r["d"]), []).append(str(r["k"]))
+    return [{"table": t, "date": d, "keys_with_several_versions": len(ks), "keys": sorted(ks)[:max_keys]}
+            for (t, d), ks in sorted(grouped.items(), key=lambda x: (x[0][0], str(x[0][1])))]
 
 
 # -- schedules ----------------------------------------------------------------
