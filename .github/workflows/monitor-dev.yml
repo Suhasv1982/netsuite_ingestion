@@ -10,7 +10,7 @@ name: Monitor dev
 
 on:
   schedule:
-    - cron: "15 6 * * *"     # 06:15 UTC; GitHub may start it some minutes late
+    - cron: "17 6 * * *"     # 06:17 UTC (owner, 2026-10-08) until the monitor moves into the dev job (docs/monitor_in_job_plan.md); GitHub may start it late
   workflow_dispatch:
     inputs:
       write:
