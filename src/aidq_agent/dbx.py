@@ -168,4 +168,15 @@ class RoutedInvestigator:
             return await DatabricksInvestigator(chat, model, self.design_notes).investigate(
                 category, signals, notes, today, toolbox)
 
-        return await self.router.run("root_cause", attempt, lambda inv: (inv.rca is not None, inv.error))
+        return await self.router.run("root_cause", attempt, _rca_ok)
+
+
+def _rca_ok(inv: Investigation) -> tuple[bool, str | None]:
+    """For the router: a valid RCA is success; a failed model call is an endpoint failure (error/timeout), any other
+    missing RCA is a schema failure."""
+    if inv.rca is not None:
+        return True, None
+    err = inv.error or "no RCA"
+    if err.startswith("model call failed"):
+        return False, ("timeout: " if "timed out" in err.lower() else "error: ") + err
+    return False, err

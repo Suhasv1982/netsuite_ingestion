@@ -146,8 +146,14 @@ class Router:
             good, why = ok(result)
             if good:
                 return result
-            reason = f"schema_invalid: {why}" if why else "schema_invalid"
-            self._mark_last(route.primary, "schema_invalid", why)
+            # `ok` may classify the failure itself ("error: ...", "timeout: ..."): an endpoint failure that the
+            # attempt caught must not be logged as a schema failure
+            kind = (why or "").split(":", 1)[0]
+            if kind in ("error", "timeout"):
+                reason = why
+            else:
+                reason = f"schema_invalid: {why}" if why else "schema_invalid"
+                self._mark_last(route.primary, "schema_invalid", why)
         except Exception as exc:
             if route.fallback is None:
                 raise

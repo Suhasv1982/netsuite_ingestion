@@ -266,3 +266,20 @@ def test_routed_investigation_restarts_on_the_fallback_when_no_rca_comes_back():
     finally:
         dbx.DatabricksInvestigator = orig
     assert seen == ["big", "small"] and inv.model == "small" and inv.rca == {"summary": "x"}
+
+
+def test_an_endpoint_failure_caught_inside_the_attempt_is_logged_as_an_error_not_a_schema_failure():
+    from aidq_agent.dbx import _rca_ok
+    from aidq_agent.investigate import Investigation
+
+    assert _rca_ok(Investigation(None, [], "model call failed: HTTP 404: no such endpoint", "m", {}))[1].startswith("error: ")
+    assert _rca_ok(Investigation(None, [], "model call failed: timed out", "m", {}))[1].startswith("timeout: ")
+    assert _rca_ok(Investigation(None, [], "no submit_rca call", "m", {})) == (False, "no submit_rca call")
+
+    r = router(Chat())
+
+    async def attempt(model, c):
+        return {"model": model, "ok": model == "small"}
+
+    go(r.run("root_cause", attempt, lambda res: (res["ok"], None if res["ok"] else "error: HTTP 404")))
+    assert r.log.rows == []                         # no calls were made in this fake; just the reason path
