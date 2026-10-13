@@ -8,9 +8,8 @@ Read this first, then run `git status` and check open PRs. Updated after every P
 required checks `gitleaks (full history)`, `pytest` and `bundle validate` (added 2026-09-30), administrators
 included, no force push or deletion. Secret scanning and push protection on. Local pre-push hook: gitleaks + pytest.
 
-**Pull requests** (2026-10-13). Merged: #1-#35. Open: #36 manifests, #37 governance (stacked on #36), #38 monitor
-cron, #39 DQ recommender plan, #40 NULL-safe HARD rules, #41 monitor keeps its report (+ eval), #42 self-healing
-endpoints (stacked on #41; needs the Lakebase grant). Required checks on `main`: `gitleaks (full history)`, `pytest`,
+**Pull requests** (2026-10-13). Merged: #1-#42 (#36-#42 on 2026-10-13, in the owner's order), and #43 (this
+update). Open: the watchdog plan (section 0h). Required checks on `main`: `gitleaks (full history)`, `pytest`,
 `bundle validate`, `migrate plan (dev)`.
 
 **Work in progress** (owner's instructions of 2026-09-30):
@@ -66,15 +65,27 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
 * **Follow-ups (PRs, owner decisions 2026-10-13).**
   * The monitor stays on GitHub as the external watchdog. #38 now only moves its cron to 06:17 UTC.
   * #41: the monitor never loses its report. A store failure keeps the full diagnosis in the run summary, exit 2, annotation `metadata unavailable`; new eval case.
-  * #42 (stacked on #41): the generator, the dev job's first task (dev only, bundle var `wake_lakebase_endpoints`), the monitor and `daily_check` re-enable a disabled endpoint before use and log `ENABLED Lakebase endpoint ...`. **Needs CAN_MANAGE on the Lakebase projects for ci-dev (both) and data-generator (netsuite-sample). Not granted: project-level, so it also covers the prod metadata branch; the owner decides.**
-* **Eval** re-run 2026-10-13 with re-recorded cassettes (`2026-10-06_afternoon`, new `2026-10-09_after_daily_run` for the healthy case; committed in #41).
-  * **Overall FAIL on one item:** `missed_runs` must-identify "schedules were UNPAUSED and unchanged" 1/3 (target 2/3). In some runs the model also suggests the schedules were paused, the same false claim as live incident 1.
-  * Everything else meets its target, including the new `missed_runs_metadata_unavailable` case (report kept and run marked failed 3/3).
-  * The cassette's schedule data is unchanged from the 10-06 recording: this is model variance; the 10-06 PASS was luck.
-  * Proposed fix (not done): triage gives the model the schedules' pause state and last change as a deterministic context note, plus a must-not-claim item "the schedules were paused".
-* **Merges #36 -> #40: on hold** until the owner decides about the eval result.
-  * Order when they go in: #36, #37 (retarget to main), then the owner runs `tools/setup_dq_roles.sh DEFAULT` **before the next 05:00 UTC generator run**. After #36 the generator writes `workspace.generator.manifests`, which needs the schema and grants the script creates.
-  * Then #38, #39, #40.
+  * #42: the generator, the dev job's first task (dev only, bundle var `wake_lakebase_endpoints`), the monitor and `daily_check` re-enable a disabled endpoint before use and log `ENABLED Lakebase endpoint ...`.
+* **Eval** (2026-10-13, cassettes re-recorded: `2026-10-06_afternoon`, new healthy `2026-10-09_after_daily_run`). **FAIL in both runs, on model-judged items only.** Owner decision: it does not gate merges, because the clean cycle passed.
+  * Run 1: `missed_runs` "UNPAUSED and unchanged" 1/3.
+  * #41 then added deterministic schedule facts (pause state, cron, last config change) and the must-not-claim "the schedules were or may have been paused".
+  * Run 2: that item reached 2/3, but "outside the pipeline" was 1/3, "paused" was still claimed once (must-not-claim 2/3), and `duplicate_versions` "same key, same date twice" was 1/3 although that case did not change. Model variance at 3 runs.
+  * The new `missed_runs_metadata_unavailable` case passed every check in both runs.
+  * Results: `evals/results/2026-10-13_*` (run 1) and `2026-10-13b_*` (run 2).
+* **Incident 1 resolved** (2026-10-13 15:28 UTC). The real finding (scheduler skipped; likely Free Edition workspace inactivity, unconfirmed) and the agent's two errors are in `evidence.resolution`. No incident is open.
+* **Lakebase permission applied: CAN_MANAGE.**
+  * Test first: CAN_USE (granted to ci-dev and data-generator on both projects) is not enough. ci-dev's PATCH was refused: "assign the user 'Can Manage' for Database project".
+  * Then CAN_MANAGE as in #42: ci-dev on `netsuite-sample` and `aidq-metadata`, data-generator on `netsuite-sample`.
+  * Verified: the monitor (dry run from the #42 branch, as ci-dev) re-enabled the disabled dev metadata endpoint and logged it.
+  * Leftover from the test: data-generator still has CAN_USE on `aidq-metadata` (not needed; remove on the owner's OK).
+  * **ci-dev and data-generator have project-level manage on shared projects, which covers prod; resolve before prod goes live.**
+* **Merged in the owner's order:** #36, #37, then the owner ran `tools/setup_dq_roles.sh DEFAULT` (dq-agent `47b5b3c3-62ad-425d-9322-1d7907438113`, its Lakebase role, the three group roles checked exact, `workspace.generator`, the UC and warehouse grants), then #38, #39, #40, #41, #42.
+  * The deploy-dev runs for #38-#41 were **cancelled**: only one job can wait in the `databricks-workspace` concurrency group, so each newer queued job (finally #42's PR checks) cancelled the waiting deploy.
+  * The deploy for #42's merge (run 38425185821, all of #36-#42) was green: migrations through 006 applied, smoke run SUCCESS, ledger_check OK (transaction_lines 93,807 entries, 0 mismatches).
+  * Merge one PR at a time and let its deploy-dev finish before the next push.
+* **Found:** a multi-day outage is never reported. `missed_schedules` treats misses before the first scheduled run in the 3-day window as `unconfirmed`. After 10-11..10-13 (manual runs only) the monitor said "Healthy". Fix planned in the watchdog PR.
+* **Watchdog PR** (the GitHub monitor triggers today's missed generator / dev ingestion runs, waits, and writes an incident): **plan only, open, waiting for approval**. It also fixes the outage bug above. Plan: `docs/watchdog_plan.md` in that PR.
+* `docs/agents_next_design.md` (owner): no work until everything above is merged (owner, 2026-10-13).
 
 ## 0. First prod release (2026-10-01, steps 0-7 done; step 8 open)
 
@@ -451,6 +462,8 @@ copy that holds the owner's bundle state.
 ## 3. Decisions waiting for the owner
 
 0. **Dev only until the owner says otherwise** (2026-10-08): no promote-prod, prod grants or prod endpoint changes.
+   Exception, owner decision 2026-10-13: ci-dev and data-generator have project-level CAN_MANAGE on the shared
+   Lakebase projects (it covers prod metadata). **Resolve before prod goes live.**
 1. Step 8 (unpause prod): after the same-day versions fix and the deferred prod rebuild (section 0g); prod cron is
    06:30 UTC in config (settled 2026-10-08).
 2. After step 8 plus three good scheduled prod runs: drop `poc_netsuite.backup_pre_release_202610010127` (ask).
