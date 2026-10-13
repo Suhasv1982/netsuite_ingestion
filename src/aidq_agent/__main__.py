@@ -34,7 +34,22 @@ def publish(report: str, report_file: str | None) -> None:
             f.write(report + "\n")
 
 
+def wake_endpoints(profile: str | None) -> list[str]:
+    """Re-enable the source and dev metadata endpoints before the read-only tools run (owner decision 2026-10-13;
+    the tools themselves still never enable anything). Returns the log lines for the report."""
+    from netsuite_ingestion.lakebase_wake import wake_cli
+
+    cfg, lines = env_config("dev"), []
+    for endpoint in (cfg.source_endpoint, cfg.metadata_endpoint):
+        try:
+            wake_cli(endpoint, who="aidq monitor", profile=profile, log=lines.append)
+        except Exception as exc:  # noqa: BLE001 -- the tools then report the endpoint as unavailable
+            lines.append(f"could not re-enable {endpoint}: {type(exc).__name__}: {exc}")
+    return lines
+
+
 async def amain(args) -> int:
+    woke = wake_endpoints(args.profile)
     store = PgIncidentStore(Reads(args.profile), env_config("dev").metadata_endpoint) if args.write else DryRunStore()
     try:
         async with McpToolBox(args.profile) as toolbox:
@@ -45,7 +60,7 @@ async def amain(args) -> int:
         publish("# aidq monitor, dev\n\n**MONITOR CRASHED** before its report: "
                 f"{type(exc).__name__}: {exc}\n\n```\n{traceback.format_exc()[-3000:]}\n```", args.report_file)
         return EXIT_CRASHED
-    publish(state["report"], args.report_file)
+    publish(state["report"] + "".join(f"\n- {line}" for line in woke), args.report_file)
     if state["exit_code"] == EXIT_METADATA_UNAVAILABLE and os.environ.get("GITHUB_ACTIONS"):
         print(f"::error title=metadata unavailable::{state.get('store_error')}")  # names the cause on the run page
     if not args.write and state.get("incidents"):

@@ -50,15 +50,27 @@ def _cli_json(profile: str, *args: str):
 DAILY_BACKUP_PREFIX = "netsuite_backup_daily_"
 
 
+def _wake_module():
+    """src/netsuite_ingestion/lakebase_wake.py, next to this repo's tools/ (also in the deployed bundle)."""
+    import sys
+    from pathlib import Path
+
+    here = Path(__file__).resolve().parent.parent / "src" / "netsuite_ingestion"
+    if str(here) not in sys.path:
+        sys.path.insert(0, str(here))
+    import lakebase_wake
+
+    return lakebase_wake
+
+
 def _connect_sdk():
     """(host, user, token) via databricks-sdk: for a job task, where there is no CLI. The identity is the job's
-    run-as identity."""
+    run-as identity. A disabled endpoint is re-enabled first, and logged."""
     from databricks.sdk import WorkspaceClient
 
     w = WorkspaceClient()
+    _wake_module().wake_sdk(w, ENDPOINT, who="netsuite_daily_generator")
     endpoint = w.postgres.get_endpoint(name=ENDPOINT)
-    if endpoint.status and endpoint.status.disabled:
-        raise RuntimeError(f"Endpoint {ENDPOINT} is disabled; enable it first (this tool never does).")
     token = w.postgres.generate_database_credential(endpoint=ENDPOINT).token
     return endpoint.status.hosts.host, w.current_user.me().user_name, token
 
@@ -73,12 +85,8 @@ def connect(profile: str = "DEFAULT", auth: str = "cli"):
             host=host, user=user, password=token, dbname=DATABASE, sslmode="require",
             connect_timeout=30, row_factory=dict_row,
         )
+    _wake_module().wake_cli(ENDPOINT, who="netsuite_gen.py (local)", profile=profile)
     endpoint = _cli_json(profile, "postgres", "get-endpoint", ENDPOINT)
-    if endpoint["status"].get("disabled"):
-        raise RuntimeError(
-            f"Endpoint {ENDPOINT} is disabled. Enable it first: databricks postgres update-endpoint "
-            f'{ENDPOINT} spec.disabled --json \'{{"spec":{{"disabled":false}}}}\' --profile {profile}'
-        )
     host = endpoint["status"]["hosts"]["host"]
     token = _cli_json(profile, "postgres", "generate-database-credential", ENDPOINT)["token"]
     user = _cli_json(profile, "current-user", "me")["userName"]

@@ -2,7 +2,8 @@
 
     python tools/daily_check.py --date 2026-10-04 --profile DEFAULT
 
-Changes nothing. For the given date it reports, with OK / WARN / FAIL per line:
+Changes nothing, except that it re-enables a disabled Lakebase endpoint first (and prints an INFO line saying so).
+For the given date it reports, with OK / WARN / FAIL per line:
   1. generator job (`netsuite_daily_generator`): runs that day, result, and whether the log says SKIPPED or an
      increment; source rows with that updated_date; rows dated after it; daily backup schemas of that day.
   2. dev job (`[dev ci_dev] netsuite_ingestion_daily`) and prod job (`netsuite_ingestion_daily`): runs that day and
@@ -120,11 +121,15 @@ def _cli(profile, *args, body=None):
 
 
 def pg(profile, endpoint):
+    """Connect read-only work to a Lakebase endpoint; a disabled endpoint is re-enabled first, with an INFO line
+    (owner decision 2026-10-13: the only change this check makes)."""
     import psycopg
 
+    import pg_writer
+
+    pg_writer._wake_module().wake_cli(endpoint, who="daily_check.py", profile=profile,
+                                      log=lambda m: print(f"INFO  {m}"))
     ep = _cli(profile, "postgres", "get-endpoint", endpoint)
-    if ep["status"].get("disabled"):
-        raise RuntimeError(f"{endpoint} is disabled (this check never enables it)")
     token = _cli(profile, "postgres", "generate-database-credential", endpoint)["token"]
     user = _cli(profile, "current-user", "me")["userName"]
     return psycopg.connect(host=ep["status"]["hosts"]["host"], dbname="databricks_postgres", user=user,
