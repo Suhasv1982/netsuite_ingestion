@@ -1,0 +1,248 @@
+[
+ {
+  "case": "watchdog_self_healed_10_11",
+  "run": 1,
+  "incidents": 1,
+  "checks": {
+   "incident_as_expected": true,
+   "one_incident": true,
+   "labelled_self_healed": true,
+   "generator_before_ingestion": true,
+   "outcome_in_report": true,
+   "category_allowed": true,
+   "rca_produced": true
+  },
+  "judge": [
+   {
+    "id": "identify_1",
+    "kind": "identify",
+    "text": "no run was triggered today for either job (absence, not failure)",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "Scheduled generator and ingestion jobs did not start at 05:00 and 05:30\u202fUTC"
+   },
+   {
+    "id": "identify_2",
+    "kind": "identify",
+    "text": "the watchdog triggered the generator and then dev ingestion, and both succeeded",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "watchdog: generator SUCCESS; ingestion SUCCESS"
+   },
+   {
+    "id": "identify_3",
+    "kind": "identify",
+    "text": "schedules were UNPAUSED and unchanged, so the cause is outside the pipeline (platform)",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "schedule status is UNPAUSED per job metadata"
+   },
+   {
+    "id": "claim_1",
+    "kind": "claim",
+    "text": "the schedules were or may have been paused",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_2",
+    "kind": "claim",
+    "text": "the job failed",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_3",
+    "kind": "claim",
+    "text": "a specific confirmed platform cause (it is suspected only)",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   }
+  ],
+  "reports": [
+   "Category: ORCHESTRATION\nSummary: [self-healed] watchdog: generator SUCCESS; ingestion SUCCESS. Scheduled generator and ingestion jobs did not start at 05:00 and 05:30\u202fUTC on 2026\u201110\u201111; they were only run later via the watchdog. Root cause: A temporary failure of the job orchestration service (e.g., Databricks Jobs scheduler) prevented the cron\u2011triggered runs from being launched at their scheduled times. (confidence medium)\nEvidence [get_recent_job_runs]: Both netsuite_daily_generator and netsuite_ingestion_daily show missed_schedules for 2026-10-11T05:00:00Z and 2026-10-11T05:30:00Z.\nEvidence [get_pipeline_errors]: No ERROR or WARN events and no failed run audits in the last 24\u202fh, indicating the pipelines themselves did not fail.\nEvidence [get_recent_deploys]: No config changes pausing or altering the schedules; last change was a reset on 2026-10-08.\nRuled out: Generator code failure \u2013 the run succeeded when manually triggered by watchdog.\nRuled out: Ingestion pipeline error \u2013 ingestion succeeded when manually triggered.\nRuled out: Schedule pause \u2013 schedule status is UNPAUSED per job metadata.\nRuled out: Schema drift or column change \u2013 no graph\u2011build errors reported.\nRuled out: Source unavailability \u2013 ingestion succeeded, indicating source was reachable.\nRuled out: Data volume overload \u2013 runs completed within normal duration.\nRuled out: Compute quota exhaustion \u2013 runs succeeded without quota errors.\nRuled out: Reject threshold breach \u2013 unrelated to scheduling; no reject errors observed.\nNot verified: Did the job orchestration service (Databricks Jobs) report any outage or latency around 05:00\u201105:30\u202fUTC on 2026\u201110\u201111?\nNot verified: Are there similar missed schedule patterns on other days that were not captured by the watchdog?\nNot verified: What internal logs (scheduler, cron dispatcher) show for the missed fire times?\nNext step: Investigate the orchestration service logs for the 05:00\u201105:30\u202fUTC window on 2026\u201110\u201111 to confirm the outage; if confirmed, work with the platform team to resolve the scheduler instability and add monitoring/alerts for missed job schedules to catch future occurrences promptly."
+  ],
+  "tool_calls": [
+   "get_recent_job_runs",
+   "get_pipeline_errors",
+   "get_recent_deploys"
+  ],
+  "errors": [],
+  "usage": [
+   {
+    "input_tokens": 15648,
+    "output_tokens": 1628
+   }
+  ],
+  "tools_expected_hit": "1/1"
+ },
+ {
+  "case": "watchdog_self_healed_10_11",
+  "run": 2,
+  "incidents": 1,
+  "checks": {
+   "incident_as_expected": true,
+   "one_incident": true,
+   "labelled_self_healed": true,
+   "generator_before_ingestion": true,
+   "outcome_in_report": true,
+   "category_allowed": true,
+   "rca_produced": true
+  },
+  "judge": [
+   {
+    "id": "identify_1",
+    "kind": "identify",
+    "text": "no run was triggered today for either job (absence, not failure)",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "jobs did not start"
+   },
+   {
+    "id": "identify_2",
+    "kind": "identify",
+    "text": "the watchdog triggered the generator and then dev ingestion, and both succeeded",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "watchdog: generator SUCCESS; ingestion SUCCESS"
+   },
+   {
+    "id": "identify_3",
+    "kind": "identify",
+    "text": "schedules were UNPAUSED and unchanged, so the cause is outside the pipeline (platform)",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "schedules are UNPAUSED"
+   },
+   {
+    "id": "claim_1",
+    "kind": "claim",
+    "text": "the schedules were or may have been paused",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_2",
+    "kind": "claim",
+    "text": "the job failed",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_3",
+    "kind": "claim",
+    "text": "a specific confirmed platform cause (it is suspected only)",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   }
+  ],
+  "reports": [
+   "Category: ORCHESTRATION\nSummary: [self-healed] watchdog: generator SUCCESS; ingestion SUCCESS. Scheduled daily generator and ingestion jobs did not start at 05:00 and 05:30 UTC on 2026-10-11 (and also on 2026-10-06). Root cause: The orchestration scheduler failed to fire the cron triggers on those days, likely due to a service outage or disruption. (confidence high)\nEvidence [get_recent_job_runs]: missed_schedules list includes 2026-10-11T05:00:00+00:00 for generator and 2026-10-11T05:30:00+00:00 for ingestion (also 2026-10-06).\nEvidence [get_pipeline_errors]: No ERROR or WARN events and no failed run audits in the last 24h.\nEvidence [get_table_health]: All layers (bronze, silver, ledger, dq) show SUCCESS status for recent runs, indicating pipelines work when manually triggered.\nEvidence [compare_bronze_to_source]: Bronze data matches source (verdict identical), ruling out source data issues.\nRuled out: Generator code failure: manual watchdog run succeeded, showing generator works.\nRuled out: Ingestion pipeline error: no pipeline errors or failed runs logged.\nRuled out: Source data unavailability: bronze matches source counts.\nRuled out: Pause/unpause config change: schedules are UNPAUSED and no recent pause actions recorded.\nRuled out: Recent deploy changes: deploy logs show only code updates, no schedule modifications.\nNot verified: Was there an outage or degradation of the job scheduler/orchestration service on 2026-10-06 and 2026-10-11?\nNot verified: Are there any platform logs indicating a restart or failure of the cron trigger system during those periods?\nNext step: Investigate the scheduler service logs for the dates of the missed runs to confirm the outage, and raise an incident with the platform team to address the reliability of cron triggers. Consider adding monitoring/alerts for missed scheduled runs to catch future orchestration failures early."
+  ],
+  "tool_calls": [
+   "get_recent_job_runs",
+   "get_pipeline_errors",
+   "get_table_health",
+   "get_recent_job_runs",
+   "compare_bronze_to_source",
+   "compare_bronze_to_source",
+   "get_recent_deploys"
+  ],
+  "errors": [],
+  "usage": [
+   {
+    "input_tokens": 56498,
+    "output_tokens": 2724
+   }
+  ],
+  "tools_expected_hit": "1/1"
+ },
+ {
+  "case": "watchdog_self_healed_10_11",
+  "run": 3,
+  "incidents": 1,
+  "checks": {
+   "incident_as_expected": true,
+   "one_incident": true,
+   "labelled_self_healed": true,
+   "generator_before_ingestion": true,
+   "outcome_in_report": true,
+   "category_allowed": true,
+   "rca_produced": true
+  },
+  "judge": [
+   {
+    "id": "identify_1",
+    "kind": "identify",
+    "text": "no run was triggered today for either job (absence, not failure)",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "Scheduled generator and ingestion jobs did not start at 05:00 and 05:30\u202fUTC on 2026\u201110\u201111"
+   },
+   {
+    "id": "identify_2",
+    "kind": "identify",
+    "text": "the watchdog triggered the generator and then dev ingestion, and both succeeded",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "watchdog: generator SUCCESS; ingestion SUCCESS"
+   },
+   {
+    "id": "identify_3",
+    "kind": "identify",
+    "text": "schedules were UNPAUSED and unchanged, so the cause is outside the pipeline (platform)",
+    "verdict": "yes",
+    "pass": true,
+    "quote": "schedules are UNPAUSED and unchanged"
+   },
+   {
+    "id": "claim_1",
+    "kind": "claim",
+    "text": "the schedules were or may have been paused",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_2",
+    "kind": "claim",
+    "text": "the job failed",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   },
+   {
+    "id": "claim_3",
+    "kind": "claim",
+    "text": "a specific confirmed platform cause (it is suspected only)",
+    "verdict": "no",
+    "pass": true,
+    "quote": ""
+   }
+  ],
+  "reports": [
+   "Category: ORCHESTRATION\nSummary: [self-healed] watchdog: generator SUCCESS; ingestion SUCCESS. Scheduled generator and ingestion jobs did not start at 05:00 and 05:30\u202fUTC on 2026\u201110\u201111. Root cause: A transient outage or glitch in the Databricks job scheduler prevented the periodic triggers from firing at the scheduled times. (confidence medium)\nEvidence [get_recent_job_runs]: Both generator and ingestion jobs list the 2026\u201110\u201111T05:00:00Z and 2026\u201110\u201111T05:30:00Z fire times in `missed_schedules`, meaning no run was started within the 15\u2011minute window.\nEvidence [get_pipeline_errors]: No ERROR or WARN events were recorded for the ingestion pipeline in the last 24\u202fh, indicating the pipeline itself did not fail.\nEvidence [get_recent_deploys]: No pause/unpause or schedule\u2011change config actions were recorded for either job in the recent window.\nEvidence [get_table_health]: Manual watchdog\u2011triggered runs (run\u202f9001,\u202f9002) completed successfully, confirming the jobs run correctly when manually started.\nRuled out: Source unavailable \u2013 no pipeline errors and the source tables are readable.\nRuled out: Data volume \u2013 manual runs finished quickly; no signs of overload.\nRuled out: Compute quota \u2013 no quota\u2011related failures reported.\nRuled out: Reject threshold \u2013 reject rates well below thresholds.\nRuled out: Schema drift \u2013 ledger status OK; no graph\u2011build errors.\nRuled out: Orchestration mis\u2011configuration \u2013 schedules are UNPAUSED and unchanged.\nRuled out: Reset config action on 2026\u201110\u201108 \u2013 resets do not disable schedules.\nNot verified: Did the Databricks job scheduler experience a temporary outage or maintenance window at 05:00\u201105:30\u202fUTC on 2026\u201110\u201111?\nNot verified: Are there internal scheduler logs or alerts that show failures to dispatch the periodic triggers at those times?\nNext step: Check the Databricks scheduler logs for the missed window and, if an outage is confirmed, open a ticket with the platform ops team. Consider adding an alert on `missed_schedules` so future scheduler glitches are detected promptly."
+  ],
+  "tool_calls": [
+   "get_recent_job_runs",
+   "get_pipeline_errors",
+   "get_table_health",
+   "get_recent_deploys",
+   "compare_bronze_to_source"
+  ],
+  "errors": [],
+  "usage": [
+   {
+    "input_tokens": 33529,
+    "output_tokens": 2826
+   }
+  ],
+  "tools_expected_hit": "1/1"
+ }
+]

@@ -95,6 +95,20 @@ async def judge(chat: DatabricksChat, model: str, report: str, grading: dict) ->
     return [{**it, "verdict": "judge_failed", "pass": False, "quote": ""} for it in items]
 
 
+def fake_watchdog(kind: str, now: dt.datetime):
+    """What the watchdog would have done at `now` (no real runs are triggered in an eval)."""
+    from aidq_agent.watchdog import ALLOWLIST, Action, WatchdogResult
+
+    if kind != "fake_success":
+        raise ValueError(f"unknown watchdog fake {kind!r}")
+    t = now.isoformat(timespec="seconds")
+    return WatchdogResult(enabled=True, write=True, actions=[
+        Action(job="generator", name=ALLOWLIST["generator"], due=True, reason="no run since the 05:00 UTC fire time",
+               triggered=True, run_id=9001, triggered_at=t, result="SUCCESS", duration_s=75),
+        Action(job="ingestion", name=ALLOWLIST["ingestion"], due=True, reason="no run since the 05:30 UTC fire time",
+               triggered=True, run_id=9002, triggered_at=t, result="SUCCESS", duration_s=780)])
+
+
 async def run_case(case: dict, r: int, chat: DatabricksChat, model: str, judge_model: str) -> dict:
     cassette = json.loads((ROOT / "evals" / "cassettes" / f"{case['cassette']}.json").read_text(encoding="utf-8"))
     now = dt.datetime.fromisoformat(case["now"])
@@ -102,8 +116,9 @@ async def run_case(case: dict, r: int, chat: DatabricksChat, model: str, judge_m
     notes = ROOT / case["design_notes"] if case.get("design_notes") else None
     # store: unavailable = the metadata database is down (incident store raises), as on 2026-10-11..13
     store = UnavailableStore() if case.get("store") == "unavailable" else DryRunStore()
+    watchdog = fake_watchdog(case["watchdog"], now) if case.get("watchdog") else None
     state = await run(ReplayToolBox(cassette), DatabricksInvestigator(chat, model, design_notes=notes), store,
-                      now=lambda: now, trace_id=f"eval-{case['id']}-{r}")
+                      now=lambda: now, trace_id=f"eval-{case['id']}-{r}", watchdog_result=watchdog)
     incidents = state.get("incidents") or []
     checks = {"incident_as_expected": bool(incidents) == case["expect_incident"]}
     if case.get("store") == "unavailable":
@@ -111,6 +126,12 @@ async def run_case(case: dict, r: int, chat: DatabricksChat, model: str, judge_m
         checks["report_kept"] = ("METADATA UNAVAILABLE" in report and bool(incidents)
                                  and all(i["summary"] in report for i in incidents))
         checks["run_marked_failed"] = state.get("exit_code") == EXIT_METADATA_UNAVAILABLE
+    if watchdog is not None:
+        acts = [a["job"] for i in incidents for a in (i["evidence"].get("self_healed") or {}).get("actions", [])]
+        checks["one_incident"] = len(incidents) == 1
+        checks["labelled_self_healed"] = bool(incidents) and all(i["summary"].startswith("[self-healed]") for i in incidents)
+        checks["generator_before_ingestion"] = acts == ["generator", "ingestion"]
+        checks["outcome_in_report"] = "generator triggered run 9001 -> SUCCESS" in (state.get("report") or "")
     result = {"case": case["id"], "run": r, "incidents": len(incidents), "checks": checks, "judge": [],
               "reports": [report_text(i) for i in incidents],
               "tool_calls": [c["tool"] for i in incidents for c in i["evidence"]["tool_calls"]],

@@ -81,6 +81,12 @@ class Tools:
         jobs = config.check_alias("job", cfg.jobs, job)
         end = self.now()
         start = end - dt.timedelta(days=days)
+        try:   # successful deploys (any could have changed a schedule); None when GitHub is unavailable
+            deploy_times = [dt.datetime.fromisoformat(r["created_at"].replace("Z", "+00:00"))
+                            for r in [r for wf in cfg.deploy_workflows for r in self.reads.workflow_runs(wf, (end - dt.timedelta(days=60)).date())]
+                            if r.get("conclusion") == "success"]
+        except Exception:  # noqa: BLE001 -- the old rule (first PERIODIC run) still applies
+            deploy_times = []
         out = []
         for alias, name in jobs.items():
             jid = self.reads.job_id(name)
@@ -109,10 +115,12 @@ class Tools:
                     try:
                         periodic = [logic.from_epoch_ms(r["start_time"]) for r in runs
                                     if r.get("start_time") and r.get("trigger") == "PERIODIC"]
+                        known = logic.schedule_known_since(self.reads.job_created(jid), deploy_times, end)
                         missed = logic.missed_schedules(
                             schedule["quartz_cron_expression"], schedule.get("pause_status") == "PAUSED",
                             [logic.from_epoch_ms(r["start_time"]) for r in runs if r.get("start_time")], start, end,
-                            first_scheduled_run=min(periodic, default=None))
+                            first_scheduled_run=min(periodic, default=None), schedule_known_since=known)
+                        entry["schedule_known_since"] = _iso(known)
                         entry["missed_schedules"] = [_iso(m) for m in missed["confirmed"]]
                         entry["missed_schedules_unconfirmed"] = [_iso(m) for m in missed["unconfirmed"]]
                     except ValueError as e:
@@ -120,10 +128,11 @@ class Tools:
                         entry["missed_schedules_note"] = str(e)
             out.append(entry)
         return {"env": env, "window": {"start": _iso(start), "end": _iso(end)}, "jobs": out,
-                "note": "missed_schedules = cron fire times with no run started within 15 minutes, after the "
-                        "first scheduled (PERIODIC) run in the window; missed_schedules_unconfirmed = such fire times "
-                        "before it, possibly before the schedule existed or was unpaused (check get_recent_deploys); "
-                        "a missed run sends no failure email"}
+                "note": "missed_schedules = cron fire times with no run started within 15 minutes, after proof "
+                        "the schedule was active (the first scheduled (PERIODIC) run in the window, or "
+                        "schedule_known_since: the later of job creation and the last successful deploy); "
+                        "missed_schedules_unconfirmed = such fire times before that proof (the schedule may not "
+                        "have existed or been unpaused yet); a missed run sends no failure email"}
 
     # -- get_pipeline_errors ----------------------------------------------------------------
 

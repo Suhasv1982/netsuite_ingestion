@@ -16,7 +16,7 @@ from typing import Any, Callable, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from . import triage
+from . import triage, watchdog as wd
 from .investigate import Investigation
 from .store import IncidentStore
 from .toolbox import ToolBox
@@ -46,6 +46,7 @@ class State(TypedDict, total=False):
     report: str
     exit_code: int
     store_error: str
+    watchdog: Any
 
 
 def _latest_ingestion_run(results: dict) -> str | None:
@@ -64,8 +65,9 @@ def build_graph(toolbox: ToolBox, investigator, store: IncidentStore,
         return {"results": results, "today": now().date().isoformat(), "trace_id": state.get("trace_id") or uuid.uuid4().hex}
 
     async def triage_node(state: State) -> State:
-        sigs = triage.signals_from(state["results"])
-        return {"signals": sigs, "groups": triage.group(sigs)[:MAX_GROUPS], "notes": triage.context_notes(state["results"])}
+        sigs = triage.signals_from(state["results"]) + triage.watchdog_signals(state.get("watchdog"))
+        notes = triage.context_notes(state["results"]) + wd.facts(state.get("watchdog"))
+        return {"signals": sigs, "groups": triage.group(sigs)[:MAX_GROUPS], "notes": notes}
 
     async def dedupe(state: State) -> State:
         fps = [g.fingerprint for g in state["groups"]]
@@ -96,10 +98,18 @@ def build_graph(toolbox: ToolBox, investigator, store: IncidentStore,
                 summary = f"{len(g.signals)} signal(s): " + "; ".join(s.detail for s in g.signals[:5]) + \
                           f" [RCA failed: {inv.error}]"
                 category, fix = g.category, None
+            healed = state.get("watchdog") if any(s.kind == "self_healed" for s in g.signals) else None
+            label = healed.label() if healed else None
+            if label:   # the watchdog acted for this group: say what it did, first
+                outcome = "; ".join(f"{a.job} {a.result or 'not triggered'}" for a in healed.actions if a.due)
+                summary = f"{label} watchdog: {outcome}. {summary}"
             incident = {"run_id": run_id, "category": category, "summary": summary, "suggested_fix": fix,
                         "agent_trace_id": state["trace_id"], "fingerprint": g.fingerprint,
                         "evidence": {"signals": [s.__dict__ for s in g.signals], "rca": rca, "error": inv.error,
-                                     "tool_calls": inv.tool_calls, "model": inv.model, "usage": inv.usage}}
+                                     "tool_calls": inv.tool_calls, "model": inv.model, "usage": inv.usage,
+                                     **({"self_healed": {"label": label,
+                                                          "actions": [a.as_dict() for a in healed.actions]}}
+                                        if healed else {})}}
             incident["incident_id"] = None
             if not store_error:
                 try:
@@ -115,6 +125,13 @@ def build_graph(toolbox: ToolBox, investigator, store: IncidentStore,
         lines.append("Tools: " + ", ".join(f"{k} {v}" for k, v in statuses.items()))
         for n in state.get("notes") or []:
             lines.append(f"- {n}")
+        w = state.get("watchdog")
+        if w is not None:
+            mode = "" if (w.enabled and w.write) else (" (kill switch: nothing triggered)" if not w.enabled
+                                                       else " (dry run: nothing triggered)")
+            lines.append(f"Watchdog{mode}: " + "; ".join(
+                f"{a.job} {'triggered run ' + str(a.run_id) + ' -> ' + str(a.result) if a.triggered else (a.result or 'not triggered')}"
+                f" ({a.detail or a.reason})" for a in w.actions))
         if state.get("store_error"):
             lines += ["", "**METADATA UNAVAILABLE:** incidents could not be written or deduplicated "
                           f"({state['store_error']}). The full diagnosis is below; nothing was written."]
@@ -157,6 +174,11 @@ def build_graph(toolbox: ToolBox, investigator, store: IncidentStore,
     return g.compile()
 
 
-async def run(toolbox: ToolBox, investigator, store: IncidentStore, now=None, trace_id: str | None = None) -> dict[str, Any]:
+async def run(toolbox: ToolBox, investigator, store: IncidentStore, now=None, trace_id: str | None = None,
+              watchdog_result: "wd.WatchdogResult | None" = None) -> dict[str, Any]:
+    """`watchdog_result`: what the watchdog did before this run (docs/watchdog_plan.md), or None."""
     graph = build_graph(toolbox, investigator, store, **({"now": now} if now else {}))
-    return await graph.ainvoke({"trace_id": trace_id} if trace_id else {})
+    init: dict[str, Any] = {"trace_id": trace_id} if trace_id else {}
+    if watchdog_result is not None:
+        init["watchdog"] = watchdog_result
+    return await graph.ainvoke(init)
