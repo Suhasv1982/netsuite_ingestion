@@ -9,6 +9,9 @@ dependency) to mint a fresh credential for each Lakebase endpoint and store
 it, so the pipeline always sees a token generated moments ago rather than
 one that may be hours or days stale.
 
+With --wake-endpoints true (the dev target), a disabled endpoint is re-enabled first and the task log says so
+(lakebase_wake.py); otherwise a disabled endpoint fails the task as before.
+
 Run as a Databricks Jobs spark_python_task -- WorkspaceClient() picks up the
 job's run-as identity automatically, no profile/token needed.
 """
@@ -16,6 +19,8 @@ job's run-as identity automatically, no profile/token needed.
 import argparse
 
 from databricks.sdk import WorkspaceClient
+
+from lakebase_wake import wake_sdk
 
 
 def refresh(w: WorkspaceClient, endpoint: str, scope: str, key: str) -> None:
@@ -31,9 +36,13 @@ def main() -> None:
     parser.add_argument("--source-key", required=True)
     parser.add_argument("--meta-endpoint", required=True)
     parser.add_argument("--meta-key", required=True)
+    parser.add_argument("--wake-endpoints", default="false", help='"true": re-enable a disabled endpoint first')
     args = parser.parse_args()
 
     w = WorkspaceClient()
+    if args.wake_endpoints.strip().lower() == "true":
+        for endpoint in (args.source_endpoint, args.meta_endpoint):
+            wake_sdk(w, endpoint, who="netsuite_ingestion_daily / refresh_credentials")
     refresh(w, args.source_endpoint, args.secret_scope, args.source_key)
     refresh(w, args.meta_endpoint, args.secret_scope, args.meta_key)
 

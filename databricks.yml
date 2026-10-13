@@ -32,6 +32,12 @@ variables:
   pg_user:
     description: Postgres user for both Lakebase endpoints (OAuth database credential subject)
     default: ${workspace.current_user.userName}
+  wake_lakebase_endpoints:
+    description: >
+      "true": the job's first task re-enables a disabled Lakebase endpoint (source, metadata) before use and logs it
+      (src/netsuite_ingestion/lakebase_wake.py; owner decision 2026-10-13). Dev only; prod keeps failing on a
+      disabled endpoint until a prod decision.
+    default: "false"
   bronze_rebuild:
     description: >
       "true" ONLY for the one full refresh that rebuilds bronze from the source (e.g. the migration
@@ -88,6 +94,7 @@ targets:
       # daily dev run at 05:30 UTC, after the generator (05:00); unpaused (owner decision 2026-10-01)
       daily_cron: "0 30 5 * * ?"
       schedule_pause_status: "UNPAUSED"
+      wake_lakebase_endpoints: "true"
     resources:
       jobs:
         # The source system: appends one day of synthetic NetSuite data (low defect rate) to netsuite-sample

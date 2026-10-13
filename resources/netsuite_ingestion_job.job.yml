@@ -21,6 +21,8 @@ resources:
               - "${var.meta_pg_endpoint}"
               - "--meta-key"
               - "${var.meta_pg_token_key}"
+              - "--wake-endpoints"
+              - "${var.wake_lakebase_endpoints}"
           environment_key: default
 
         - task_key: run_pipeline
