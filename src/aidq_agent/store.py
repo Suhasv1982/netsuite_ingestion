@@ -38,6 +38,23 @@ class DryRunStore:
         return None          # nothing written: no id
 
 
+class UnavailableStore:
+    """A store whose database is down (tests and the eval's metadata-unavailable case): every call raises, like
+    PgIncidentStore with a disabled metadata endpoint. `fail_on` = "dedupe" (both calls fail) or "write" (only
+    insert fails, after dedupe succeeded)."""
+
+    def __init__(self, reason: str = "metadata endpoint is disabled (the agent never enables it)", fail_on: str = "dedupe"):
+        self.reason, self.fail_on, self.inserted = reason, fail_on, []
+
+    def open_fingerprints(self, fingerprints: list[str]) -> set[str]:
+        if self.fail_on == "dedupe":
+            raise RuntimeError(self.reason)
+        return set()
+
+    def insert(self, incident: dict) -> int | None:
+        raise RuntimeError(self.reason)
+
+
 class PgIncidentStore:
     """Writes as the caller's identity (ci-dev in CI, the CLI profile locally) to the dev metadata endpoint."""
 

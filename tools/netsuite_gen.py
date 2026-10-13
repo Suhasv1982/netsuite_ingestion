@@ -779,6 +779,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--seed", type=int, required=True)
     p.add_argument("--config", help="YAML defect config (all defects off if omitted)")
     p.add_argument("--manifest", help="manifest output path (default: manifest_<mode>_<seed>.json)")
+    p.add_argument("--manifest-table",
+                   help="also write the manifest to this Delta table, one row per defect row (needs Spark: the daily "
+                        "job). Skipped for --dry-run and skipped batches. See tools/manifest_table.py")
     p.add_argument("--batch-date", type=dt.date.fromisoformat, help="snapshot date (default: 2026-07-11 for --init, latest updated_date + 21d for --increment)")
     p.add_argument("--scale", type=float, default=1.0, help="multiplier on the default row counts")
     p.add_argument("--apply-schema-drift", action="store_true", help=f"--increment only: add {DRIFT_COLUMN} to {DRIFT_TABLE}")
@@ -897,6 +900,25 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{'DRY RUN: ' if args.dry_run else ''}{result.manifest['mode']} seed={args.seed} rows: {counts}")
     print(f"defects injected: {sum(d['row_count'] for d in result.manifest['defects'])} rows in {len(result.manifest['defects'])} groups")
     print(f"manifest: {manifest_path}")
+    if args.manifest_table and not args.dry_run:
+        return write_manifest_table(args.manifest_table, result.manifest)
+    return 0
+
+
+def write_manifest_table(table: str, manifest: dict) -> int:
+    """Persist the batch's manifest (the eval's ground truth). The data is already written at this point: a failure
+    here fails the job (failure email) and the manifest can be rebuilt with tools/recompute_manifest.py."""
+    import manifest_table  # next to this file; imported late so the generator stays usable without Spark
+
+    try:
+        from pyspark.sql import SparkSession
+
+        n = manifest_table.write_with_spark(SparkSession.builder.getOrCreate(), table, manifest, source="job")
+    except Exception as exc:  # noqa: BLE001 -- report and fail the job, the data is already committed
+        print(f"MANIFEST NOT PERSISTED to {table}: {exc}\nThe batch's data is written. Rebuild its manifest with "
+              "tools/recompute_manifest.py from the batch's daily backup before the backup is pruned.", file=sys.stderr)
+        return 3
+    print(f"manifest table: {n} defect rows written to {table}")
     return 0
 
 
