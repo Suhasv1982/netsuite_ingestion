@@ -55,3 +55,7 @@ metadata_roles:
     update:
       config_proposals: [status, reviewed_by, reviewed_at, review_comment, approved_severity]
     execute: ["apply_proposal(bigint, text)"]
+  aidq_llm_logger:     # writers of the LLM call log (src/aidq_llm, migration 007): add rows, prune rows older than 90 days
+    members: [ci, agent]
+    insert: [llm_calls]
+    execute: ["prune_llm_calls(integer)"]

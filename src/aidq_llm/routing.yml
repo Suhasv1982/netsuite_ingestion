@@ -1,0 +1,26 @@
+# Model routing (docs/model_routing_plan.md). Agents name a task, never a model: this file is the only place in
+# src/ that names models (tests/test_aidq_llm.py checks). A task moves to a smaller primary only with eval evidence
+# (evals/routing_compare.py -> evals/routing_report.md).
+version: 1
+retention_days: 90          # aidq_metadata.llm_calls rows older than this are pruned after each run
+
+tasks:
+  root_cause:               # the monitor's investigation (a tool-calling loop ending with submit_rca)
+    primary: databricks-gpt-oss-120b
+    fallback: databricks-qwen3-next-80b-a3b-instruct
+    max_tokens: 4000
+  eval_judge:               # evals/run_agent_eval.py: a fixed yardstick, never escalated
+    primary: databricks-qwen35-122b-a10b
+    fallback: null
+    max_tokens: 2000
+
+# Illustrative cost estimate only: USD per 1M tokens (input, output). Free Edition is free, and these are NOT
+# Databricks list prices; replace them with the price list before using cost numbers for a decision.
+illustrative_prices_usd_per_1m_tokens:
+  databricks-gpt-oss-120b: [0.15, 0.60]
+  databricks-gpt-oss-20b: [0.07, 0.30]
+  databricks-qwen3-next-80b-a3b-instruct: [0.15, 1.20]
+  databricks-qwen35-122b-a10b: [0.40, 2.40]
+  databricks-meta-llama-3-3-70b-instruct: [0.50, 1.50]
+  databricks-gemma-3-12b: [0.15, 0.50]
+  databricks-meta-llama-3-1-8b-instruct: [0.15, 0.45]

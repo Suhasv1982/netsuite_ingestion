@@ -1,6 +1,6 @@
 # Plan: model routing (agents_next_design.md section 2, build order item 1)
 
-Status: **plan only** (owner, 2026-10-13). Dev only. Design: `docs/agents_next_design.md` (committed in this PR). Section 1 below lists where that design conflicts with the current code, for every part of it. Only model routing is planned here; each other agent gets its own plan PR, in the section 6 order.
+Status: plan approved with the review corrections and **built** (owner, 2026-10-13); not merged until the owner's OK. Dev only. Design: `docs/agents_next_design.md` (committed in this PR). Section 1 below lists where that design conflicts with the current code, for every part of it. Only model routing is planned here; each other agent gets its own plan PR, in the section 6 order.
 
 ## 1. Review of agents_next_design.md against the code
 
@@ -17,8 +17,21 @@ Status: **plan only** (owner, 2026-10-13). Dev only. Design: `docs/agents_next_d
    - (b) Postgres `aidq_metadata.llm_calls` (migration 007): the monitor already writes incidents there, no warehouse is needed, `INSERT` goes to ci-dev and `aidq_agent`.
 
    Recommended: (b), exposed to Spark/SQL readers later if needed.
+
+   **Decided (owner 2026-10-13): (b)** Postgres `aidq_metadata.llm_calls`, migration 007, grants in `grants/dev.yml`.
+   - **Conditions:** logging failures never crash an agent (the call details go to the run summary instead), and a **90-day retention rule**.
+   - **Built:**
+     - `prune_llm_calls(keep_days)` (SECURITY DEFINER, not executable by PUBLIC), called after each run's insert; `retention_days: 90` in `routing.yml`.
+     - Role `aidq_llm_logger` (members ci-dev and dq-agent): INSERT on `llm_calls` and EXECUTE on the prune function, nothing else.
 8. **The trace id.** MLflow tracing does not exist yet (DQ plan step 8). Until it does, `llm_calls.trace_id` = the run's `agent_trace_id` (the monitor already sets one per run).
-9. **Eval-based routing needs more runs.** The 2026-10-13 evals swung on items whose input did not change: 3 runs per case is too noisy to show that a smaller model "meets the same targets". The routing comparison uses 5 runs per case per model and requires every must-not-claim item at 5/5.
+9. **Eval-based routing needs more runs.** The 2026-10-13 evals swung on items whose input did not change: 3 runs per case is too noisy to show that a smaller model "meets the same targets".
+   **Decided (owner 2026-10-13):** enough runs, or paired comparisons on the same inputs. Built as both, in `src/aidq_llm/compare.py`. A task moves to a candidate only if all four rules hold:
+   - at least 10 paired runs per case;
+   - every check and every must-not-claim item passes N/N;
+   - every must-identify item meets ceil(2N/3);
+   - no item loses more paired runs to the baseline than it wins back, beyond 1 (b - c <= 1).
+
+   The report gives the exact sign test per item.
 10. **The judge is not routed.** The eval judge stays fixed (`databricks-qwen35-122b-a10b`), so model comparisons share one yardstick.
 
 ### Shared foundation, schema drift, RAG, onboarding (for their later plan PRs)

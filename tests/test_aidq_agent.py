@@ -329,7 +329,7 @@ def test_free_model_investigator_loop_with_a_fake_chat():
                     "usage": {"prompt_tokens": 7, "completion_tokens": 3}}
 
     tb = FakeToolBox(MISSED)
-    inv = asyncio.run(DatabricksInvestigator(Chat()).investigate("ORCHESTRATION", ["s"], [], "2026-10-06", tb))
+    inv = asyncio.run(DatabricksInvestigator(Chat(), "model-under-test").investigate("ORCHESTRATION", ["s"], [], "2026-10-06", tb))
     assert inv.rca == RCA and [c["tool"] for c in inv.tool_calls] == ["get_recent_deploys"]
     assert inv.usage == {"input_tokens": 14, "output_tokens": 6}
 
