@@ -24,8 +24,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from aidq_agent.dbx import DEFAULT_MODEL, DatabricksChat, DatabricksInvestigator, _text  # noqa: E402
-from aidq_agent.graph import run  # noqa: E402
-from aidq_agent.store import DryRunStore  # noqa: E402
+from aidq_agent.graph import EXIT_METADATA_UNAVAILABLE, run  # noqa: E402
+from aidq_agent.store import DryRunStore, UnavailableStore  # noqa: E402
 from aidq_agent.toolbox import ReplayToolBox  # noqa: E402
 
 JUDGE_MODEL = "databricks-qwen35-122b-a10b"
@@ -100,10 +100,17 @@ async def run_case(case: dict, r: int, chat: DatabricksChat, model: str, judge_m
     now = dt.datetime.fromisoformat(case["now"])
     # a case recorded before a design change replays with the design notes of its time (evals/design_notes/)
     notes = ROOT / case["design_notes"] if case.get("design_notes") else None
-    state = await run(ReplayToolBox(cassette), DatabricksInvestigator(chat, model, design_notes=notes), DryRunStore(),
+    # store: unavailable = the metadata database is down (incident store raises), as on 2026-10-11..13
+    store = UnavailableStore() if case.get("store") == "unavailable" else DryRunStore()
+    state = await run(ReplayToolBox(cassette), DatabricksInvestigator(chat, model, design_notes=notes), store,
                       now=lambda: now, trace_id=f"eval-{case['id']}-{r}")
     incidents = state.get("incidents") or []
     checks = {"incident_as_expected": bool(incidents) == case["expect_incident"]}
+    if case.get("store") == "unavailable":
+        report = state.get("report") or ""
+        checks["report_kept"] = ("METADATA UNAVAILABLE" in report and bool(incidents)
+                                 and all(i["summary"] in report for i in incidents))
+        checks["run_marked_failed"] = state.get("exit_code") == EXIT_METADATA_UNAVAILABLE
     result = {"case": case["id"], "run": r, "incidents": len(incidents), "checks": checks, "judge": [],
               "reports": [report_text(i) for i in incidents],
               "tool_calls": [c["tool"] for i in incidents for c in i["evidence"]["tool_calls"]],

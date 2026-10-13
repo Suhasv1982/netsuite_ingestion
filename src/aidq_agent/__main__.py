@@ -1,7 +1,9 @@
 """python -m aidq_agent --profile <PROFILE> [--write] [--report-file PATH]
 
 Runs the monitor once against dev. Default is a dry run (nothing written); --write inserts incidents into dev
-aidq_metadata.incidents. Exit 1 when a new incident was written (so a CI run fails and notifies), else 0.
+aidq_metadata.incidents. Exit 1 when a new incident was written (so a CI run fails and notifies), 2 when the
+diagnosis could not be written ("metadata unavailable": the report still has all of it), 3 when the run itself
+crashed (the report says where), else 0. The report always reaches --report-file.
 """
 
 from __future__ import annotations
@@ -10,27 +12,42 @@ import argparse
 import asyncio
 import os
 import sys
+import traceback
 
 from aidq_mcp.config import env_config
 from aidq_mcp.reads import Reads
 
 from .dbx import DatabricksChat, DatabricksInvestigator
-from .graph import run
+from .graph import EXIT_METADATA_UNAVAILABLE, run
 from .investigate import AnthropicInvestigator
 from .store import DryRunStore, PgIncidentStore
 from .toolbox import McpToolBox
 
 
+EXIT_CRASHED = 3
+
+
+def publish(report: str, report_file: str | None) -> None:
+    print(report)
+    if report_file:
+        with open(report_file, "a", encoding="utf-8") as f:
+            f.write(report + "\n")
+
+
 async def amain(args) -> int:
     store = PgIncidentStore(Reads(args.profile), env_config("dev").metadata_endpoint) if args.write else DryRunStore()
-    async with McpToolBox(args.profile) as toolbox:
-        investigator = (DatabricksInvestigator(DatabricksChat(args.profile), args.model)
-                        if args.model.startswith("databricks-") else AnthropicInvestigator(model=args.model))
-        state = await run(toolbox, investigator, store)
-    print(state["report"])
-    if args.report_file:
-        with open(args.report_file, "a", encoding="utf-8") as f:
-            f.write(state["report"] + "\n")
+    try:
+        async with McpToolBox(args.profile) as toolbox:
+            investigator = (DatabricksInvestigator(DatabricksChat(args.profile), args.model)
+                            if args.model.startswith("databricks-") else AnthropicInvestigator(model=args.model))
+            state = await run(toolbox, investigator, store)
+    except Exception as exc:  # noqa: BLE001 -- a crash still produces a report
+        publish("# aidq monitor, dev\n\n**MONITOR CRASHED** before its report: "
+                f"{type(exc).__name__}: {exc}\n\n```\n{traceback.format_exc()[-3000:]}\n```", args.report_file)
+        return EXIT_CRASHED
+    publish(state["report"], args.report_file)
+    if state["exit_code"] == EXIT_METADATA_UNAVAILABLE and os.environ.get("GITHUB_ACTIONS"):
+        print(f"::error title=metadata unavailable::{state.get('store_error')}")  # names the cause on the run page
     if not args.write and state.get("incidents"):
         print(f"\n(dry run: {len(state['incidents'])} incident(s) not written)")
     return state["exit_code"]

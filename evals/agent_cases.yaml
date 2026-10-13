@@ -22,3 +22,12 @@ cases:
     expect_incident: true
     categories: [ORCHESTRATION]
     fixture: 2026-10-06_scheduler_did_not_fire
+
+  - id: missed_runs_metadata_unavailable
+    cassette: 2026-10-06_afternoon
+    now: "2026-10-06T14:45:00+00:00"
+    expect_incident: true
+    categories: [ORCHESTRATION]
+    fixture: 2026-10-06_scheduler_did_not_fire
+    store: unavailable    # the incident store raises (disabled metadata endpoint, 2026-10-11..13)
+    note: the diagnosis must still be complete in the report, and the run marked failed (exit 2)

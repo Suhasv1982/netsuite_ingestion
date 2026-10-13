@@ -234,6 +234,39 @@ def test_failed_rca_still_records_the_signal():
     assert inc["suggested_fix"] is None
 
 
+@pytest.mark.parametrize("fail_on", ["dedupe", "write"])
+def test_metadata_unavailable_keeps_the_full_diagnosis_and_fails_the_run(fail_on):
+    # 10-11..10-13: the metadata endpoint was disabled and the run crashed in dedupe, losing the report
+    from aidq_agent.graph import EXIT_METADATA_UNAVAILABLE
+    from aidq_agent.store import UnavailableStore
+
+    state, inv, _ = graph_run(MISSED, store=UnavailableStore(fail_on=fail_on))
+    assert len(inv.calls) == 1                                   # still investigated
+    assert state["exit_code"] == EXIT_METADATA_UNAVAILABLE
+    report = state["report"]
+    assert "METADATA UNAVAILABLE" in report and "endpoint is disabled" in report
+    assert "## ORCHESTRATION" in report and "(not written)" in report and "Ruled out:" in report
+    assert "already covered" not in report
+
+
+def test_crash_outside_the_store_still_publishes_a_report(tmp_path, monkeypatch):
+    import aidq_agent.__main__ as cli
+
+    class Boom:
+        async def __aenter__(self):
+            raise RuntimeError("tool server did not start")
+
+        async def __aexit__(self, *a):
+            return False
+
+    monkeypatch.setattr(cli, "McpToolBox", lambda profile: Boom())
+    out = tmp_path / "summary.md"
+    args = type("A", (), {"profile": None, "write": False, "model": "databricks-gpt-oss-120b",
+                          "report_file": str(out)})()
+    assert asyncio.run(cli.amain(args)) == cli.EXIT_CRASHED
+    assert "MONITOR CRASHED" in out.read_text(encoding="utf-8") and "tool server did not start" in out.read_text(encoding="utf-8")
+
+
 def test_dry_run_reports_but_exits_zero():
     state, _, store = graph_run(MISSED)
     assert len(store.inserted) == 1 and state["exit_code"] == 0 and "(not written)" in state["report"]
