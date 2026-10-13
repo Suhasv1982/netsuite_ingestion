@@ -34,7 +34,13 @@ async def run_model(model: str, cases: list[dict], runs: int, chat, judge: str) 
     out: dict[str, list[dict]] = {}
     for case in cases:
         for r in range(1, runs + 1):
-            res = await run_case(case, r, chat, model, judge)
+            try:
+                res = await run_case(case, r, chat, model, judge)
+            except Exception as exc:  # noqa: BLE001 -- a crashed run is a failed run, never the end of the comparison
+                res = {"case": case["id"], "run": r, "checks": {"run_completed": False}, "judge": [],
+                       "errors": [f"{type(exc).__name__}: {str(exc)[:300]}"], "usage": []}
+            else:
+                res["checks"] = {"run_completed": True, **res["checks"]}
             out.setdefault(case["id"], []).append(res)
             print(f"{model} {case['id']} run {r}: checks={res['checks']}", file=sys.stderr)
     return out

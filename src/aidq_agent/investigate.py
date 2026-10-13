@@ -42,6 +42,34 @@ RCA_SCHEMA = {
     "additionalProperties": False,
 }
 
+def rca_problems(obj, schema: dict = RCA_SCHEMA, path: str = "rca") -> list[str]:
+    """Every way `obj` breaks RCA_SCHEMA (types, enums, required and unexpected keys, array items), as short
+    messages; [] when valid. On 2026-10-13 a model returned an evidence item without `finding`, and the report
+    crashed: a submit_rca is accepted only when this returns []."""
+    t = schema.get("type")
+    if t == "object":
+        if not isinstance(obj, dict):
+            return [f"{path} must be an object"]
+        out = [f"{path}.{k} is required" for k in schema.get("required", []) if k not in obj]
+        props = schema.get("properties", {})
+        if schema.get("additionalProperties") is False:
+            out += [f"{path}.{k} is not allowed" for k in obj if k not in props]
+        for k, sub in props.items():
+            if k in obj:
+                out += rca_problems(obj[k], sub, f"{path}.{k}")
+        return out
+    if t == "array":
+        if not isinstance(obj, list):
+            return [f"{path} must be an array"]
+        return [m for i, item in enumerate(obj) for m in rca_problems(item, schema.get("items", {}), f"{path}[{i}]")]
+    if t == "string":
+        if not isinstance(obj, str):
+            return [f"{path} must be a string"]
+        if "enum" in schema and obj not in schema["enum"]:
+            return [f"{path} must be one of {schema['enum']}"]
+    return []
+
+
 SYSTEM = """You investigate problems in a daily data ingestion platform (dev environment) and write a root-cause \
 analysis for the people who run it.
 

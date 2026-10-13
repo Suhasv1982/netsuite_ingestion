@@ -347,3 +347,49 @@ def test_eval_verdicts_pass_rules():
     got = apply_verdicts(items, {"items": [{"id": "claim_1", "verdict": "yes"}]})
     assert [(g["verdict"], g["pass"]) for g in got] == [("missing", False), ("yes", False)]
     assert apply_verdicts(items, None) is None
+
+
+# -- RCA schema validation (2026-10-13: an evidence item without `finding` crashed the report) ---------------
+
+def test_rca_problems_catches_nested_errors():
+    from aidq_agent.investigate import rca_problems
+
+    assert rca_problems(RCA) == []
+    bad = {**RCA, "evidence": [{"tool": "get_recent_job_runs"}], "confidence": "certain", "extra": 1}
+    msgs = rca_problems(bad)
+    assert "rca.evidence[0].finding is required" in msgs
+    assert any("rca.confidence must be one of" in m for m in msgs) and "rca.extra is not allowed" in msgs
+    assert rca_problems({**RCA, "not_the_cause": "one string"}) == ["rca.not_the_cause must be an array"]
+
+
+def test_an_invalid_submit_is_sent_back_and_a_corrected_one_accepted():
+    from aidq_agent.dbx import SUBMIT, DatabricksInvestigator
+
+    bad = {**RCA, "evidence": [{"tool": "get_recent_job_runs"}]}
+
+    class Chat:
+        def __init__(self):
+            self.n, self.errors = 0, []
+
+        async def complete(self, model, messages, tools=None, max_tokens=4000):
+            self.n += 1
+            if self.n == 2:
+                self.errors.append(messages[-1]["content"])
+            args = bad if self.n == 1 else RCA
+            tc = [{"id": f"c{self.n}", "type": "function", "function": {"name": SUBMIT, "arguments": json.dumps(args)}}]
+            return {"choices": [{"message": {"content": "", "tool_calls": tc}, "finish_reason": "tool_calls"}]}
+
+    chat = Chat()
+    inv = asyncio.run(DatabricksInvestigator(chat, "m").investigate("ORCHESTRATION", ["s"], [], "2026-10-06",
+                                                                     FakeToolBox(MISSED)))
+    assert inv.rca == RCA and chat.n == 2 and "rca.evidence[0].finding is required" in chat.errors[0]
+
+
+def test_the_report_never_crashes_on_malformed_rca():
+    class Inv(FakeInvestigator):
+        async def investigate(self, *a):
+            from aidq_agent.investigate import Investigation
+            return Investigation({**RCA, "evidence": [{"tool": "x"}, "loose text"], "not_the_cause": [1]}, [], None, "m", {})
+
+    state, _, _ = graph_run(MISSED, investigator=Inv())
+    assert "- [x] (no finding given)" in state["report"] and "- [?] loose text" in state["report"]
