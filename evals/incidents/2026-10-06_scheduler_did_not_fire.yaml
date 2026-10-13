@@ -64,4 +64,5 @@ grading:
     - deploy-dev paused the schedules
     - the job failed
     - a specific confirmed platform cause (it is suspected only)
+    - the schedules were or may have been paused (they were UNPAUSED and unchanged; owner 2026-10-13)
   tools_expected: [get_recent_job_runs, get_recent_deploys]

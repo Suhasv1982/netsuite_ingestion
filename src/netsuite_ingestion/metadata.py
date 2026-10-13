@@ -856,8 +856,16 @@ def build_column_list(columns: list[dict]) -> list[str]:
     return [c["column_name"] for c in active]
 
 
+def null_safe(expr: str) -> str:
+    """A HARD rule that evaluates to NULL counts as failed. Without this, `WHERE pred` (valid rows) and
+    `WHERE NOT pred` (rejects) both drop a row whose predicate is NULL, so it reached neither silver nor
+    rejected_rows and got no reason (owner decision 2026-10-08, docs/phase5_dq_recommender_plan.md)."""
+    return f"coalesce(({expr}), false)"
+
+
 def build_dq_predicate(rules: list[dict]) -> str:
-    """SQL boolean expression: true only when every HARD rule passes.
+    """SQL boolean expression: true only when every HARD rule passes. Never NULL: a rule that evaluates to
+    NULL fails (null_safe), so every row is either valid or rejected.
 
     `rules` is the list of data_quality_rules rows (as dicts) for a single
     table_id. Only severity == 'HARD' rows are enforced; SOFT/other
@@ -871,7 +879,7 @@ def build_dq_predicate(rules: list[dict]) -> str:
     ]
     if not hard_exprs:
         return "true"
-    return " AND ".join(f"({expr})" for expr in hard_exprs)
+    return " AND ".join(null_safe(expr) for expr in hard_exprs)
 
 
 def has_merge_keys(table_def: dict) -> bool:
@@ -900,7 +908,8 @@ def soft_expectation_name(rule: dict, duplicated: bool = False) -> str:
 
 
 def build_dq_reason_expr(rules: list[dict]) -> str:
-    """SQL expression producing a comma-joined list of failed HARD rule names.
+    """SQL expression producing a comma-joined list of failed HARD rule names. A rule that evaluates to NULL is
+    listed as failed, like in build_dq_predicate.
 
     Evaluates to NULL literal when there are no HARD rules for the table
     (nothing can fail).
@@ -912,5 +921,5 @@ def build_dq_reason_expr(rules: list[dict]) -> str:
     ]
     if not hard_rules:
         return "NULL"
-    cases = ", ".join(f"CASE WHEN NOT ({expr}) THEN '{name}' END" for name, expr in hard_rules)
+    cases = ", ".join(f"CASE WHEN NOT {null_safe(expr)} THEN '{name}' END" for name, expr in hard_rules)
     return f"array_join(array_compact(array({cases})), ', ')"

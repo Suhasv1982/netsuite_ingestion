@@ -112,4 +112,40 @@ def context_notes(results: dict[str, dict]) -> list[str]:
     guard = (results.get("get_table_health", {}) or {}).get("latest_guard") or {}
     if guard.get("status") == "WARN" and guard.get("event_log_reads") == 2:
         notes.append("guard WARN with 2 event-log reads is the normal baseline (not a signal)")
+    notes += schedule_facts(results)
     return notes
+
+
+def schedule_facts(results: dict[str, dict]) -> list[str]:
+    """When a scheduled run was missed: each job's schedule as the tools report it (pause state, cron) and its last
+    config change, as deterministic facts. The model must not have to infer them: in evals and in incident 1 it
+    left out the pause state or guessed the schedules "may have been paused" although they were UNPAUSED."""
+    jobs = (results.get("get_recent_job_runs", {}) or {}).get("jobs") or []
+    missed = [j for j in jobs if j.get("missed_schedules")]
+    if not missed:
+        return []
+    states = []
+    for j in jobs:
+        sched = j.get("schedule") or {}
+        if sched:
+            states.append(f"{j.get('job')} {sched.get('pause_status', 'unknown')} (cron {sched.get('cron')} "
+                          f"{sched.get('timezone', '')})".rstrip())
+    facts = ["fact (from get_recent_job_runs): schedules as configured now: " + "; ".join(states)]
+    deploys = results.get("get_recent_deploys", {}) or {}
+    changes = deploys.get("config_changes")
+    if isinstance(changes, dict) and "unavailable" in changes:
+        facts.append("fact: config-change history is unavailable to this identity (no audit access), so a schedule "
+                     "change cannot be seen directly; GitHub deploy runs are listed by get_recent_deploys")
+    else:
+        names = {j.get("job") for j in missed}
+        last: dict[str, dict] = {}
+        for c in _items(changes):
+            job = str(c.get("resource", "")).removeprefix("job:")
+            if job in names and (job not in last or str(c.get("time")) > str(last[job].get("time"))):
+                last[job] = c
+        for job in sorted(names):
+            c = last.get(job)
+            facts.append(f"fact (from get_recent_deploys): last config change to {job}: "
+                         + (f"{c.get('time')} {c.get('action')} by {c.get('actor')}" if c else "none in the window")
+                         + "; no pause or unpause action appears for it")
+    return facts

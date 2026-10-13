@@ -73,6 +73,25 @@ def test_both_10_06_misses_are_one_orchestration_group_with_a_stable_fingerprint
     assert groups[0].fingerprint == again[0].fingerprint and groups[0].fingerprint.startswith("orchestration:")
 
 
+def test_missed_runs_add_deterministic_schedule_facts():
+    deploys = {"status": "ok", "deploys": {"items": []}, "config_changes": {"items": [
+        {"time": "2026-10-01 20:56:45", "action": "reset", "resource": "job:generator", "actor": "ci-dev"},
+        {"time": "2026-09-30 10:00:00", "action": "reset", "resource": "job:generator", "actor": "ci-dev"}]}}
+    jobs = {"status": "ok", "jobs": [
+        {**job("generator", missed=["2026-10-06T05:00:00+00:00"], runs=[run_(1)]),
+         "schedule": {"cron": "0 0 5 * * ?", "timezone": "UTC", "pause_status": "UNPAUSED"}},
+        {**job("ingestion", missed=["2026-10-06T05:30:00+00:00"], runs=[run_(2)]),
+         "schedule": {"cron": "0 30 5 * * ?", "timezone": "UTC", "pause_status": "UNPAUSED"}}]}
+    notes = triage.context_notes(with_(get_recent_job_runs=jobs, get_recent_deploys=deploys))
+    facts = [n for n in notes if n.startswith("fact")]
+    assert "generator UNPAUSED (cron 0 0 5 * * ? UTC); ingestion UNPAUSED (cron 0 30 5 * * ? UTC)" in facts[0]
+    assert "last config change to generator: 2026-10-01 20:56:45 reset by ci-dev" in facts[1]
+    assert "last config change to ingestion: none in the window" in facts[2]
+    assert triage.schedule_facts(HEALTHY) == []          # nothing missed: no schedule facts
+    no_audit = with_(get_recent_job_runs=jobs, get_recent_deploys={"status": "ok", "config_changes": {"unavailable": "x"}})
+    assert any("unavailable to this identity" in n for n in triage.context_notes(no_audit))
+
+
 def test_unexplained_gap_failed_run_unavailable_tool_and_threshold_are_signals():
     r = with_(
         compare_bronze_to_source={"status": "ok", "gaps": {"items": [
