@@ -7,7 +7,8 @@ name: Monitor dev
 # The report goes to the job summary (public repo: tool results are redacted; no hosts, URLs or emails).
 # GitHub disables scheduled workflows after 60 days without repo activity: a disabled monitor is a silent gap.
 # It stays on GitHub on purpose (owner decision 2026-10-13): an external watchdog that keeps running when Databricks
-# schedules stop firing (2026-10-06, 2026-10-11..13).
+# schedules stop firing (2026-10-06, 2026-10-11..13). With write on, it also triggers today's missed dev generator /
+# dev ingestion run (once per job per day, generator first) and labels the incident [self-healed] (docs/watchdog_plan.md).
 # Never switch the trigger to pull_request_target (CLAUDE.md). Third-party actions are pinned to commit SHAs.
 
 on:
@@ -28,7 +29,7 @@ jobs:
   monitor:
     name: monitor dev
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90       # watchdog waits: generator <= 20 min + dev ingestion <= 45 min, plus the checks (docs/watchdog_plan.md)
     # Shared with every job that calls the workspace; never cancels a running deploy.
     concurrency:
       group: databricks-workspace
@@ -56,6 +57,7 @@ jobs:
           DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET_DEV }}
           DATABRICKS_AUTH_TYPE: oauth-m2m
           GH_TOKEN: ${{ github.token }}
+          WATCHDOG_TRIGGER: ${{ vars.WATCHDOG_TRIGGER }}   # "off" = kill switch: report what would be triggered, trigger nothing
           PYTHONPATH: src
           WRITE: ${{ github.event_name == 'schedule' || inputs.write }}
         run: |

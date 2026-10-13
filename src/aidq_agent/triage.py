@@ -92,6 +92,17 @@ def signals_from(results: dict[str, dict]) -> list[Signal]:
     return out
 
 
+def watchdog_signals(result) -> list[Signal]:
+    """The watchdog's due jobs as ORCHESTRATION signals (grouped with the missed schedules, so one incident per
+    day says both why the scheduler did not fire and what the watchdog did)."""
+    if result is None:
+        return []
+    return [Signal("self_healed", "ORCHESTRATION", f"watchdog:{a.job}",
+                   f"watchdog: {a.job} due ({a.reason}); "
+                   + (f"triggered run {a.run_id}: {a.result}" if a.triggered else (a.result or "not triggered")))
+            for a in result.actions if a.due]
+
+
 def group(signals: list[Signal]) -> list[Group]:
     """One investigation per category: e.g. both 10-06 missed runs are one ORCHESTRATION incident."""
     groups: dict[str, Group] = {}
