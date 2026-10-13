@@ -96,7 +96,7 @@
   },
   {
    "name": "compare_bronze_to_source",
-   "description": "Row counts of dev bronze against the source per table and snapshot date (updated_date day). Lists every\n        date that differs, classified as known_defect_same_day_duplicates or unexplained; verdict identical /\n        known_defects_only / unexplained_gaps. `since` (YYYY-MM-DD) limits the dates compared.",
+   "description": "Row counts of dev bronze against the source per table and snapshot date (updated_date day). Lists every\n        date that differs (verdict identical / gaps), plus, for information, the business keys that have several\n        versions on one day in the source. `since` (YYYY-MM-DD) limits the dates compared.",
    "input_schema": {
     "properties": {
      "env": {
@@ -2997,16 +2997,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 4309,
-      "rows_written": 4309,
+      "rows_read": 6255,
+      "rows_written": 6255,
       "rows_rejected": null,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 2,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_certifications",
@@ -3014,16 +3014,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 4309,
-      "rows_written": 4242,
-      "rows_rejected": 67,
-      "reject_rate": 0.0155,
+      "rows_read": 6255,
+      "rows_written": 6146,
+      "rows_rejected": 109,
+      "reject_rate": 0.0174,
       "discard_threshold": 0.05,
       "threshold_breached": false,
       "active_rules": 2,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_certifications",
@@ -3031,16 +3031,16 @@
       "run_id": "<id-35>",
       "status": "OK",
       "error": null,
-      "rows_read": 4271,
-      "rows_written": 4271,
+      "rows_read": 6255,
+      "rows_written": 6255,
       "rows_rejected": 0,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 2,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:39:18.887939+00:00",
-      "ended_at": "2026-10-06T17:39:32.451540+00:00"
+      "started_at": "2026-10-13T14:46:10.496826+00:00",
+      "ended_at": "2026-10-13T14:46:28.131847+00:00"
      },
      {
       "source_table": "netsuite_certifications",
@@ -3048,16 +3048,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 4242,
-      "rows_written": 2646,
+      "rows_read": 6146,
+      "rows_written": 3141,
       "rows_rejected": null,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 2,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_customers",
@@ -3065,16 +3065,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 2700,
-      "rows_written": 2700,
+      "rows_read": 3200,
+      "rows_written": 3200,
       "rows_rejected": null,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 0,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_customers",
@@ -3082,16 +3082,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 2700,
-      "rows_written": 2700,
+      "rows_read": 3200,
+      "rows_written": 3200,
       "rows_rejected": 0,
       "reject_rate": 0.0,
       "discard_threshold": 0.05,
       "threshold_breached": false,
       "active_rules": 0,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_memberships",
@@ -3099,16 +3099,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 5368,
-      "rows_written": 5368,
+      "rows_read": 7816,
+      "rows_written": 7816,
       "rows_rejected": null,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 2,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_memberships",
@@ -3116,16 +3116,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 5368,
-      "rows_written": 5333,
-      "rows_rejected": 35,
-      "reject_rate": 0.0065,
+      "rows_read": 7816,
+      "rows_written": 7770,
+      "rows_rejected": 46,
+      "reject_rate": 0.0059,
       "discard_threshold": 0.05,
       "threshold_breached": false,
       "active_rules": 2,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_memberships",
@@ -3133,16 +3133,16 @@
       "run_id": "<id-35>",
       "status": "OK",
       "error": null,
-      "rows_read": 5320,
-      "rows_written": 5320,
+      "rows_read": 7816,
+      "rows_written": 7816,
       "rows_rejected": 0,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 2,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:39:18.887939+00:00",
-      "ended_at": "2026-10-06T17:39:38.337721+00:00"
+      "started_at": "2026-10-13T14:46:10.496826+00:00",
+      "ended_at": "2026-10-13T14:46:34.205459+00:00"
      },
      {
       "source_table": "netsuite_memberships",
@@ -3150,16 +3150,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 5333,
-      "rows_written": 3334,
+      "rows_read": 7770,
+      "rows_written": 3964,
       "rows_rejected": null,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 2,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_transaction_lines",
@@ -3167,16 +3167,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 64534,
-      "rows_written": 64534,
+      "rows_read": 93828,
+      "rows_written": 93828,
       "rows_rejected": null,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 1,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_transaction_lines",
@@ -3184,16 +3184,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 64534,
-      "rows_written": 64534,
+      "rows_read": 93828,
+      "rows_written": 93828,
       "rows_rejected": 0,
       "reject_rate": 0.0,
       "discard_threshold": 0.05,
       "threshold_breached": false,
       "active_rules": 1,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_transaction_lines",
@@ -3201,16 +3201,16 @@
       "run_id": "<id-35>",
       "status": "OK",
       "error": null,
-      "rows_read": 63956,
-      "rows_written": 63956,
+      "rows_read": 93807,
+      "rows_written": 93807,
       "rows_rejected": 0,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 1,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:39:18.887939+00:00",
-      "ended_at": "2026-10-06T17:39:26.956265+00:00"
+      "started_at": "2026-10-13T14:46:10.496826+00:00",
+      "ended_at": "2026-10-13T14:46:20.909063+00:00"
      },
      {
       "source_table": "netsuite_transaction_lines",
@@ -3218,16 +3218,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 64534,
-      "rows_written": 40210,
+      "rows_read": 93828,
+      "rows_written": 47710,
       "rows_rejected": null,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 1,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_transactions",
@@ -3235,16 +3235,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 21515,
-      "rows_written": 21515,
+      "rows_read": 31278,
+      "rows_written": 31278,
       "rows_rejected": null,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 0,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_transactions",
@@ -3252,16 +3252,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 21515,
-      "rows_written": 21515,
+      "rows_read": 31278,
+      "rows_written": 31278,
       "rows_rejected": 0,
       "reject_rate": 0.0,
       "discard_threshold": 0.05,
       "threshold_breached": false,
       "active_rules": 0,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_transactions",
@@ -3269,16 +3269,16 @@
       "run_id": "<id-35>",
       "status": "OK",
       "error": null,
-      "rows_read": 21319,
-      "rows_written": 21319,
+      "rows_read": 31278,
+      "rows_written": 31278,
       "rows_rejected": 0,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 0,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:39:18.887939+00:00",
-      "ended_at": "2026-10-06T17:39:44.152983+00:00"
+      "started_at": "2026-10-13T14:46:10.496826+00:00",
+      "ended_at": "2026-10-13T14:46:40.567541+00:00"
      },
      {
       "source_table": "netsuite_transactions",
@@ -3286,16 +3286,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 21515,
-      "rows_written": 13402,
+      "rows_read": 31278,
+      "rows_written": 15902,
       "rows_rejected": null,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 0,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      }
     ],
     "latest_guard": {
@@ -3303,7 +3303,7 @@
      "status": "WARN",
      "event_log_reads": 2,
      "error": "update <id-36>: create_update event found after 2 read(s)",
-     "started_at": "2026-10-06T17:34:08.370000+00:00"
+     "started_at": "2026-10-13T14:36:12.719000+00:00"
     },
     "note": "layer 'ledger' stores ledger pairs in rows_read and mismatches in rows_rejected; guard WARN with 2 event-log reads is the normal baseline"
    }
@@ -3324,16 +3324,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 2700,
-      "rows_written": 2700,
+      "rows_read": 3200,
+      "rows_written": 3200,
       "rows_rejected": null,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 0,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_customers",
@@ -3341,16 +3341,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 2700,
-      "rows_written": 2700,
+      "rows_read": 3200,
+      "rows_written": 3200,
       "rows_rejected": 0,
       "reject_rate": 0.0,
       "discard_threshold": 0.05,
       "threshold_breached": false,
       "active_rules": 0,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      }
     ],
     "latest_guard": {
@@ -3358,7 +3358,7 @@
      "status": "WARN",
      "event_log_reads": 2,
      "error": "update <id-36>: create_update event found after 2 read(s)",
-     "started_at": "2026-10-06T17:34:08.370000+00:00"
+     "started_at": "2026-10-13T14:36:12.719000+00:00"
     },
     "note": "layer 'ledger' stores ledger pairs in rows_read and mismatches in rows_rejected; guard WARN with 2 event-log reads is the normal baseline"
    }
@@ -3379,16 +3379,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 5368,
-      "rows_written": 5368,
+      "rows_read": 7816,
+      "rows_written": 7816,
       "rows_rejected": null,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 2,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_memberships",
@@ -3396,16 +3396,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 5368,
-      "rows_written": 5333,
-      "rows_rejected": 35,
-      "reject_rate": 0.0065,
+      "rows_read": 7816,
+      "rows_written": 7770,
+      "rows_rejected": 46,
+      "reject_rate": 0.0059,
       "discard_threshold": 0.05,
       "threshold_breached": false,
       "active_rules": 2,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_memberships",
@@ -3413,16 +3413,16 @@
       "run_id": "<id-35>",
       "status": "OK",
       "error": null,
-      "rows_read": 5320,
-      "rows_written": 5320,
+      "rows_read": 7816,
+      "rows_written": 7816,
       "rows_rejected": 0,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 2,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:39:18.887939+00:00",
-      "ended_at": "2026-10-06T17:39:38.337721+00:00"
+      "started_at": "2026-10-13T14:46:10.496826+00:00",
+      "ended_at": "2026-10-13T14:46:34.205459+00:00"
      },
      {
       "source_table": "netsuite_memberships",
@@ -3430,16 +3430,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 5333,
-      "rows_written": 3334,
+      "rows_read": 7770,
+      "rows_written": 3964,
       "rows_rejected": null,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 2,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      }
     ],
     "latest_guard": {
@@ -3447,7 +3447,7 @@
      "status": "WARN",
      "event_log_reads": 2,
      "error": "update <id-36>: create_update event found after 2 read(s)",
-     "started_at": "2026-10-06T17:34:08.370000+00:00"
+     "started_at": "2026-10-13T14:36:12.719000+00:00"
     },
     "note": "layer 'ledger' stores ledger pairs in rows_read and mismatches in rows_rejected; guard WARN with 2 event-log reads is the normal baseline"
    }
@@ -3468,16 +3468,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 4309,
-      "rows_written": 4309,
+      "rows_read": 6255,
+      "rows_written": 6255,
       "rows_rejected": null,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 2,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_certifications",
@@ -3485,16 +3485,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 4309,
-      "rows_written": 4242,
-      "rows_rejected": 67,
-      "reject_rate": 0.0155,
+      "rows_read": 6255,
+      "rows_written": 6146,
+      "rows_rejected": 109,
+      "reject_rate": 0.0174,
       "discard_threshold": 0.05,
       "threshold_breached": false,
       "active_rules": 2,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_certifications",
@@ -3502,16 +3502,16 @@
       "run_id": "<id-35>",
       "status": "OK",
       "error": null,
-      "rows_read": 4271,
-      "rows_written": 4271,
+      "rows_read": 6255,
+      "rows_written": 6255,
       "rows_rejected": 0,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 2,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:39:18.887939+00:00",
-      "ended_at": "2026-10-06T17:39:32.451540+00:00"
+      "started_at": "2026-10-13T14:46:10.496826+00:00",
+      "ended_at": "2026-10-13T14:46:28.131847+00:00"
      },
      {
       "source_table": "netsuite_certifications",
@@ -3519,16 +3519,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 4242,
-      "rows_written": 2646,
+      "rows_read": 6146,
+      "rows_written": 3141,
       "rows_rejected": null,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 2,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      }
     ],
     "latest_guard": {
@@ -3536,7 +3536,7 @@
      "status": "WARN",
      "event_log_reads": 2,
      "error": "update <id-36>: create_update event found after 2 read(s)",
-     "started_at": "2026-10-06T17:34:08.370000+00:00"
+     "started_at": "2026-10-13T14:36:12.719000+00:00"
     },
     "note": "layer 'ledger' stores ledger pairs in rows_read and mismatches in rows_rejected; guard WARN with 2 event-log reads is the normal baseline"
    }
@@ -3557,16 +3557,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 21515,
-      "rows_written": 21515,
+      "rows_read": 31278,
+      "rows_written": 31278,
       "rows_rejected": null,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 0,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_transactions",
@@ -3574,16 +3574,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 21515,
-      "rows_written": 21515,
+      "rows_read": 31278,
+      "rows_written": 31278,
       "rows_rejected": 0,
       "reject_rate": 0.0,
       "discard_threshold": 0.05,
       "threshold_breached": false,
       "active_rules": 0,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_transactions",
@@ -3591,16 +3591,16 @@
       "run_id": "<id-35>",
       "status": "OK",
       "error": null,
-      "rows_read": 21319,
-      "rows_written": 21319,
+      "rows_read": 31278,
+      "rows_written": 31278,
       "rows_rejected": 0,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 0,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:39:18.887939+00:00",
-      "ended_at": "2026-10-06T17:39:44.152983+00:00"
+      "started_at": "2026-10-13T14:46:10.496826+00:00",
+      "ended_at": "2026-10-13T14:46:40.567541+00:00"
      },
      {
       "source_table": "netsuite_transactions",
@@ -3608,16 +3608,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 21515,
-      "rows_written": 13402,
+      "rows_read": 31278,
+      "rows_written": 15902,
       "rows_rejected": null,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 0,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      }
     ],
     "latest_guard": {
@@ -3625,7 +3625,7 @@
      "status": "WARN",
      "event_log_reads": 2,
      "error": "update <id-36>: create_update event found after 2 read(s)",
-     "started_at": "2026-10-06T17:34:08.370000+00:00"
+     "started_at": "2026-10-13T14:36:12.719000+00:00"
     },
     "note": "layer 'ledger' stores ledger pairs in rows_read and mismatches in rows_rejected; guard WARN with 2 event-log reads is the normal baseline"
    }
@@ -3646,16 +3646,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 64534,
-      "rows_written": 64534,
+      "rows_read": 93828,
+      "rows_written": 93828,
       "rows_rejected": null,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 1,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_transaction_lines",
@@ -3663,16 +3663,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 64534,
-      "rows_written": 64534,
+      "rows_read": 93828,
+      "rows_written": 93828,
       "rows_rejected": 0,
       "reject_rate": 0.0,
       "discard_threshold": 0.05,
       "threshold_breached": false,
       "active_rules": 1,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      },
      {
       "source_table": "netsuite_transaction_lines",
@@ -3680,16 +3680,16 @@
       "run_id": "<id-35>",
       "status": "OK",
       "error": null,
-      "rows_read": 63956,
-      "rows_written": 63956,
+      "rows_read": 93807,
+      "rows_written": 93807,
       "rows_rejected": 0,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 1,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:39:18.887939+00:00",
-      "ended_at": "2026-10-06T17:39:26.956265+00:00"
+      "started_at": "2026-10-13T14:46:10.496826+00:00",
+      "ended_at": "2026-10-13T14:46:20.909063+00:00"
      },
      {
       "source_table": "netsuite_transaction_lines",
@@ -3697,16 +3697,16 @@
       "run_id": "<id-35>",
       "status": "SUCCESS",
       "error": null,
-      "rows_read": 64534,
-      "rows_written": 40210,
+      "rows_read": 93828,
+      "rows_written": 47710,
       "rows_rejected": null,
       "reject_rate": null,
       "discard_threshold": 0.05,
       "threshold_breached": null,
       "active_rules": 1,
       "open_proposals": 0,
-      "started_at": "2026-10-06T17:34:08.370000+00:00",
-      "ended_at": "2026-10-06T17:36:50.281000+00:00"
+      "started_at": "2026-10-13T14:36:12.719000+00:00",
+      "ended_at": "2026-10-13T14:43:09.093000+00:00"
      }
     ],
     "latest_guard": {
@@ -3714,7 +3714,7 @@
      "status": "WARN",
      "event_log_reads": 2,
      "error": "update <id-36>: create_update event found after 2 read(s)",
-     "started_at": "2026-10-06T17:34:08.370000+00:00"
+     "started_at": "2026-10-13T14:36:12.719000+00:00"
     },
     "note": "layer 'ledger' stores ledger pairs in rows_read and mismatches in rows_rejected; guard WARN with 2 event-log reads is the normal baseline"
    }
@@ -3962,113 +3962,320 @@
     "status": "ok",
     "env": "dev",
     "since": null,
-    "verdict": "known_defects_only",
+    "verdict": "identical",
     "totals": [
      {
       "table": "netsuite_customers",
-      "source": 2700,
-      "bronze": 2700
+      "source": 3200,
+      "bronze": 3200
      },
      {
       "table": "netsuite_memberships",
-      "source": 5392,
-      "bronze": 5368
+      "source": 7816,
+      "bronze": 7816
      },
      {
       "table": "netsuite_certifications",
-      "source": 4315,
-      "bronze": 4309
+      "source": 6255,
+      "bronze": 6255
      },
      {
       "table": "netsuite_transactions",
-      "source": 21578,
-      "bronze": 21515
+      "source": 31278,
+      "bronze": 31278
      },
      {
       "table": "netsuite_transaction_lines",
-      "source": 64728,
-      "bronze": 64534
+      "source": 93828,
+      "bronze": 93828
      }
     ],
     "gaps": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    },
+    "same_day_versions": {
      "items": [
       {
        "table": "netsuite_certifications",
+       "date": "2026-07-11",
+       "keys_with_several_versions": 20,
+       "keys": [
+        "8041",
+        "8203",
+        "8259",
+        "8271",
+        "8274",
+        "8569",
+        "8573",
+        "8947",
+        "8952",
+        "9096",
+        "9241",
+        "9308",
+        "9332",
+        "9501",
+        "9541",
+        "9638",
+        "9690",
+        "9746",
+        "9863",
+        "None"
+       ]
+      },
+      {
+       "table": "netsuite_certifications",
        "date": "2026-10-02",
-       "source": 392,
-       "bronze": 387,
-       "missing": 5,
-       "same_day_extra": 5,
-       "classification": "known_defect_same_day_duplicates"
+       "keys_with_several_versions": 5,
+       "keys": [
+        "10081",
+        "8019",
+        "8268",
+        "8507",
+        "8643"
+       ]
       },
       {
        "table": "netsuite_certifications",
        "date": "2026-10-03",
-       "source": 398,
-       "bronze": 397,
-       "missing": 1,
-       "same_day_extra": 1,
-       "classification": "known_defect_same_day_duplicates"
+       "keys_with_several_versions": 1,
+       "keys": [
+        "8495"
+       ]
+      },
+      {
+       "table": "netsuite_memberships",
+       "date": "2026-07-11",
+       "keys_with_several_versions": 25,
+       "keys": [
+        "5040",
+        "5233",
+        "5360",
+        "5367",
+        "5388",
+        "5419",
+        "5441",
+        "5525",
+        "5585",
+        "5619",
+        "5646",
+        "5695",
+        "5708",
+        "5833",
+        "6060",
+        "6088",
+        "6297",
+        "6325",
+        "6585",
+        "6683"
+       ]
       },
       {
        "table": "netsuite_memberships",
        "date": "2026-10-02",
-       "source": 500,
-       "bronze": 489,
-       "missing": 11,
-       "same_day_extra": 11,
-       "classification": "known_defect_same_day_duplicates"
+       "keys_with_several_versions": 11,
+       "keys": [
+        "5225",
+        "5287",
+        "5650",
+        "5765",
+        "6243",
+        "6832",
+        "7014",
+        "7169",
+        "7172",
+        "7309",
+        "7554"
+       ]
       },
       {
        "table": "netsuite_memberships",
        "date": "2026-10-03",
-       "source": 506,
-       "bronze": 493,
-       "missing": 13,
-       "same_day_extra": 13,
-       "classification": "known_defect_same_day_duplicates"
+       "keys_with_several_versions": 13,
+       "keys": [
+        "5704",
+        "5878",
+        "5969",
+        "5987",
+        "6060",
+        "6217",
+        "6292",
+        "6523",
+        "6875",
+        "7024",
+        "7102",
+        "7205",
+        "7290"
+       ]
+      },
+      {
+       "table": "netsuite_transaction_lines",
+       "date": "2026-07-11",
+       "keys_with_several_versions": 289,
+       "keys": [
+        "90025_5",
+        "90072_3",
+        "90092_3",
+        "90113_2",
+        "90136_1",
+        "90184_2",
+        "90286_2",
+        "90324_3",
+        "90326_1",
+        "90383_2",
+        "90399_1",
+        "90420_1",
+        "90459_3",
+        "90484_1",
+        "90487_2",
+        "90495_2",
+        "90514_4",
+        "90527_2",
+        "90533_1",
+        "90578_1"
+       ]
       },
       {
        "table": "netsuite_transaction_lines",
        "date": "2026-10-02",
-       "source": 5988,
-       "bronze": 5898,
-       "missing": 90,
-       "same_day_extra": 90,
-       "classification": "known_defect_same_day_duplicates"
+       "keys_with_several_versions": 90,
+       "keys": [
+        "100159_1",
+        "100189_2",
+        "100517_4",
+        "100558_2",
+        "100735_4",
+        "100903_2",
+        "100927_1",
+        "90352_1",
+        "90371_2",
+        "90389_3",
+        "90468_2",
+        "90722_2",
+        "90746_1",
+        "90857_4",
+        "90938_3",
+        "91025_5",
+        "91118_3",
+        "91233_3",
+        "91244_2",
+        "91261_2"
+       ]
       },
       {
        "table": "netsuite_transaction_lines",
        "date": "2026-10-03",
-       "source": 6074,
-       "bronze": 5970,
-       "missing": 104,
-       "same_day_extra": 104,
-       "classification": "known_defect_same_day_duplicates"
+       "keys_with_several_versions": 104,
+       "keys": [
+        "100029_2",
+        "100048_3",
+        "100145_1",
+        "100153_1",
+        "100337_2",
+        "100391_5",
+        "100614_4",
+        "100676_1",
+        "100682_3",
+        "100741_1",
+        "100930_2",
+        "100961_1",
+        "100999_1",
+        "90177_2",
+        "90272_1",
+        "90339_2",
+        "90546_1",
+        "90577_2",
+        "90581_3",
+        "90699_3"
+       ]
+      },
+      {
+       "table": "netsuite_transactions",
+       "date": "2026-07-11",
+       "keys_with_several_versions": 99,
+       "keys": [
+        "90145",
+        "90252",
+        "90294",
+        "90298",
+        "90309",
+        "90420",
+        "90446",
+        "90599",
+        "90690",
+        "90723",
+        "90760",
+        "90780",
+        "90965",
+        "91115",
+        "91286",
+        "91786",
+        "91816",
+        "91900",
+        "92004",
+        "92017"
+       ]
       },
       {
        "table": "netsuite_transactions",
        "date": "2026-10-02",
-       "source": 1994,
-       "bronze": 1960,
-       "missing": 34,
-       "same_day_extra": 34,
-       "classification": "known_defect_same_day_duplicates"
+       "keys_with_several_versions": 34,
+       "keys": [
+        "100965",
+        "90126",
+        "90230",
+        "90503",
+        "90649",
+        "90713",
+        "91715",
+        "91756",
+        "91832",
+        "91978",
+        "91982",
+        "92131",
+        "92180",
+        "92638",
+        "92943",
+        "93349",
+        "93822",
+        "94226",
+        "94327",
+        "94798"
+       ]
       },
       {
        "table": "netsuite_transactions",
        "date": "2026-10-03",
-       "source": 2024,
-       "bronze": 1995,
-       "missing": 29,
-       "same_day_extra": 29,
-       "classification": "known_defect_same_day_duplicates"
+       "keys_with_several_versions": 29,
+       "keys": [
+        "100883",
+        "91170",
+        "91892",
+        "91925",
+        "92297",
+        "92606",
+        "92955",
+        "92976",
+        "93214",
+        "93229",
+        "93305",
+        "93348",
+        "93697",
+        "94150",
+        "94425",
+        "94561",
+        "95348",
+        "95631",
+        "95888",
+        "96179"
+       ]
       }
      ],
-     "total": 8,
+     "total": 12,
      "truncated": false
     },
-    "note": "known_defect_same_day_duplicates: a date short by exactly its same-day duplicate versions (same key, same updated_date day), which the bronze key ledger never loads"
+    "note": "gaps: every (table, date) whose bronze row count differs from the source. same_day_versions (info, not a problem): business keys with several source rows on one updated_date day; bronze loads every version (rows are keyed by content), silver keeps one per key"
    }
   },
   {
@@ -4085,8 +4292,8 @@
     "totals": [
      {
       "table": "netsuite_customers",
-      "source": 2700,
-      "bronze": 2700
+      "source": 3200,
+      "bronze": 3200
      }
     ],
     "gaps": {
@@ -4094,7 +4301,12 @@
      "total": 0,
      "truncated": false
     },
-    "note": "known_defect_same_day_duplicates: a date short by exactly its same-day duplicate versions (same key, same updated_date day), which the bronze key ledger never loads"
+    "same_day_versions": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    },
+    "note": "gaps: every (table, date) whose bronze row count differs from the source. same_day_versions (info, not a problem): business keys with several source rows on one updated_date day; bronze loads every version (rows are keyed by content), silver keeps one per key"
    }
   },
   {
@@ -4107,39 +4319,91 @@
     "status": "ok",
     "env": "dev",
     "since": null,
-    "verdict": "known_defects_only",
+    "verdict": "identical",
     "totals": [
      {
       "table": "netsuite_memberships",
-      "source": 5392,
-      "bronze": 5368
+      "source": 7816,
+      "bronze": 7816
      }
     ],
     "gaps": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    },
+    "same_day_versions": {
      "items": [
       {
        "table": "netsuite_memberships",
+       "date": "2026-07-11",
+       "keys_with_several_versions": 25,
+       "keys": [
+        "5040",
+        "5233",
+        "5360",
+        "5367",
+        "5388",
+        "5419",
+        "5441",
+        "5525",
+        "5585",
+        "5619",
+        "5646",
+        "5695",
+        "5708",
+        "5833",
+        "6060",
+        "6088",
+        "6297",
+        "6325",
+        "6585",
+        "6683"
+       ]
+      },
+      {
+       "table": "netsuite_memberships",
        "date": "2026-10-02",
-       "source": 500,
-       "bronze": 489,
-       "missing": 11,
-       "same_day_extra": 11,
-       "classification": "known_defect_same_day_duplicates"
+       "keys_with_several_versions": 11,
+       "keys": [
+        "5225",
+        "5287",
+        "5650",
+        "5765",
+        "6243",
+        "6832",
+        "7014",
+        "7169",
+        "7172",
+        "7309",
+        "7554"
+       ]
       },
       {
        "table": "netsuite_memberships",
        "date": "2026-10-03",
-       "source": 506,
-       "bronze": 493,
-       "missing": 13,
-       "same_day_extra": 13,
-       "classification": "known_defect_same_day_duplicates"
+       "keys_with_several_versions": 13,
+       "keys": [
+        "5704",
+        "5878",
+        "5969",
+        "5987",
+        "6060",
+        "6217",
+        "6292",
+        "6523",
+        "6875",
+        "7024",
+        "7102",
+        "7205",
+        "7290"
+       ]
       }
      ],
-     "total": 2,
+     "total": 3,
      "truncated": false
     },
-    "note": "known_defect_same_day_duplicates: a date short by exactly its same-day duplicate versions (same key, same updated_date day), which the bronze key ledger never loads"
+    "note": "gaps: every (table, date) whose bronze row count differs from the source. same_day_versions (info, not a problem): business keys with several source rows on one updated_date day; bronze loads every version (rows are keyed by content), silver keeps one per key"
    }
   },
   {
@@ -4152,39 +4416,73 @@
     "status": "ok",
     "env": "dev",
     "since": null,
-    "verdict": "known_defects_only",
+    "verdict": "identical",
     "totals": [
      {
       "table": "netsuite_certifications",
-      "source": 4315,
-      "bronze": 4309
+      "source": 6255,
+      "bronze": 6255
      }
     ],
     "gaps": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    },
+    "same_day_versions": {
      "items": [
       {
        "table": "netsuite_certifications",
+       "date": "2026-07-11",
+       "keys_with_several_versions": 20,
+       "keys": [
+        "8041",
+        "8203",
+        "8259",
+        "8271",
+        "8274",
+        "8569",
+        "8573",
+        "8947",
+        "8952",
+        "9096",
+        "9241",
+        "9308",
+        "9332",
+        "9501",
+        "9541",
+        "9638",
+        "9690",
+        "9746",
+        "9863",
+        "None"
+       ]
+      },
+      {
+       "table": "netsuite_certifications",
        "date": "2026-10-02",
-       "source": 392,
-       "bronze": 387,
-       "missing": 5,
-       "same_day_extra": 5,
-       "classification": "known_defect_same_day_duplicates"
+       "keys_with_several_versions": 5,
+       "keys": [
+        "10081",
+        "8019",
+        "8268",
+        "8507",
+        "8643"
+       ]
       },
       {
        "table": "netsuite_certifications",
        "date": "2026-10-03",
-       "source": 398,
-       "bronze": 397,
-       "missing": 1,
-       "same_day_extra": 1,
-       "classification": "known_defect_same_day_duplicates"
+       "keys_with_several_versions": 1,
+       "keys": [
+        "8495"
+       ]
       }
      ],
-     "total": 2,
+     "total": 3,
      "truncated": false
     },
-    "note": "known_defect_same_day_duplicates: a date short by exactly its same-day duplicate versions (same key, same updated_date day), which the bronze key ledger never loads"
+    "note": "gaps: every (table, date) whose bronze row count differs from the source. same_day_versions (info, not a problem): business keys with several source rows on one updated_date day; bronze loads every version (rows are keyed by content), silver keeps one per key"
    }
   },
   {
@@ -4197,39 +4495,107 @@
     "status": "ok",
     "env": "dev",
     "since": null,
-    "verdict": "known_defects_only",
+    "verdict": "identical",
     "totals": [
      {
       "table": "netsuite_transactions",
-      "source": 21578,
-      "bronze": 21515
+      "source": 31278,
+      "bronze": 31278
      }
     ],
     "gaps": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    },
+    "same_day_versions": {
      "items": [
       {
        "table": "netsuite_transactions",
+       "date": "2026-07-11",
+       "keys_with_several_versions": 99,
+       "keys": [
+        "90145",
+        "90252",
+        "90294",
+        "90298",
+        "90309",
+        "90420",
+        "90446",
+        "90599",
+        "90690",
+        "90723",
+        "90760",
+        "90780",
+        "90965",
+        "91115",
+        "91286",
+        "91786",
+        "91816",
+        "91900",
+        "92004",
+        "92017"
+       ]
+      },
+      {
+       "table": "netsuite_transactions",
        "date": "2026-10-02",
-       "source": 1994,
-       "bronze": 1960,
-       "missing": 34,
-       "same_day_extra": 34,
-       "classification": "known_defect_same_day_duplicates"
+       "keys_with_several_versions": 34,
+       "keys": [
+        "100965",
+        "90126",
+        "90230",
+        "90503",
+        "90649",
+        "90713",
+        "91715",
+        "91756",
+        "91832",
+        "91978",
+        "91982",
+        "92131",
+        "92180",
+        "92638",
+        "92943",
+        "93349",
+        "93822",
+        "94226",
+        "94327",
+        "94798"
+       ]
       },
       {
        "table": "netsuite_transactions",
        "date": "2026-10-03",
-       "source": 2024,
-       "bronze": 1995,
-       "missing": 29,
-       "same_day_extra": 29,
-       "classification": "known_defect_same_day_duplicates"
+       "keys_with_several_versions": 29,
+       "keys": [
+        "100883",
+        "91170",
+        "91892",
+        "91925",
+        "92297",
+        "92606",
+        "92955",
+        "92976",
+        "93214",
+        "93229",
+        "93305",
+        "93348",
+        "93697",
+        "94150",
+        "94425",
+        "94561",
+        "95348",
+        "95631",
+        "95888",
+        "96179"
+       ]
       }
      ],
-     "total": 2,
+     "total": 3,
      "truncated": false
     },
-    "note": "known_defect_same_day_duplicates: a date short by exactly its same-day duplicate versions (same key, same updated_date day), which the bronze key ledger never loads"
+    "note": "gaps: every (table, date) whose bronze row count differs from the source. same_day_versions (info, not a problem): business keys with several source rows on one updated_date day; bronze loads every version (rows are keyed by content), silver keeps one per key"
    }
   },
   {
@@ -4242,39 +4608,107 @@
     "status": "ok",
     "env": "dev",
     "since": null,
-    "verdict": "known_defects_only",
+    "verdict": "identical",
     "totals": [
      {
       "table": "netsuite_transaction_lines",
-      "source": 64728,
-      "bronze": 64534
+      "source": 93828,
+      "bronze": 93828
      }
     ],
     "gaps": {
+     "items": [],
+     "total": 0,
+     "truncated": false
+    },
+    "same_day_versions": {
      "items": [
       {
        "table": "netsuite_transaction_lines",
+       "date": "2026-07-11",
+       "keys_with_several_versions": 289,
+       "keys": [
+        "90025_5",
+        "90072_3",
+        "90092_3",
+        "90113_2",
+        "90136_1",
+        "90184_2",
+        "90286_2",
+        "90324_3",
+        "90326_1",
+        "90383_2",
+        "90399_1",
+        "90420_1",
+        "90459_3",
+        "90484_1",
+        "90487_2",
+        "90495_2",
+        "90514_4",
+        "90527_2",
+        "90533_1",
+        "90578_1"
+       ]
+      },
+      {
+       "table": "netsuite_transaction_lines",
        "date": "2026-10-02",
-       "source": 5988,
-       "bronze": 5898,
-       "missing": 90,
-       "same_day_extra": 90,
-       "classification": "known_defect_same_day_duplicates"
+       "keys_with_several_versions": 90,
+       "keys": [
+        "100159_1",
+        "100189_2",
+        "100517_4",
+        "100558_2",
+        "100735_4",
+        "100903_2",
+        "100927_1",
+        "90352_1",
+        "90371_2",
+        "90389_3",
+        "90468_2",
+        "90722_2",
+        "90746_1",
+        "90857_4",
+        "90938_3",
+        "91025_5",
+        "91118_3",
+        "91233_3",
+        "91244_2",
+        "91261_2"
+       ]
       },
       {
        "table": "netsuite_transaction_lines",
        "date": "2026-10-03",
-       "source": 6074,
-       "bronze": 5970,
-       "missing": 104,
-       "same_day_extra": 104,
-       "classification": "known_defect_same_day_duplicates"
+       "keys_with_several_versions": 104,
+       "keys": [
+        "100029_2",
+        "100048_3",
+        "100145_1",
+        "100153_1",
+        "100337_2",
+        "100391_5",
+        "100614_4",
+        "100676_1",
+        "100682_3",
+        "100741_1",
+        "100930_2",
+        "100961_1",
+        "100999_1",
+        "90177_2",
+        "90272_1",
+        "90339_2",
+        "90546_1",
+        "90577_2",
+        "90581_3",
+        "90699_3"
+       ]
       }
      ],
-     "total": 2,
+     "total": 3,
      "truncated": false
     },
-    "note": "known_defect_same_day_duplicates: a date short by exactly its same-day duplicate versions (same key, same updated_date day), which the bronze key ledger never loads"
+    "note": "gaps: every (table, date) whose bronze row count differs from the source. same_day_versions (info, not a problem): business keys with several source rows on one updated_date day; bronze loads every version (rows are keyed by content), silver keeps one per key"
    }
   },
   {

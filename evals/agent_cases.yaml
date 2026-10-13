@@ -1,11 +1,11 @@
 # Agent eval cases: recorded tool outputs (evals/cassettes) + what the monitor must do with them.
 # `fixture` points at evals/incidents/<id>.yaml, whose grading.must_identify / must_not_claim the judge checks.
 cases:
-  - id: healthy_2026-10-05
-    cassette: 2026-10-05_after_daily_run
-    now: "2026-10-05T12:00:00+00:00"
+  - id: healthy_2026-10-09
+    cassette: 2026-10-09_after_daily_run
+    now: "2026-10-09T12:00:00+00:00"
     expect_incident: false
-    note: both daily runs succeeded; the only gaps are the known same-day duplicates
+    note: first scheduled cycle after the row-hash fix; both daily runs succeeded, bronze = source (same-day versions are info only)
 
   - id: duplicate_versions
     cassette: 2026-10-05_pre_fix
