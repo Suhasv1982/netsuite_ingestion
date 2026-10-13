@@ -77,14 +77,17 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
   * Test first: CAN_USE (granted to ci-dev and data-generator on both projects) is not enough. ci-dev's PATCH was refused: "assign the user 'Can Manage' for Database project".
   * Then CAN_MANAGE as in #42: ci-dev on `netsuite-sample` and `aidq-metadata`, data-generator on `netsuite-sample`.
   * Verified: the monitor (dry run from the #42 branch, as ci-dev) re-enabled the disabled dev metadata endpoint and logged it.
-  * Leftover from the test: data-generator still has CAN_USE on `aidq-metadata` (not needed; remove on the owner's OK).
+  * The leftover CAN_USE for data-generator on `aidq-metadata` was removed 2026-10-13 (owner OK).
+  * Final, direct: `netsuite-sample`: ci-dev CAN_MANAGE, data-generator CAN_MANAGE. `aidq-metadata`: ci-dev CAN_MANAGE, data-generator none (ci-prod CAN_MANAGE and the owner CAN_MANAGE, unchanged).
+  * Known gaps: project-level manage covers prod (below). Every workspace user, both SPs included, inherits CAN_CREATE on both projects through the `users` group (workspace default, not ours).
   * **ci-dev and data-generator have project-level manage on shared projects, which covers prod; resolve before prod goes live.**
 * **Merged in the owner's order:** #36, #37, then the owner ran `tools/setup_dq_roles.sh DEFAULT` (dq-agent `47b5b3c3-62ad-425d-9322-1d7907438113`, its Lakebase role, the three group roles checked exact, `workspace.generator`, the UC and warehouse grants), then #38, #39, #40, #41, #42.
   * The deploy-dev runs for #38-#41 were **cancelled**: only one job can wait in the `databricks-workspace` concurrency group, so each newer queued job (finally #42's PR checks) cancelled the waiting deploy.
   * The deploy for #42's merge (run 38425185821, all of #36-#42) was green: migrations through 006 applied, smoke run SUCCESS, ledger_check OK (transaction_lines 93,807 entries, 0 mismatches).
   * Merge one PR at a time and let its deploy-dev finish before the next push.
 * **Found:** a multi-day outage is never reported. `missed_schedules` treats misses before the first scheduled run in the 3-day window as `unconfirmed`. After 10-11..10-13 (manual runs only) the monitor said "Healthy". Fix planned in the watchdog PR.
-* **Watchdog PR** (the GitHub monitor triggers today's missed generator / dev ingestion runs, waits, and writes an incident): **plan only, open, waiting for approval**. It also fixes the outage bug above. Plan: `docs/watchdog_plan.md` in that PR.
+* **Watchdog PR #44**: plan approved with the owner's checklist and **built** (not merged). It also fixes the outage bug above. Eval case `watchdog_self_healed_10_11` (new fixture 2026-10-11): see `evals/results/2026-10-13c_watchdog_*`.
+* **Model routing plan PR #45** (agents_next_design.md item 1): plan only, open; decision needed on the call-log storage.
 * `docs/agents_next_design.md` (owner): no work until everything above is merged (owner, 2026-10-13).
 
 ## 0. First prod release (2026-10-01, steps 0-7 done; step 8 open)

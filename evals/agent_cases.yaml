@@ -31,3 +31,12 @@ cases:
     fixture: 2026-10-06_scheduler_did_not_fire
     store: unavailable    # the incident store raises (disabled metadata endpoint, 2026-10-11..13)
     note: the diagnosis must still be complete in the report, and the run marked failed (exit 2)
+
+  - id: watchdog_self_healed_10_11
+    cassette: 2026-10-11_afternoon
+    now: "2026-10-11T13:00:00+00:00"
+    expect_incident: true
+    categories: [ORCHESTRATION]
+    fixture: 2026-10-11_scheduler_stopped_three_days
+    watchdog: fake_success   # the watchdog triggered generator then ingestion, both SUCCESS (no real runs in an eval)
+    note: second day of the 10-11..10-13 outage; one ORCHESTRATION incident labelled [self-healed] with the outcome

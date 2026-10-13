@@ -53,6 +53,28 @@ def test_same_day_versions_groups_keys_per_table_and_date():
 
 # -- schedules ----------------------------------------------------------------
 
+def test_a_multi_day_outage_with_only_manual_runs_is_confirmed():
+    # 2026-10-11..13: no PERIODIC run in the 3-day window, only a manual run on 10-13 14:35
+    start, end = dt.datetime(2026, 10, 10, 15, 45, tzinfo=dt.timezone.utc), dt.datetime(2026, 10, 13, 15, 45, tzinfo=dt.timezone.utc)
+    manual = [dt.datetime(2026, 10, 13, 14, 35, tzinfo=dt.timezone.utc)]
+    old = logic.missed_schedules("0 0 5 * * ?", False, manual, start, end)
+    assert old["confirmed"] == [] and len(old["unconfirmed"]) == 3        # the bug: never reported
+    known = logic.schedule_known_since(dt.datetime(2026, 9, 29, tzinfo=dt.timezone.utc),
+                                       [dt.datetime(2026, 10, 8, 19, 49, tzinfo=dt.timezone.utc)], end)
+    new = logic.missed_schedules("0 0 5 * * ?", False, manual, start, end, schedule_known_since=known)
+    assert [f.day for f in new["confirmed"]] == [11, 12, 13] and new["unconfirmed"] == []
+
+
+def test_schedule_known_since_needs_a_deploy_history_and_ignores_later_deploys():
+    end = dt.datetime(2026, 10, 13, tzinfo=dt.timezone.utc)
+    created = dt.datetime(2026, 9, 29, tzinfo=dt.timezone.utc)
+    assert logic.schedule_known_since(created, [], end) is None
+    assert logic.schedule_known_since(None, [end], end) is None
+    later = dt.datetime(2026, 10, 14, tzinfo=dt.timezone.utc)
+    d1 = dt.datetime(2026, 10, 8, tzinfo=dt.timezone.utc)
+    assert logic.schedule_known_since(created, [d1, later], end) == d1
+    assert logic.schedule_known_since(dt.datetime(2026, 10, 10, tzinfo=dt.timezone.utc), [d1], end).day == 10
+
 def test_cron_fire_times_daily():
     assert logic.cron_fire_times("0 30 5 * * ?", t(4, 0), t(6, 0)) == [t(4, 5, 30), t(5, 5, 30)]
     assert logic.cron_fire_times("0 0 5 * * ?", t(4, 5), t(4, 6)) == [t(4, 5)]  # start inclusive

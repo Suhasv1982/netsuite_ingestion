@@ -120,6 +120,8 @@ CASES = {
     "2026-10-06_afternoon": dt.datetime(2026, 10, 6, 14, 45, tzinfo=UTC),
     # first healthy day after the row-hash fix (bronze rebuilt on dev, then one scheduled cycle)
     "2026-10-09_after_daily_run": dt.datetime(2026, 10, 9, 12, 0, tzinfo=UTC),
+    # second day of the 10-11..10-13 outage, at the monitor's usual (late) start: both jobs missed today
+    "2026-10-11_afternoon": dt.datetime(2026, 10, 11, 13, 0, tzinfo=UTC),
 }
 
 

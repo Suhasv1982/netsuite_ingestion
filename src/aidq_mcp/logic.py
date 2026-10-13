@@ -67,23 +67,38 @@ def cron_fire_times(quartz: str, start: dt.datetime, end: dt.datetime) -> list[d
 
 def missed_schedules(quartz: str, paused: bool, run_starts: Iterable[dt.datetime], start: dt.datetime,
                      end: dt.datetime, first_scheduled_run: dt.datetime | None = None,
-                     tolerance: dt.timedelta = dt.timedelta(minutes=15)) -> dict:
+                     tolerance: dt.timedelta = dt.timedelta(minutes=15),
+                     schedule_known_since: dt.datetime | None = None) -> dict:
     """Scheduled fire times in the window with no run started within `tolerance` after them (incident 2026-10-06:
     an unpaused schedule that never triggered). A paused schedule misses nothing; a fire time whose tolerance has
     not passed yet at `end` is not counted.
 
     Current settings cannot say when the schedule was added or unpaused, so a miss counts as `confirmed` only
-    after `first_scheduled_run` (the earliest scheduled run seen, proof the schedule was active). Earlier ones
-    are `unconfirmed`: possibly before the schedule existed."""
+    after proof the schedule was active: `first_scheduled_run` (the earliest scheduled run seen) or
+    `schedule_known_since` (the current schedule has been in place since then: the later of the job's creation
+    and the last deploy that could have changed it). Earlier ones are `unconfirmed`. Without
+    `schedule_known_since`, a multi-day outage with only manual runs in the window was never confirmed
+    (2026-10-11..13)."""
     if paused:
         return {"confirmed": [], "unconfirmed": []}
     starts = sorted(run_starts)
     missed = [f for f in cron_fire_times(quartz, start, end)
               if f + tolerance <= end and not any(f <= s <= f + tolerance for s in starts)]
-    if first_scheduled_run is None:
-        return {"confirmed": [], "unconfirmed": missed}
-    return {"confirmed": [f for f in missed if f > first_scheduled_run],
-            "unconfirmed": [f for f in missed if f < first_scheduled_run]}
+    def proven(f: dt.datetime) -> bool:
+        return ((first_scheduled_run is not None and f > first_scheduled_run)
+                or (schedule_known_since is not None and f > schedule_known_since))
+
+    return {"confirmed": [f for f in missed if proven(f)], "unconfirmed": [f for f in missed if not proven(f)]}
+
+
+def schedule_known_since(job_created: dt.datetime | None, deploy_times: Iterable[dt.datetime],
+                         end: dt.datetime) -> dt.datetime | None:
+    """When the job's current schedule was certainly in place: the later of its creation and the last
+    successful deploy before `end` (a deploy may change the schedule). None without a deploy history."""
+    deploys = [t for t in deploy_times if t <= end]
+    if job_created is None or not deploys:
+        return None
+    return max([job_created, *deploys])
 
 
 # -- output shaping -----------------------------------------------------------

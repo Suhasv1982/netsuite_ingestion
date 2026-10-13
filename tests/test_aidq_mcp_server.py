@@ -41,6 +41,9 @@ class FakeReads:
         return {"schedule": {"quartz_cron_expression": CRON[jid], "timezone_id": "UTC", "pause_status": "UNPAUSED"}} \
             if jid in CRON else {}
 
+    def job_created(self, jid):
+        return dt.datetime(2026, 9, 29, 12, 0, tzinfo=dt.timezone.utc) if jid in CRON else None
+
     def job_runs(self, jid, since):
         if jid not in CRON:
             return []
@@ -127,12 +130,14 @@ def test_missed_schedules_on_10_06():
     assert by["canary"]["schedule"] is None and "missed_schedules" not in by["canary"]
 
 
-def test_misses_before_the_first_scheduled_run_are_unconfirmed():
+def test_misses_before_any_proof_of_the_schedule_are_unconfirmed():
     by = {j["job"]: j for j in tools().get_recent_job_runs("dev", 7)["jobs"]}
-    # fake runs start 10-03: 09-29 .. 10-02 05:00 are unconfirmed, 10-06 confirmed
-    assert by["generator"]["missed_schedules"] == ["2026-10-06T05:00:00+00:00"]
-    assert by["generator"]["missed_schedules_unconfirmed"][0] == "2026-09-30T05:00:00+00:00"
-    assert by["generator"]["missed_schedules_unconfirmed"][-1] == "2026-10-02T05:00:00+00:00"
+    # job created 09-29, last deploy 10-01 20:56 (the schedule may have changed then): 09-30 and 10-01 05:00 are
+    # unconfirmed; 10-02 (after the deploy, before the first PERIODIC run on 10-03) and 10-06 are confirmed
+    assert by["generator"]["missed_schedules"] == ["2026-10-02T05:00:00+00:00", "2026-10-06T05:00:00+00:00"]
+    assert by["generator"]["missed_schedules_unconfirmed"] == ["2026-09-30T05:00:00+00:00",
+                                                                "2026-10-01T05:00:00+00:00"]
+    assert by["generator"]["schedule_known_since"] == "2026-10-01T20:56:18+00:00"
 
 
 def test_deploys_show_no_deploy_after_10_01_and_no_change_on_our_jobs():

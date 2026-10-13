@@ -48,14 +48,29 @@ def wake_endpoints(profile: str | None) -> list[str]:
     return lines
 
 
+def run_watchdog(args):
+    """Trigger today's missed dev runs before the checks (docs/watchdog_plan.md). Never raises: a failure is
+    reported in the run summary and the monitor goes on."""
+    from .watchdog import CliJobsClient, Watchdog
+
+    enabled = os.environ.get("WATCHDOG_TRIGGER", "on").strip().lower() != "off"
+    try:
+        return Watchdog(CliJobsClient(Reads(args.profile)), write=args.write, enabled=enabled).act(), None
+    except Exception as exc:  # noqa: BLE001
+        return None, f"watchdog failed: {type(exc).__name__}: {exc}"
+
+
 async def amain(args) -> int:
     woke = wake_endpoints(args.profile)
+    watchdog_result, watchdog_error = run_watchdog(args)
+    if watchdog_error:
+        woke.append(watchdog_error)
     store = PgIncidentStore(Reads(args.profile), env_config("dev").metadata_endpoint) if args.write else DryRunStore()
     try:
         async with McpToolBox(args.profile) as toolbox:
             investigator = (DatabricksInvestigator(DatabricksChat(args.profile), args.model)
                             if args.model.startswith("databricks-") else AnthropicInvestigator(model=args.model))
-            state = await run(toolbox, investigator, store)
+            state = await run(toolbox, investigator, store, watchdog_result=watchdog_result)
     except Exception as exc:  # noqa: BLE001 -- a crash still produces a report
         publish("# aidq monitor, dev\n\n**MONITOR CRASHED** before its report: "
                 f"{type(exc).__name__}: {exc}\n\n```\n{traceback.format_exc()[-3000:]}\n```", args.report_file)

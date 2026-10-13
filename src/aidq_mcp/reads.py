@@ -57,6 +57,10 @@ class Reads:
     def job_settings(self, job_id: int) -> dict:
         return self.cli("jobs", "get", str(job_id)).get("settings", {})
 
+    def job_created(self, job_id: int) -> dt.datetime | None:
+        ms = self.cli("jobs", "get", str(job_id)).get("created_time")
+        return dt.datetime.fromtimestamp(ms / 1000, dt.timezone.utc) if ms else None
+
     def job_runs(self, job_id: int, since: dt.datetime) -> list[dict]:
         return self.cli("jobs", "list-runs", "--job-id", str(job_id), "--start-time-from",
                         str(int(since.timestamp() * 1000)), "--limit", "100") or []

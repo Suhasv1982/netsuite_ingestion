@@ -1,0 +1,61 @@
+id: 2026-10-11_scheduler_stopped_three_days
+title: Dev schedules stopped for three days (2026-10-11..10-13); the watchdog triggers the missed runs
+detected: 2026-10-13
+occurred: [2026-10-11, 2026-10-12, 2026-10-13]
+environment: dev
+category: orchestration
+severity: high   # three days without data; the monitor itself crashed and nothing reported it (fixed: #41, #44)
+
+symptoms:
+  - no run of netsuite_daily_generator (05:00 UTC) or dev netsuite_ingestion_daily (05:30 UTC) on 10-11, 10-12, 10-13
+  - no failure email from Databricks (a run that never starts cannot fail)
+  - source and dev metadata Lakebase endpoints disabled on 10-11 (no audit event)
+  - the GitHub monitor ran each day but crashed on the disabled metadata endpoint (fixed in #41)
+
+evidence:
+  - step: job runs
+    query: databricks jobs list-runs --job-id <id>   # both dev jobs
+    finding: PERIODIC SUCCESS runs through 10-10; none on 10-11, 10-12, 10-13 until manual runs on 10-13 14:35
+  - step: did the scheduler try?
+    query: |
+      SELECT to_date(event_time), action_name, count(*) FROM system.access.audit
+      WHERE service_name = 'jobs' AND to_json(request_params) RLIKE '<generator id>|<dev job id>'
+        AND event_date >= '2026-10-01' GROUP BY ALL;
+    finding: runTriggered at 05:00/05:30 every day except 10-06 and 10-11..10-13; no update/reset after the 10-08 deploy
+  - step: schedule settings
+    query: databricks jobs get <id>   # settings.schedule
+    finding: both UNPAUSED, unchanged since the 10-08 deploy
+  - step: workspace activity
+    query: SELECT to_date(event_time), service_name, count(*) FROM system.access.audit WHERE event_time >= '2026-10-04' GROUP BY ALL;
+    finding: about 60-90k events a day until 10-10, about 3.7k a day 10-11..10-12 (mostly unityCatalog)
+
+root_cause: >
+  Platform cause, suspected not confirmed: the Databricks job scheduler did not trigger either dev job for three
+  days while the schedules were UNPAUSED and unchanged and nothing was deployed. Consistent with Free Edition
+  deactivating an idle workspace (community reports: denyReason INACTIVE; only a manual Start reactivates it).
+  Schedules did not come back on their own; runs resumed only when started by hand.
+not_the_cause:
+  - a paused or changed schedule (UNPAUSED; no job update after the 10-08 deploy)
+  - a failing job (there were no runs to fail)
+  - a deploy (the last deploy-dev before the gap was 10-08 19:49)
+
+fix:
+  decision: keep the monitor on GitHub as the external watchdog and let it trigger today's missed dev runs
+  changes:
+    - "#41: the monitor keeps its report when metadata is unavailable"
+    - "#42: components re-enable disabled Lakebase endpoints before use"
+    - "#44: the watchdog triggers today's missed generator then dev ingestion, once per job per day, and labels the incident [self-healed]; misses after the last deploy are confirmed (a multi-day outage is reported)"
+  follow_up:
+    - the next real skipped day verifies the watchdog end to end
+  verification: pending
+
+grading:
+  must_identify:
+    - no run was triggered today for either job (absence, not failure)
+    - the watchdog triggered the generator and then dev ingestion, and both succeeded
+    - schedules were UNPAUSED and unchanged, so the cause is outside the pipeline (platform)
+  must_not_claim:
+    - the schedules were or may have been paused
+    - the job failed
+    - a specific confirmed platform cause (it is suspected only)
+  tools_expected: [get_recent_job_runs]
