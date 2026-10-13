@@ -2,6 +2,10 @@
 
 Only `investigate` calls the model; writing is a fixed node, never a model tool. Dedupe runs before the model so
 a problem that already has an OPEN incident costs nothing to see again.
+
+The report is never lost (owner decision 2026-10-13, after three runs on 10-11..10-13 crashed in dedupe on a
+disabled metadata endpoint): when the incident store fails (dedupe or write), the run investigates every group,
+publishes the full diagnosis marked "not written", and ends with EXIT_METADATA_UNAVAILABLE.
 """
 
 from __future__ import annotations
@@ -18,6 +22,8 @@ from .store import IncidentStore
 from .toolbox import ToolBox
 
 MAX_GROUPS = 3
+EXIT_NEW_INCIDENT = 1           # a new incident was written (the CI run fails and notifies)
+EXIT_METADATA_UNAVAILABLE = 2   # the diagnosis is in the report but could not be written
 COLLECT_CALLS = {
     "get_recent_job_runs": {"env": "dev", "days": 3},
     "get_table_health": {"env": "dev"},
@@ -39,6 +45,7 @@ class State(TypedDict, total=False):
     incidents: list[dict]
     report: str
     exit_code: int
+    store_error: str
 
 
 def _latest_ingestion_run(results: dict) -> str | None:
@@ -62,7 +69,10 @@ def build_graph(toolbox: ToolBox, investigator, store: IncidentStore,
 
     async def dedupe(state: State) -> State:
         fps = [g.fingerprint for g in state["groups"]]
-        already = store.open_fingerprints(fps) if fps else set()
+        try:
+            already = store.open_fingerprints(fps) if fps else set()
+        except Exception as exc:  # noqa: BLE001 -- never lose the diagnosis; investigate every group instead
+            return {"store_error": f"{type(exc).__name__}: {exc}", "already_open": []}
         return {"groups": [g for g in state["groups"] if g.fingerprint not in already], "already_open": sorted(already)}
 
     async def investigate(state: State) -> State:
@@ -74,7 +84,7 @@ def build_graph(toolbox: ToolBox, investigator, store: IncidentStore,
         return {"investigations": out}
 
     async def write(state: State) -> State:
-        incidents = []
+        incidents, store_error = [], state.get("store_error")
         run_id = _latest_ingestion_run(state["results"])
         for item in state["investigations"]:
             g, inv = item["group"], item["investigation"]
@@ -90,9 +100,14 @@ def build_graph(toolbox: ToolBox, investigator, store: IncidentStore,
                         "agent_trace_id": state["trace_id"], "fingerprint": g.fingerprint,
                         "evidence": {"signals": [s.__dict__ for s in g.signals], "rca": rca, "error": inv.error,
                                      "tool_calls": inv.tool_calls, "model": inv.model, "usage": inv.usage}}
-            incident["incident_id"] = store.insert(incident)
+            incident["incident_id"] = None
+            if not store_error:
+                try:
+                    incident["incident_id"] = store.insert(incident)
+                except Exception as exc:  # noqa: BLE001 -- keep this and the remaining diagnoses in the report
+                    store_error = f"{type(exc).__name__}: {exc}"
             incidents.append(incident)
-        return {"incidents": incidents}
+        return {"incidents": incidents, **({"store_error": store_error} if store_error else {})}
 
     async def report(state: State) -> State:
         lines = [f"# aidq monitor, dev, {state['today']}", ""]
@@ -100,12 +115,15 @@ def build_graph(toolbox: ToolBox, investigator, store: IncidentStore,
         lines.append("Tools: " + ", ".join(f"{k} {v}" for k, v in statuses.items()))
         for n in state.get("notes") or []:
             lines.append(f"- {n}")
+        if state.get("store_error"):
+            lines += ["", "**METADATA UNAVAILABLE:** incidents could not be written or deduplicated "
+                          f"({state['store_error']}). The full diagnosis is below; nothing was written."]
         if state.get("already_open"):
             lines.append(f"Already open (not re-investigated): {', '.join(state['already_open'])}")
         incidents = state.get("incidents") or []
         if not state.get("signals"):
             lines += ["", "**Healthy:** no signals."]
-        elif not incidents:
+        elif not incidents and not state.get("store_error"):
             lines += ["", "Signals found, all already covered by open incidents."]
         for inc in incidents:
             rca = inc["evidence"]["rca"] or {}
@@ -121,7 +139,8 @@ def build_graph(toolbox: ToolBox, investigator, store: IncidentStore,
             if inc.get("suggested_fix"):
                 lines.append(f"Next step: {inc['suggested_fix']}")
         new = [i for i in incidents if i.get("incident_id")]
-        return {"report": "\n".join(lines), "exit_code": 1 if new else 0}
+        code = EXIT_METADATA_UNAVAILABLE if state.get("store_error") else (EXIT_NEW_INCIDENT if new else 0)
+        return {"report": "\n".join(lines), "exit_code": code}
 
     g = StateGraph(State)
     for name, fn in (("collect", collect), ("triage", triage_node), ("dedupe", dedupe), ("investigate", investigate),
@@ -131,6 +150,7 @@ def build_graph(toolbox: ToolBox, investigator, store: IncidentStore,
     g.add_edge("collect", "triage")
     g.add_conditional_edges("triage", lambda s: "dedupe" if s["groups"] else "report", ["dedupe", "report"])
     g.add_conditional_edges("dedupe", lambda s: "investigate" if s["groups"] else "report", ["investigate", "report"])
+    # (a store failure in dedupe keeps every group, so they are all investigated and reported)
     g.add_edge("investigate", "write")
     g.add_edge("write", "report")
     g.add_edge("report", END)
