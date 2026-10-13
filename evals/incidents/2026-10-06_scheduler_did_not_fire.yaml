@@ -42,6 +42,20 @@ root_cause: >
   The schedules were active and unchanged; there was no deploy and no config change. Free Edition suspending an
   idle workspace is suspected (Lakebase endpoints were disabled in the same window, also with no audit event),
   not confirmed.
+  Update 2026-10-13: schedules do NOT reliably come back on their own. The scheduler skipped again on 10-11, 10-12
+  and 10-13 (three days; no runTriggered event, schedules UNPAUSED and unchanged, no deploy), with the source and
+  dev metadata endpoints disabled on 10-11 and workspace audit activity down from ~60-90k events/day to ~3.7k.
+  On 10-06 runs resumed after an interactive login; on 10-13 the jobs ran only when started by hand. Matches
+  community reports of idle Free Edition workspaces being deactivated (denyReason INACTIVE, "only a manual Start in
+  the console reactivates it"); the official limitations page only documents fair-usage quotas and deletion of
+  inactive accounts. Still suspected, not confirmed.
+
+recurrence:
+  - occurred: [2026-10-11, 2026-10-12, 2026-10-13]
+    finding: no runTriggered for either dev job; schedules UNPAUSED, unchanged since the 10-08 deploy; endpoints
+      disabled 10-11 (no audit event); runs resumed only when started by hand on 10-13
+    note: the GitHub monitor ran each day but crashed on the disabled metadata endpoint, so the missed runs were
+      never reported (fixed by the "monitor never loses its report" change)
 not_the_cause:
   - "deploy-dev paused the dev schedules on 10-05 (no deploy-dev run after 10-01; schedules UNPAUSED; no job update in the audit log)"
   - a failing job (there is no run at all, so no failure)
@@ -53,7 +67,11 @@ fix:
   follow_up:
     - a missing scheduled run is a silent gap; the daily check (and the future monitor) must alert on "no run", not only on "failed run"
     - verify the next scheduled 05:00 run fires
-  verification: pending, next scheduled runs after 2026-10-06
+    - "schedules do not reliably resume by themselves (2026-10-11..13): keep the monitor on GitHub as an external
+      watchdog (owner decision 2026-10-13), and re-enable disabled Lakebase endpoints before use"
+  verification: >
+    10-07..10-10 fired normally; 10-11..10-13 skipped again (see recurrence). Not resolved: the platform cause is
+    outside the pipeline.
 
 grading:
   must_identify:
