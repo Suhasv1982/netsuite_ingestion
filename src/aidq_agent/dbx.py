@@ -16,7 +16,6 @@ import urllib.request
 from .investigate import MAX_TOOL_CALLS, RCA_SCHEMA, Investigation, _user_prompt, system_prompt
 from .toolbox import ToolBox
 
-DEFAULT_MODEL = "databricks-gpt-oss-120b"
 SUBMIT = "submit_rca"
 
 
@@ -94,7 +93,9 @@ def openai_tools(tools: list[dict]) -> list[dict]:
 
 
 class DatabricksInvestigator:
-    def __init__(self, chat: DatabricksChat, model: str = DEFAULT_MODEL, design_notes=None):
+    def __init__(self, chat, model: str, design_notes=None):
+        """`chat`: anything with `complete(model, messages, tools, max_tokens=...)` (DatabricksChat, or the router's
+        LoggingChat). The model comes from the router (src/aidq_llm/routing.yml), never a default here."""
         self.chat, self.model, self.design_notes = chat, model, design_notes
 
     async def investigate(self, category: str, signals: list[str], notes: list[str], today: str,
@@ -151,3 +152,19 @@ class DatabricksInvestigator:
                     calls.append({"tool": name, "arguments": args, "status": result.get("status")})
                 messages.append({"role": "tool", "tool_call_id": tc["id"], "content": json.dumps(result, default=str)})
         return Investigation(None, calls, "too many turns without a final answer", self.model, usage)
+
+
+class RoutedInvestigator:
+    """The monitor's investigation through the router: task `root_cause` on the routed primary, restarted once on
+    the fallback when the model call fails or no valid submit_rca comes back (docs/model_routing_plan.md)."""
+
+    def __init__(self, router, design_notes=None):
+        self.router, self.design_notes = router, design_notes
+
+    async def investigate(self, category: str, signals: list[str], notes: list[str], today: str,
+                          toolbox: ToolBox) -> Investigation:
+        async def attempt(model, chat):
+            return await DatabricksInvestigator(chat, model, self.design_notes).investigate(
+                category, signals, notes, today, toolbox)
+
+        return await self.router.run("root_cause", attempt, lambda inv: (inv.rca is not None, inv.error))

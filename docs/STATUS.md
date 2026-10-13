@@ -87,7 +87,12 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
   * Merge one PR at a time and let its deploy-dev finish before the next push.
 * **Found:** a multi-day outage is never reported. `missed_schedules` treats misses before the first scheduled run in the 3-day window as `unconfirmed`. After 10-11..10-13 (manual runs only) the monitor said "Healthy". Fix planned in the watchdog PR.
 * **Watchdog PR #44**: plan approved with the owner's checklist and **built** (not merged). It also fixes the outage bug above. Eval case `watchdog_self_healed_10_11` (new fixture 2026-10-11): see `evals/results/2026-10-13c_watchdog_*`.
-* **Model routing plan PR #45** (agents_next_design.md item 1): plan only, open; decision needed on the call-log storage.
+* **#44 merged** 2026-10-13 19:53 UTC (`663e09b`), alone. Its deploy-dev was green (smoke run SUCCESS, ledger OK).
+* **Model routing, PR #45**: plan approved with the review corrections, **built**, waiting for the owner's merge OK.
+  * `src/aidq_llm`: the router (task -> primary/fallback, one escalation, no loops), `routing.yml` (the only place that names models), and the call log in Postgres `aidq_metadata.llm_calls` (migration 007, 90-day retention via `prune_llm_calls`). A logging failure never crashes an agent: the calls go to the run summary.
+  * The monitor routes `root_cause`. The eval judge model comes from `routing.yml`.
+  * Paired comparison `evals/routing_compare.py` (rules in `src/aidq_llm/compare.py`). No task has moved to a smaller model.
+  * **After merge (owner):** re-run `! bash tools/setup_dq_roles.sh DEFAULT`. It creates `aidq_llm_logger` and extends the SELECT grants to the new table, after which `dq_roles.py --check` is exact again.
 * `docs/agents_next_design.md` (owner): no work until everything above is merged (owner, 2026-10-13).
 
 ## 0. First prod release (2026-10-01, steps 0-7 done; step 8 open)

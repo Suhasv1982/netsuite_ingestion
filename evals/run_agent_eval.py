@@ -23,12 +23,13 @@ import yaml
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from aidq_agent.dbx import DEFAULT_MODEL, DatabricksChat, DatabricksInvestigator, _text  # noqa: E402
+from aidq_agent.dbx import DatabricksChat, DatabricksInvestigator, _text  # noqa: E402
+from aidq_llm.router import Router, load_routes  # noqa: E402
 from aidq_agent.graph import EXIT_METADATA_UNAVAILABLE, run  # noqa: E402
 from aidq_agent.store import DryRunStore, UnavailableStore  # noqa: E402
 from aidq_agent.toolbox import ReplayToolBox  # noqa: E402
 
-JUDGE_MODEL = "databricks-qwen35-122b-a10b"
+JUDGE_MODEL = load_routes()["tasks"]["eval_judge"]["primary"]   # fixed yardstick (src/aidq_llm/routing.yml)
 JUDGE_PROMPT = """You grade an incident report written by a monitoring agent against a checklist.
 
 Report:
@@ -204,7 +205,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--profile", required=True)
     ap.add_argument("--runs", type=int, default=3)
-    ap.add_argument("--model", default=DEFAULT_MODEL)
+    ap.add_argument("--model", default=load_routes()["tasks"]["root_cause"]["primary"],
+                    help="the agent model, pinned for the whole eval (default: the routed root_cause primary)")
     ap.add_argument("--judge", default=JUDGE_MODEL)
     ap.add_argument("--cases", nargs="*")
     args = ap.parse_args()
