@@ -4,7 +4,14 @@ import pytest
 
 yaml = pytest.importorskip("yaml")
 
-from apply_grants import GRANTS_DIR, desired_grants, missing_privileges  # noqa: E402
+from apply_grants import (  # noqa: E402
+    GRANTS_DIR,
+    desired_catalog_grants,
+    desired_grants,
+    desired_warehouse_permissions,
+    has_level,
+    missing_privileges,
+)
 
 PRINCIPALS = {"ci": "sp-1", "owner": "owner@example.com"}
 
@@ -53,3 +60,36 @@ class TestMissing:
 
     def test_the_owner_needs_no_grant(self):
         assert missing_privileges({"me": {"SELECT"}, "sp": {"SELECT"}}, {}, owner="me") == {"sp": ["SELECT"]}
+
+
+ALL = {"ci": "sp-1", "owner": "owner@example.com", "data_generator": "gen-1", "agent": "agent-1"}
+
+
+class TestPrincipalTypesAndOwnerApplied:
+    def test_optional_entries_are_skipped_until_their_principal_exists(self):
+        spec = yaml.safe_load((GRANTS_DIR / "dev.yml").read_text(encoding="utf-8"))
+        assert "workspace.generator" not in desired_grants(spec, PRINCIPALS)   # data-generator not set: skipped
+        assert desired_grants(spec, ALL)["workspace.generator"]["gen-1"] == {"USE_SCHEMA", "CREATE_TABLE", "SELECT", "MODIFY"}
+
+    def test_generator_grants_are_owner_applied_and_include_use_catalog(self):
+        spec = yaml.safe_load((GRANTS_DIR / "dev.yml").read_text(encoding="utf-8"))
+        assert "workspace.generator" not in desired_grants(spec, ALL, owner_applied=False)  # CI never grants them
+        assert "workspace.generator" in desired_grants(spec, ALL, owner_applied=True)
+        assert desired_catalog_grants(spec, ALL, owner_applied=True)["gen-1"] == {"USE_CATALOG"}
+        assert desired_catalog_grants(spec, ALL, owner_applied=False) == {}
+
+    def test_ci_entries_are_unchanged(self):
+        spec = yaml.safe_load((GRANTS_DIR / "dev.yml").read_text(encoding="utf-8"))
+        assert desired_grants(spec, ALL, owner_applied=False) == desired_grants(spec, PRINCIPALS)
+
+    def test_unknown_principal_type_is_an_error(self):
+        with pytest.raises(ValueError, match="unknown principal type"):
+            desired_grants({"catalog": "c", "grants": [{"principal": "robot", "schemas": ["s"], "privileges": ["SELECT"]}]}, ALL)
+
+    def test_warehouse_permissions(self):
+        spec = {"catalog": "c", "grants": [{"principal": "agent", "warehouses": [{"name": "W", "level": "CAN_USE"}]}]}
+        assert desired_warehouse_permissions(spec, ALL) == {"W": {"agent-1": "CAN_USE"}}
+
+    def test_warehouse_levels_include_lower_ones(self):
+        assert has_level({"CAN_MANAGE"}, "CAN_USE") and has_level({"CAN_USE"}, "CAN_USE")
+        assert not has_level({"CAN_VIEW"}, "CAN_USE") and not has_level(set(), "CAN_USE")
