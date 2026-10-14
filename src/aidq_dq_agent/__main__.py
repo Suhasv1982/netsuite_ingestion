@@ -4,7 +4,7 @@ Runs the DQ rule recommender once against dev (plan #39 step 4). Default is a dr
 the metadata, nothing is written. --write inserts PENDING proposals and DQ_NOT_EXPRESSIBLE incidents as the
 caller: dq-agent in its job (role aidq_agent), the owner locally. Exit 0 when done, 1 when the model gave no
 valid recommendation (also after escalation), 2 when an input or a write failed (the report lists it), 3 when the
-run itself crashed. The report always reaches --report-file.
+run itself crashed, 4 when the answer left a profile candidate unanswered (nothing written). The report always reaches --report-file.
 """
 
 from __future__ import annotations

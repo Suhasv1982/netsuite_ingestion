@@ -8,7 +8,8 @@
 * report: what was submitted, skipped or refused, and what the model decided against.
 
 A store failure never loses the recommendations: they stay in the report, marked "not written", and the run ends
-with EXIT_METADATA_UNAVAILABLE.
+with EXIT_METADATA_UNAVAILABLE. A run whose answer leaves a profile candidate unanswered (also after escalation)
+writes nothing and ends with EXIT_UNANSWERED.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from .recommend import PROMPT_VERSION, Recommendation
 
 EXIT_NO_RECOMMENDATION = 1      # the model gave no valid submission, also after escalation
 EXIT_METADATA_UNAVAILABLE = 2   # inputs or writes failed: the report has what could not be done
+EXIT_UNANSWERED = 4             # the model did not answer every candidate of the checklist: nothing written
 
 
 class State(TypedDict, total=False):
@@ -68,12 +70,14 @@ def build_graph(toolbox, recommender, write_tools, tables: list[str],
         out, store_error = [], None
         result = state["recommendation"].result or {}
         for p in result.get("proposals", []):
-            args = {k: v for k, v in p.items() if k != "defect_type"}
+            args = {k: v for k, v in p.items() if k not in ("defect_type", "candidate_id")}
             args["evidence"] = {**(p.get("evidence") or {}), "defect_type": p.get("defect_type"),
-                                "prompt_version": PROMPT_VERSION}
+                                "candidate_id": p.get("candidate_id"), "prompt_version": PROMPT_VERSION}
             out.append(_try("proposal", p, lambda a=args: write_tools.submit_proposal(a)))
         for f in result.get("findings", []):
-            out.append(_try("finding", f, lambda a=f: write_tools.report_finding(a)))
+            args = {k: v for k, v in f.items() if k != "candidate_id"}
+            args["evidence"] = {**(f.get("evidence") or {}), "candidate_id": f.get("candidate_id")}
+            out.append(_try("finding", f, lambda a=args: write_tools.report_finding(a)))
         failed = [o for o in out if o["result"].get("status") == "store_error"]
         if failed:
             store_error = failed[0]["result"]["error"]
@@ -93,6 +97,9 @@ def build_graph(toolbox, recommender, write_tools, tables: list[str],
             lines += ["", "**No profile could be read:** the model was not called."]
         elif rec.result is None:
             lines += ["", f"**No valid recommendation:** {rec.error}"]
+            if rec.unanswered:
+                lines += [f"**Checklist incomplete:** {len(rec.unanswered)} candidate(s) unanswered; nothing written:"]
+                lines += [f"- {c}" for c in rec.unanswered]
         if state.get("store_error"):
             lines += ["", f"**METADATA UNAVAILABLE:** {state['store_error']}. What could not be written is listed below."]
         for kind, title in (("proposal", "Proposals"), ("finding", "Findings (DQ_NOT_EXPRESSIBLE)")):
@@ -101,12 +108,13 @@ def build_graph(toolbox, recommender, write_tools, tables: list[str],
                 lines += ["", f"## {title}"]
             for s in items:
                 lines.append(_line(s))
-        declined = ((rec.result or {}).get("not_recommended") if rec else None) or []
-        if declined:
-            lines += ["", "## Not recommended"] + [f"- {n['table']}: {n['what']} ({n['reason']})" for n in declined]
+        dismissed = ((rec.result or {}).get("dismissed") if rec else None) or []
+        if dismissed:
+            lines += ["", "## Dismissed candidates"] + [f"- {d['candidate_id']}: {d['reason']}" for d in dismissed]
         if rec and rec.result is not None and not state.get("submitted"):
             lines += ["", "Nothing to recommend."]
         code = (EXIT_METADATA_UNAVAILABLE if state.get("store_error") or rec is None
+                else EXIT_UNANSWERED if rec.result is None and rec.unanswered
                 else EXIT_NO_RECOMMENDATION if rec.result is None else 0)
         return {"report": "\n".join(lines), "exit_code": code}
 
@@ -150,6 +158,7 @@ def _line(s: dict) -> str:
     if s["kind"] == "proposal":
         ev = it.get("evidence") or {}
         return (f"- **{it.get('table')}** {it.get('rule_name')} [{it.get('severity')}, {it.get('defect_type')}, "
+                f"{it.get('candidate_id')}, "
                 f"confidence {it.get('confidence')}]: `{it.get('rule_expr')}`; {ev.get('violations')} of "
                 f"{ev.get('rows')} rows. {done}\n  {it.get('rationale')}")
     return f"- **{it.get('table')}** {it.get('finding_type')}: {it.get('summary')} {done}"

@@ -94,3 +94,10 @@ def test_runner_sets_the_role_and_writes_status_with_the_result():
     updates = [p for s, p in conn.sql if s.startswith("UPDATE aidq_metadata.config_proposals")]
     assert [u[0] for u in updates] == ["VALIDATED", "VALIDATION_FAILED"] and json.loads(updates[0][1])["rows"] == 100
     assert sum(1 for c in calls if "count_if" in c) == 1          # the unsafe rule never reaches the warehouse
+
+
+def test_a_backslash_is_refused_because_spark_unescapes_it():
+    # '\s' reaches Spark as 's': this rule rejected every email containing an 's' (DQ eval 2026-10-14)
+    r = v.static_check(r"email IS NULL OR email rlike '^[^@\s]+@[^@\s]+\.[A-Za-z]+$'", ["email"])
+    assert not r.ok and any("backslash is not allowed" in p for p in r.problems)
+    assert v.static_check("email IS NULL OR email rlike '^[^@ ]+@[^@ ]+[.][A-Za-z]+$'", ["email"]).ok

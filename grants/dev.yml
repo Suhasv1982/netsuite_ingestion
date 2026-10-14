@@ -22,6 +22,13 @@ grants:
     schemas: [generator]
     privileges: [USE_SCHEMA, CREATE_TABLE, SELECT, MODIFY]
 
+  # ci-dev reads the manifests in the DQ eval workflow (.github/workflows/dq-eval.yml; owner request 2026-10-14 to
+  # run the eval on GitHub). Read only. Owner-applied: the owner owns workspace.generator.
+  - principal: ci
+    applied_by: owner
+    schemas: [generator]
+    privileges: [USE_SCHEMA, SELECT]
+
   # dq-agent, the DQ recommender's service principal (docs/dq_recommender_design_v2.md section 3): read bronze, silver
   # and rejects, use the SQL warehouse for profiling. Owner-applied (tools/setup_dq_roles.sh): CI can grant neither
   # USE CATALOG nor without the principal. No grant on the databricks-gpt-oss-120b endpoint: it is a pay-per-token

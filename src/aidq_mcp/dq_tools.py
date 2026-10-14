@@ -12,7 +12,10 @@ import re
 from . import config, logic
 
 TOP_VALUES_MAX_DISTINCT = 20
-TOP_VALUES_LIMIT = 10
+TOP_VALUES_LIMIT = 20         # = TOP_VALUES_MAX_DISTINCT: a low-cardinality column's values are all listed
+RARE_SHARE = 0.01             # a value (or NULL) on fewer than 1% of rows of a column that has it on some rows
+LATE_LOAD_HOURS = 12          # a new key loaded this long after its snapshot date was first loaded arrived late
+EMAIL_PATTERN = "^[^@ ]+@[^@ ]+[.][A-Za-z]+$"   # one @, no spaces, a domain ending in .letters (no escapes in SQL)
 METADATA_COLS = ("_row_hash", "_snapshot_date", "_loaded_at")
 DATE_TYPES = ("date", "timestamp")
 NUMERIC_TYPES = ("int", "integer", "bigint", "smallint", "numeric", "decimal", "double", "float", "real")
@@ -61,6 +64,9 @@ def profile_sql(relation: str, cols: list[dict], key: str | None) -> str:
             parts.append(f"count_if({n} > current_date()) AS {bq(c['column_name'] + '__future')}")
         if kind_of(c.get("data_type")) == "number":
             parts.append(f"count_if({n} < 0) AS {bq(c['column_name'] + '__negative')}")
+        if kind_of(c.get("data_type")) == "text" and "email" in c["column_name"].lower():
+            parts.append(f"count_if({n} IS NOT NULL AND NOT {n} rlike '{EMAIL_PATTERN}') "
+                         f"AS {bq(c['column_name'] + '__bad_format')}")
     for s, e in date_pairs(names):
         parts.append(f"count_if({bq(e)} < {bq(s)}) AS {bq('check__' + e + '_before_' + s)}")
     if {"amount", "quantity", "rate"} <= set(names):
@@ -78,6 +84,17 @@ def duplicates_sql(relation: str, key: str) -> str:
             f"SELECT {bq(key)}, _snapshot_date, count(DISTINCT created_date) AS created, "
             f"count(DISTINCT _row_hash) AS versions FROM {relation} WHERE {bq(key)} IS NOT NULL "
             f"GROUP BY {bq(key)}, _snapshot_date)")
+
+
+def late_rows_sql(relation: str, key: str) -> str:
+    """New keys (first bronze version) loaded more than LATE_LOAD_HOURS after their snapshot date was first loaded:
+    rows that arrived after their day was loaded (bronze's top-up flows). A bronze rebuild reloads every day at
+    once, so late rows from before the last rebuild are not visible here."""
+    return (f"WITH b AS (SELECT {bq(key)} AS k, _snapshot_date AS d, _loaded_at AS t FROM {relation} "
+            f"WHERE {bq(key)} IS NOT NULL), first_load AS (SELECT d, min(t) AS ft FROM b GROUP BY d), "
+            f"first_seen AS (SELECT k, min(d) AS fd FROM b GROUP BY k) "
+            f"SELECT count(*) AS late_rows, count(DISTINCT b.d) AS late_dates FROM b JOIN first_load f ON b.d = f.d "
+            f"JOIN first_seen s ON b.k = s.k WHERE b.d = s.fd AND b.t > f.ft + INTERVAL {LATE_LOAD_HOURS} HOURS")
 
 
 def reference_sql(relation: str, column: str, target: str, target_key: str) -> str:
@@ -102,12 +119,68 @@ def shape_profile(agg: dict, cols: list[dict], key: str | None) -> dict:
         entry = {"column": name, "type": c.get("data_type"), "null_rate": round(nulls / rows, 4) if rows else None,
                  "distinct": int(agg.get(f"{name}__distinct") or 0),
                  "min": logic.truncate(agg.get(f"{name}__min"), 40), "max": logic.truncate(agg.get(f"{name}__max"), 40)}
-        for extra in ("future", "negative"):
+        for extra in ("future", "negative", "bad_format"):
             if f"{name}__{extra}" in agg:
                 entry[f"{extra}_count"] = int(agg[f"{name}__{extra}"] or 0)
+        if "bad_format_count" in entry and rows:
+            entry["valid_format_rate"] = round(1 - (entry["bad_format_count"] + nulls) / rows, 4) if rows > nulls else None
         out_cols.append(entry)
     checks = {k.removeprefix("check__"): int(v or 0) for k, v in agg.items() if k.startswith("check__")}
     return {"rows": rows, "business_key": key, "columns": out_cols, "candidate_checks": checks}
+
+
+def rare_values(top: list[dict], rows: int) -> list[dict]:
+    """Values of a low-cardinality column that look wrong by shape alone: blank, a case or whitespace variant of a
+    more frequent value, or on fewer than RARE_SHARE of the rows. Which values are valid is the model's call."""
+    out = []
+    norm_first: dict[str, str] = {}
+    for t in sorted(top, key=lambda t: -t["count"]):
+        v = t["value"]
+        if v is None or v == "<masked>":
+            continue
+        norm = str(v).strip().lower()
+        why = ("blank" if not norm else f"variant of {norm_first[norm]!r}" if norm in norm_first
+               else f"under {RARE_SHARE:.0%} of rows" if rows and t["count"] / rows < RARE_SHARE else None)
+        norm_first.setdefault(norm, v)
+        if why:
+            out.append({"value": v, "count": t["count"], "why": why})
+    return out
+
+
+def candidates(table: str, profile: dict) -> list[dict]:
+    """The checklist the model must answer: every check with violations > 0, as (id, check, count, rate, kind).
+    kind row_rule: one row shows it; not_expressible: needs other rows, another table or history."""
+    rows = profile.get("rows") or 0
+    out = []
+
+    def add(check, count, kind, columns, **extra):
+        if count and count > 0:
+            out.append({"id": f"{table}:{check}", "check": check, "count": int(count),
+                        "rate": round(count / rows, 6) if rows else None, "kind": kind, "columns": columns, **extra})
+
+    key = profile.get("business_key")
+    for name, n in (profile.get("candidate_checks") or {}).items():
+        if name == "keys_with_conflicting_created_date_same_day":
+            add("duplicate_business_key", n, "not_expressible", [key])
+        elif name == "null_business_key":
+            add(name, n, "row_rule", [key])
+        else:
+            add(name, n, "row_rule", [c for c in (name.replace("_before_", " ").replace("_ne_", " ").split())
+                                      if c in {x["column"] for x in profile.get("columns", [])}])
+    for c in profile.get("columns", []):
+        col = c["column"]
+        add(f"{col}_future", c.get("future_count"), "row_rule", [col])
+        add(f"{col}_negative", c.get("negative_count"), "row_rule", [col])
+        add(f"{col}_bad_format", c.get("bad_format_count"), "row_rule", [col], valid_format_rate=c.get("valid_format_rate"))
+        rare = c.get("rare_values") or []
+        add(f"{col}_rare_values", sum(r["count"] for r in rare), "row_rule", [col], values=rare)
+        rate = c.get("null_rate")
+        if col != key and rate and rate < RARE_SHARE:
+            add(f"{col}_rare_nulls", round(rate * rows), "row_rule", [col])
+    for ref, n in (profile.get("references_without_target") or {}).items():
+        add(f"orphan:{ref.split(' ')[0]}", n, "not_expressible", [ref.split(" ")[0]], reference=ref)
+    add("late_rows", (profile.get("late_arrivals") or {}).get("late_rows"), "not_expressible", [key])
+    return out
 
 
 def safe_top_values(rows: list[dict]) -> list[dict]:
@@ -176,6 +249,8 @@ class DqTools:
         for c in out["columns"]:
             if 0 < c["distinct"] <= TOP_VALUES_MAX_DISTINCT:
                 c["top_values"] = safe_top_values(self.reads.sql(top_values_sql(relation, c["column"])))
+                if kind_of(c.get("type")) == "text":
+                    c["rare_values"] = rare_values(c["top_values"], out["rows"])
         incremental = (tdef.get("load_mode") or "").lower() == "incremental"
         if incremental and key and any(c["column_name"] == "created_date" for c in cols):
             [d] = self.reads.sql(duplicates_sql(relation, key))
@@ -188,13 +263,20 @@ class DqTools:
                 [r] = self.reads.sql(reference_sql(relation, other_key, f"{cfg.catalog}.poc_bronze.{other}", other_key))
                 refs[f"{other_key} -> {other}"] = int(r["n"] or 0)
         out["references_without_target"] = refs
+        if incremental and key:
+            [lr] = self.reads.sql(late_rows_sql(relation, key))
+            out["late_arrivals"] = {"late_rows": int(lr["late_rows"] or 0), "late_dates": int(lr["late_dates"] or 0),
+                                    "note": f"new keys loaded > {LATE_LOAD_HOURS} h after their day was first loaded; "
+                                            "not visible from before the last bronze rebuild"}
+        out["candidates"] = candidates(table, out)
         out.update({"env": env, "table": table, "load_mode": tdef.get("load_mode"),
                     "watermark_col": tdef.get("watermark_col"),
                     "discard_threshold": None if tdef.get("discard_threshold") is None else float(tdef["discard_threshold"]),
                     "note": "computed on bronze (all rows, including those silver merges away or DQ rejects); "
                             "aggregates only, no raw rows. info_same_day_versions are normal (bronze keys rows by "
                             "content), not duplicates; keys_with_conflicting_created_date_same_day are duplicates. "
-                            "Uniqueness, references and late rows need more than one row: they are not row rules."})
+                            "Uniqueness, references and late rows need more than one row: they are not row rules. "
+                            "`candidates` is the checklist: every check with violations > 0, each to be answered."})
         return out
 
     def get_rejects_summary(self, env: str = "dev", table: str | None = None, runs: int | None = None) -> dict:
