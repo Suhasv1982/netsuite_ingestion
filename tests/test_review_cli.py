@@ -65,9 +65,40 @@ def test_only_validated_proposals_can_be_approved():
         review.approve(Conn(None), 12, "me", None, None)
 
 
-def test_reject_needs_a_reason():
-    with pytest.raises(SystemExit, match="--reason is required"):
-        review.reject(Conn(ROW), 12, "me", "  ")
+def test_reject_needs_a_real_reason():
+    for placeholder in ("  ", "...", ".", "no", "     x    "):
+        with pytest.raises(SystemExit, match="at least 10 characters"):
+            review.reject(Conn(ROW), 12, "me", placeholder)
+    conn = Conn(ROW)
+    assert "rejected" in review.reject(conn, 12, "me", "  refunds are legitimate  ")
+    assert conn.sql[-1][1] == ("me", "refunds are legitimate", 12)          # stripped
+
+
+REJECTED = {**ROW, "status": "REJECTED", "reviewed_by": "owner@example.com", "review_comment": "..."}
+
+
+def test_correct_reason_keeps_the_old_reason_and_only_the_reviewer_may_do_it():
+    conn = Conn(REJECTED)
+    out = review.correct_reason(conn, 12, "owner@example.com", "future start dates are planned memberships",
+                                "2026-10-14T20:30:00+00:00")
+    assert out == "Proposal 12: reason corrected by owner@example.com"
+    sql, params = conn.sql[-1]
+    assert sql == review.CORRECT_REASON_SQL
+    assert params == ("future start dates are planned memberships\n[corrected 2026-10-14T20:30:00+00:00 by "
+                      "owner@example.com; was: '...']", 12, "owner@example.com")
+    with pytest.raises(SystemExit, match="only that reviewer can correct"):
+        review.correct_reason(Conn(REJECTED), 12, "someone@example.com", "a long enough reason", "t")
+    with pytest.raises(SystemExit, match="only a REJECTED proposal"):
+        review.correct_reason(Conn(ROW), 12, "owner@example.com", "a long enough reason", "t")
+    with pytest.raises(SystemExit, match="at least 10 characters"):
+        review.correct_reason(Conn(REJECTED), 12, "owner@example.com", "...", "t")
+
+
+def test_a_second_correction_keeps_the_original_reason():
+    once = {**REJECTED, "review_comment": "first real reason\n[corrected t1 by owner@example.com; was: '...']"}
+    conn = Conn(once)
+    review.correct_reason(conn, 12, "owner@example.com", "second real reason", "t2")
+    assert conn.sql[-1][1][0] == "second real reason\n[corrected t2 by owner@example.com; was: 'first real reason']"
 
 
 @pytest.mark.skipif(os.environ.get("NETSUITE_INTEGRATION") != "1", reason="set NETSUITE_INTEGRATION=1 (dev, rolled back)")
@@ -100,6 +131,11 @@ def test_review_on_dev_rolled_back():
         assert conn.execute("SELECT status, review_comment FROM aidq_metadata.config_proposals WHERE proposal_id = %s",
                             (ids[1],)).fetchone() == ("REJECTED", "integration test: not wanted")
         assert "Reviewed by" in review.render(review.show(conn, ids[0]))
+        # the lifecycle trigger and aidq_reviewer allow correcting the reason of a rejection; status stays
+        assert "reason corrected" in review.correct_reason(conn, ids[1], reviewer, "integration test: corrected", "t")
+        status, comment = conn.execute("SELECT status, review_comment FROM aidq_metadata.config_proposals "
+                                       "WHERE proposal_id = %s", (ids[1],)).fetchone()
+        assert status == "REJECTED" and comment.startswith("integration test: corrected\n[corrected t by ")
     finally:
         conn.rollback()
         conn.close()
