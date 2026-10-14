@@ -148,9 +148,11 @@ def test_the_recommender_entry_runs_without___file__(monkeypatch):
     import aidq_dq_agent.job as job
 
     monkeypatch.setattr(job, "main", lambda argv=None: 0)
-    with pytest.raises(SystemExit) as e:
+    _exec_like_a_job(ROOT / "src" / "dq_recommender_job.py", monkeypatch)    # success: no SystemExit at all
+    monkeypatch.setattr(job, "main", lambda argv=None: 4)
+    with pytest.raises(SystemExit) as e:                                       # a failure code still fails the task
         _exec_like_a_job(ROOT / "src" / "dq_recommender_job.py", monkeypatch)
-    assert e.value.code == 0
+    assert e.value.code == 4
 
 
 def test_the_validator_module_loads_without___file__(monkeypatch):
