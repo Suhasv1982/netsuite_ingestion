@@ -12,24 +12,24 @@
       "2026-10-08",
       "2026-10-14"
     ],
-    "rescored": "offline with existing-rule coverage; runs unchanged"
+    "produced_by": "GitHub Actions dq-eval.yml as ci-dev, commit 5b37195"
   },
   "metrics": {
     "runs": 3,
-    "proposals": 35,
-    "validated": 32,
+    "proposals": 32,
+    "validated": 29,
     "checklist_complete_runs": 3,
     "unknown_ground_truth_rows": {
       "netsuite_memberships: start_date IS NULL OR start_date <= current_date()": 6,
       "netsuite_certifications: certification_end_date IS NULL OR certification_start_date IS NULL OR certification_end_date >= certification_start_date": 10,
       "netsuite_transactions: type IN ('Cash Sale','Invoice')": 48,
-      "netsuite_transaction_lines: amount IS NULL OR quantity IS NULL OR rate IS NULL OR abs(amount - quantity * rate) <= 0.01": 108,
       "netsuite_certifications: certification_start_date IS NULL OR certification_start_date <= current_date()": 6,
+      "netsuite_transaction_lines: amount IS NULL OR quantity IS NULL OR rate IS NULL OR abs(amount - quantity * rate) <= 0.01": 108,
       "netsuite_transactions: type IS NULL OR type IN ('Cash Sale','Invoice')": 48
     },
     "recall_runs": {
-      "netsuite_transaction_lines|negative_amount": 3,
-      "netsuite_transaction_lines|amount_mismatch": 2,
+      "netsuite_transaction_lines|negative_amount": 1,
+      "netsuite_transaction_lines|amount_mismatch": 1,
       "netsuite_transaction_lines|null_business_key": 3,
       "netsuite_transactions|invalid_enum": 3,
       "netsuite_transactions|null_business_key": 3,
@@ -40,7 +40,7 @@
       "netsuite_certifications|end_before_start": 3,
       "netsuite_certifications|null_business_key": 3,
       "netsuite_customers|customer_malformed_email": 3,
-      "netsuite_customers|customer_null_company_name": 3
+      "netsuite_customers|customer_null_company_name": 2
     },
     "covered_by_existing_rule": {
       "netsuite_memberships|invalid_enum": "rule 1 Not in List",
@@ -49,7 +49,7 @@
       "netsuite_transaction_lines|amount_mismatch": "rule 4 Amount Equals Qty x Rate",
       "netsuite_memberships|end_before_start": "rule 5 End Not Before Start"
     },
-    "precision": 0.8285714285714286,
+    "precision": 0.8125,
     "false_reject_rules": {},
     "unsafe_validated": 0,
     "not_expressible_coverage": {
@@ -57,7 +57,7 @@
       "late_arriving": true,
       "orphan_lines": true
     },
-    "repeatability": 1.0,
+    "repeatability": 0.8629629629629628,
     "verdicts": {
       "recall": true,
       "precision": true,
@@ -69,10 +69,10 @@
   },
   "runs": [
     {
-      "trace_id": "daceb44507884aea87c57deabf91a09b",
+      "trace_id": "749d4218f61846208015e238ae8f9b30",
       "exit_code": 0,
       "model": "databricks-gpt-oss-120b",
-      "tokens": 35211,
+      "tokens": 36462,
       "error": null,
       "proposals": [
         {
@@ -103,7 +103,7 @@
         },
         {
           "table": "netsuite_customers",
-          "rule_name": "Email Valid Format",
+          "rule_name": "Valid Email Format",
           "rule_expr": "email IS NULL OR email rlike '^[^@ ]+@[^@ ]+[.][A-Za-z]+$'",
           "severity": "SOFT",
           "defect_type": "invalid_email",
@@ -263,7 +263,7 @@
         },
         {
           "table": "netsuite_transactions",
-          "rule_name": "Transaction Type Allowed",
+          "rule_name": "Transaction Type Allowed Values",
           "rule_expr": "type IN ('Cash Sale','Invoice')",
           "severity": "SOFT",
           "defect_type": "invalid_enum",
@@ -302,7 +302,369 @@
         },
         {
           "table": "netsuite_transaction_lines",
-          "rule_name": "Amount Matches Quantity Times Rate",
+          "rule_name": "Transaction Line ID Not Null",
+          "rule_expr": "transaction_line_id IS NOT NULL",
+          "severity": "HARD",
+          "defect_type": "null_business_key",
+          "candidate_id": "netsuite_transaction_lines:null_business_key",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "100098",
+            "passed": "99807",
+            "failed": "291",
+            "nulls": "0"
+          },
+          "recall": {
+            "negative_amount": 0.0,
+            "amount_mismatch": 0.0,
+            "null_business_key": 1.0
+          },
+          "matched_defect": "null_business_key",
+          "best_recall": 1.0,
+          "failing_rows": 291,
+          "unexplained_rows": 0,
+          "unknown_rows": 0,
+          "recheck_ok": true
+        }
+      ],
+      "findings": [
+        {
+          "table": "netsuite_memberships",
+          "finding_type": "duplicate_business_key"
+        },
+        {
+          "table": "netsuite_memberships",
+          "finding_type": "late_arriving_rows"
+        },
+        {
+          "table": "netsuite_certifications",
+          "finding_type": "duplicate_business_key"
+        },
+        {
+          "table": "netsuite_certifications",
+          "finding_type": "late_arriving_rows"
+        },
+        {
+          "table": "netsuite_transactions",
+          "finding_type": "duplicate_business_key"
+        },
+        {
+          "table": "netsuite_transactions",
+          "finding_type": "late_arriving_rows"
+        },
+        {
+          "table": "netsuite_transaction_lines",
+          "finding_type": "duplicate_business_key"
+        },
+        {
+          "table": "netsuite_transaction_lines",
+          "finding_type": "orphan_records"
+        },
+        {
+          "table": "netsuite_transaction_lines",
+          "finding_type": "late_arriving_rows"
+        }
+      ],
+      "skipped": [],
+      "dismissed": [
+        {
+          "candidate_id": "netsuite_memberships:end_date_before_start_date",
+          "reason": "Already covered by the existing active rule \"End Not Before Start\" (rule_id 5) which validates that end_date >= start_date."
+        },
+        {
+          "candidate_id": "netsuite_memberships:end_date_future",
+          "reason": "Future end_date is expected for active memberships (48% of rows); the high future count indicates normal business behavior."
+        },
+        {
+          "candidate_id": "netsuite_memberships:membership_status_rare_values",
+          "reason": "The active hard rule \"Not in List\" on membership_status already restricts values to ('Active','Suspended','Expired'), covering these rare/invalid variants."
+        },
+        {
+          "candidate_id": "netsuite_certifications:certification_type_rare_values",
+          "reason": "An existing hard rule \"Not in List\" on certification_type restricts values to ('SCP','CP'), already catching the listed rare variants."
+        },
+        {
+          "candidate_id": "netsuite_certifications:certification_start_date_future",
+          "reason": "Future certification start dates can represent upcoming certifications; the low count (0.7%) suggests they are intentional and not erroneous."
+        },
+        {
+          "candidate_id": "netsuite_certifications:certification_end_date_future",
+          "reason": "More than half of certification rows have end dates in the future, which is normal for active or ongoing certifications."
+        },
+        {
+          "candidate_id": "netsuite_transaction_lines:amount_ne_quantity_x_rate",
+          "reason": "The existing soft rule \"Amount Equals Qty x Rate\" (rule_id 4) already flags mismatches between amount and quantity*rate."
+        },
+        {
+          "candidate_id": "netsuite_transaction_lines:amount_negative",
+          "reason": "Negative amounts can legitimately represent refunds or credits; without business guidance they are not deemed invalid."
+        }
+      ],
+      "unanswered": []
+    },
+    {
+      "trace_id": "ed7caefb353a4ed2b1d49aeebdbef34d",
+      "exit_code": 0,
+      "model": "databricks-gpt-oss-120b",
+      "tokens": 17593,
+      "error": null,
+      "proposals": [
+        {
+          "table": "netsuite_customers",
+          "rule_name": "Company Name Not Null",
+          "rule_expr": "company_name IS NOT NULL",
+          "severity": "SOFT",
+          "defect_type": "null_value",
+          "candidate_id": "netsuite_customers:company_name_rare_nulls",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "3300",
+            "passed": "3297",
+            "failed": "3",
+            "nulls": "0"
+          },
+          "recall": {
+            "customer_null_company_name": 1.0,
+            "customer_malformed_email": 0.0
+          },
+          "matched_defect": "customer_null_company_name",
+          "best_recall": 1.0,
+          "failing_rows": 3,
+          "unexplained_rows": 0,
+          "unknown_rows": 0,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_customers",
+          "rule_name": "Valid Email Format",
+          "rule_expr": "email IS NULL OR email rlike '^[^@ ]+@[^@ ]+[.][A-Za-z]+$'",
+          "severity": "SOFT",
+          "defect_type": "invalid_email",
+          "candidate_id": "netsuite_customers:email_bad_format",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "3300",
+            "passed": "3294",
+            "failed": "6",
+            "nulls": "0"
+          },
+          "recall": {
+            "customer_null_company_name": 0.0,
+            "customer_malformed_email": 1.0
+          },
+          "matched_defect": "customer_malformed_email",
+          "best_recall": 1.0,
+          "failing_rows": 6,
+          "unexplained_rows": 0,
+          "unknown_rows": 0,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_memberships",
+          "rule_name": "Membership ID Not Null",
+          "rule_expr": "membership_internal_id IS NOT NULL",
+          "severity": "HARD",
+          "defect_type": "null_business_key",
+          "candidate_id": "netsuite_memberships:null_business_key",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "8338",
+            "passed": "8313",
+            "failed": "25",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.0,
+            "end_before_start": 0.0,
+            "null_business_key": 1.0
+          },
+          "matched_defect": "null_business_key",
+          "best_recall": 1.0,
+          "failing_rows": 25,
+          "unexplained_rows": 0,
+          "unknown_rows": 0,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_memberships",
+          "rule_name": "Start Date Not Future",
+          "rule_expr": "start_date IS NULL OR start_date <= current_date()",
+          "severity": "SOFT",
+          "defect_type": "future_date",
+          "candidate_id": "netsuite_memberships:start_date_future",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "8338",
+            "passed": "8308",
+            "failed": "30",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.0,
+            "end_before_start": 0.3333333333333333,
+            "null_business_key": 0.0
+          },
+          "matched_defect": "end_before_start",
+          "best_recall": 0.3333333333333333,
+          "failing_rows": 30,
+          "unexplained_rows": 0,
+          "unknown_rows": 6,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_certifications",
+          "rule_name": "Certification End Not Before Start",
+          "rule_expr": "certification_end_date IS NULL OR certification_start_date IS NULL OR certification_end_date >= certification_start_date",
+          "severity": "SOFT",
+          "defect_type": "end_before_start",
+          "candidate_id": "netsuite_certifications:certification_end_date_before_certification_start_date",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "6673",
+            "passed": "6593",
+            "failed": "80",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.0,
+            "end_before_start": 1.0,
+            "null_business_key": 0.0
+          },
+          "matched_defect": "end_before_start",
+          "best_recall": 1.0,
+          "failing_rows": 80,
+          "unexplained_rows": 0,
+          "unknown_rows": 10,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_certifications",
+          "rule_name": "Certification ID Not Null",
+          "rule_expr": "certification_internal_id IS NOT NULL",
+          "severity": "HARD",
+          "defect_type": "null_business_key",
+          "candidate_id": "netsuite_certifications:null_business_key",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "6673",
+            "passed": "6653",
+            "failed": "20",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.0,
+            "end_before_start": 0.0,
+            "null_business_key": 1.0
+          },
+          "matched_defect": "null_business_key",
+          "best_recall": 1.0,
+          "failing_rows": 20,
+          "unexplained_rows": 0,
+          "unknown_rows": 0,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_certifications",
+          "rule_name": "Certification Start Not Future",
+          "rule_expr": "certification_start_date IS NULL OR certification_start_date <= current_date()",
+          "severity": "SOFT",
+          "defect_type": "future_date",
+          "candidate_id": "netsuite_certifications:certification_start_date_future",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "6673",
+            "passed": "6626",
+            "failed": "47",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.0,
+            "end_before_start": 0.6,
+            "null_business_key": 0.0
+          },
+          "matched_defect": "end_before_start",
+          "best_recall": 0.6,
+          "failing_rows": 47,
+          "unexplained_rows": 0,
+          "unknown_rows": 6,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_transactions",
+          "rule_name": "Transaction ID Not Null",
+          "rule_expr": "transaction_internal_id IS NOT NULL",
+          "severity": "HARD",
+          "defect_type": "null_business_key",
+          "candidate_id": "netsuite_transactions:null_business_key",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "33368",
+            "passed": "33269",
+            "failed": "99",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.0,
+            "null_business_key": 1.0
+          },
+          "matched_defect": "null_business_key",
+          "best_recall": 1.0,
+          "failing_rows": 99,
+          "unexplained_rows": 0,
+          "unknown_rows": 0,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_transactions",
+          "rule_name": "Allowed Transaction Types",
+          "rule_expr": "type IN ('Cash Sale','Invoice')",
+          "severity": "SOFT",
+          "defect_type": "invalid_enum",
+          "candidate_id": "netsuite_transactions:type_rare_values",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "33368",
+            "passed": "33002",
+            "failed": "366",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 1.0,
+            "null_business_key": 0.0
+          },
+          "matched_defect": "invalid_enum",
+          "best_recall": 1.0,
+          "failing_rows": 366,
+          "unexplained_rows": 0,
+          "unknown_rows": 48,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_transactions",
+          "rule_name": "Transaction Date Not Future",
+          "rule_expr": "date IS NULL OR date <= current_date()",
+          "severity": "SOFT",
+          "defect_type": "future_date",
+          "candidate_id": "netsuite_transactions:date_future",
+          "status": "VALIDATION_FAILED",
+          "problems": [
+            "reserved name 'date' must be quoted as `date`"
+          ],
+          "counts": null
+        },
+        {
+          "table": "netsuite_transaction_lines",
+          "rule_name": "Amount Matches Quantity * Rate",
           "rule_expr": "amount IS NULL OR quantity IS NULL OR rate IS NULL OR abs(amount - quantity * rate) <= 0.01",
           "severity": "SOFT",
           "defect_type": "amount_mismatch",
@@ -397,72 +759,42 @@
       "dismissed": [
         {
           "candidate_id": "netsuite_memberships:end_date_before_start_date",
-          "reason": "Already covered by the existing soft rule 'End Not Before Start' which validates end_date >= start_date."
-        },
-        {
-          "candidate_id": "netsuite_memberships:membership_status_rare_values",
-          "reason": "Covered by the existing HARD rule 'membership_status in (\\'Active\\',\\'Suspended\\',\\'Expired\\')' which rejects the listed rare values."
-        },
-        {
-          "candidate_id": "netsuite_certifications:certification_type_rare_values",
-          "reason": "Covered by the existing HARD rule 'certification_type in (\\'SCP\\',\\'CP\\')' which rejects the listed rare types."
-        },
-        {
-          "candidate_id": "netsuite_certifications:certification_start_date_future",
-          "reason": "Covered by the existing HARD rule 'certification_start_date < DATE \\'2027-01-01\\'' which rejects future start dates."
-        },
-        {
-          "candidate_id": "netsuite_certifications:certification_end_date_future",
-          "reason": "Future certification end dates are expected for active certifications; high rate (56%) indicates normal business behavior."
+          "reason": "An existing hard\u2011coded rule (End Not Before Start) already enforces that end_date is null, start_date is null, or end_date >= start_date."
         },
         {
           "candidate_id": "netsuite_memberships:end_date_future",
-          "reason": "Future end dates are common for active memberships (rate 48%); this is normal business data."
+          "reason": "Future end dates are expected for active memberships; the high future count (47.9%) indicates normal business behavior."
+        },
+        {
+          "candidate_id": "netsuite_memberships:membership_status_rare_values",
+          "reason": "A current HARD rule restricts membership_status to ('Active','Suspended','Expired'), covering the rare variants and blanks."
+        },
+        {
+          "candidate_id": "netsuite_certifications:certification_type_rare_values",
+          "reason": "An existing HARD rule limits certification_type to ('SCP','CP'), which already rejects the listed rare values."
+        },
+        {
+          "candidate_id": "netsuite_certifications:certification_end_date_future",
+          "reason": "Future certification end dates are valid for ongoing certifications; the majority of rows being future indicates normal data."
         },
         {
           "candidate_id": "netsuite_transaction_lines:amount_negative",
-          "reason": "Negative amounts may represent refunds or credits, which are valid in transaction lines; without additional context we retain them."
+          "reason": "Negative amounts can represent refunds or credits, which are legitimate in transaction line data; the low rate suggests they are expected."
         }
       ],
       "unanswered": []
     },
     {
-      "trace_id": "7bf6d2ddd13544309d5512394d6524cd",
+      "trace_id": "aedf8e732b1f4174ba627c005dcda8d7",
       "exit_code": 0,
       "model": "databricks-gpt-oss-120b",
-      "tokens": 17502,
+      "tokens": 18149,
       "error": null,
       "proposals": [
         {
           "table": "netsuite_customers",
-          "rule_name": "Company Name Not Null",
-          "rule_expr": "company_name IS NOT NULL",
-          "severity": "SOFT",
-          "defect_type": "null_value",
-          "candidate_id": "netsuite_customers:company_name_rare_nulls",
-          "status": "VALIDATED",
-          "problems": [],
-          "counts": {
-            "rows": "3300",
-            "passed": "3297",
-            "failed": "3",
-            "nulls": "0"
-          },
-          "recall": {
-            "customer_null_company_name": 1.0,
-            "customer_malformed_email": 0.0
-          },
-          "matched_defect": "customer_null_company_name",
-          "best_recall": 1.0,
-          "failing_rows": 3,
-          "unexplained_rows": 0,
-          "unknown_rows": 0,
-          "recheck_ok": true
-        },
-        {
-          "table": "netsuite_customers",
           "rule_name": "Email Valid Format",
-          "rule_expr": "email IS NULL OR email rlike '^[^@ ]+@[^@ ]+\\.[A-Za-z]+$'",
+          "rule_expr": "email IS NULL OR email rlike '^[^@ ]+@[^@ ]+[.][A-Za-z]+$'",
           "severity": "SOFT",
           "defect_type": "invalid_email",
           "candidate_id": "netsuite_customers:email_bad_format",
@@ -514,7 +846,7 @@
         },
         {
           "table": "netsuite_memberships",
-          "rule_name": "Start Date Not Future",
+          "rule_name": "Membership Start Date Not Future",
           "rule_expr": "start_date IS NULL OR start_date <= current_date()",
           "severity": "SOFT",
           "defect_type": "future_date",
@@ -541,7 +873,7 @@
         },
         {
           "table": "netsuite_certifications",
-          "rule_name": "Certification End After Start",
+          "rule_name": "Certification End Not Before Start",
           "rule_expr": "certification_end_date IS NULL OR certification_start_date IS NULL OR certification_end_date >= certification_start_date",
           "severity": "SOFT",
           "defect_type": "end_before_start",
@@ -595,7 +927,7 @@
         },
         {
           "table": "netsuite_certifications",
-          "rule_name": "Certification Start Not Future",
+          "rule_name": "Certification Start Date Not Future",
           "rule_expr": "certification_start_date IS NULL OR certification_start_date <= current_date()",
           "severity": "SOFT",
           "defect_type": "future_date",
@@ -650,7 +982,7 @@
           "table": "netsuite_transactions",
           "rule_name": "Transaction Type Allowed",
           "rule_expr": "type IS NULL OR type IN ('Cash Sale','Invoice')",
-          "severity": "SOFT",
+          "severity": "HARD",
           "defect_type": "invalid_enum",
           "candidate_id": "netsuite_transactions:type_rare_values",
           "status": "VALIDATED",
@@ -684,33 +1016,6 @@
             "reserved name 'date' must be quoted as `date`"
           ],
           "counts": null
-        },
-        {
-          "table": "netsuite_transaction_lines",
-          "rule_name": "Amount Matches Quantity x Rate",
-          "rule_expr": "amount IS NULL OR quantity IS NULL OR rate IS NULL OR abs(amount - quantity * rate) <= 0.01",
-          "severity": "SOFT",
-          "defect_type": "amount_mismatch",
-          "candidate_id": "netsuite_transaction_lines:amount_ne_quantity_x_rate",
-          "status": "VALIDATED",
-          "problems": [],
-          "counts": {
-            "rows": "100098",
-            "passed": "99203",
-            "failed": "895",
-            "nulls": "0"
-          },
-          "recall": {
-            "negative_amount": 1.0,
-            "amount_mismatch": 0.9954022988505747,
-            "null_business_key": 0.0
-          },
-          "matched_defect": "negative_amount",
-          "best_recall": 1.0,
-          "failing_rows": 895,
-          "unexplained_rows": 0,
-          "unknown_rows": 108,
-          "recheck_ok": true
         },
         {
           "table": "netsuite_transaction_lines",
@@ -781,409 +1086,36 @@
       "skipped": [],
       "dismissed": [
         {
-          "candidate_id": "netsuite_memberships:end_date_before_start_date",
-          "reason": "Already covered by the existing soft rule End Not Before Start (rule_id 5) on the memberships table."
-        },
-        {
-          "candidate_id": "netsuite_memberships:end_date_future",
-          "reason": "Future end dates are common for active memberships (48% rate) and represent valid business data."
-        },
-        {
-          "candidate_id": "netsuite_memberships:membership_status_rare_values",
-          "reason": "Existing hard rule Not in List (rule_id 1) already restricts membership_status to ('Active','Suspended','Expired'), covering these rare variants."
-        },
-        {
-          "candidate_id": "netsuite_certifications:certification_type_rare_values",
-          "reason": "Existing hard rule Not in List (rule_id 2) restricts certification_type to ('SCP','CP'), handling these rare values."
-        },
-        {
-          "candidate_id": "netsuite_certifications:certification_end_date_future",
-          "reason": "Future certification end dates are expected for ongoing certifications; the high 56% rate indicates normal business data."
-        },
-        {
-          "candidate_id": "netsuite_transaction_lines:amount_negative",
-          "reason": "Negative amounts may represent legitimate refunds or credit memos; without further context they are considered acceptable."
-        }
-      ],
-      "unanswered": []
-    },
-    {
-      "trace_id": "9a66d765a90248e7926f33cb84622902",
-      "exit_code": 0,
-      "model": "databricks-gpt-oss-120b",
-      "tokens": 18033,
-      "error": null,
-      "proposals": [
-        {
-          "table": "netsuite_customers",
-          "rule_name": "Company Name Not Null",
-          "rule_expr": "company_name IS NOT NULL",
-          "severity": "SOFT",
-          "defect_type": "null_value",
           "candidate_id": "netsuite_customers:company_name_rare_nulls",
-          "status": "VALIDATED",
-          "problems": [],
-          "counts": {
-            "rows": "3300",
-            "passed": "3297",
-            "failed": "3",
-            "nulls": "0"
-          },
-          "recall": {
-            "customer_null_company_name": 1.0,
-            "customer_malformed_email": 0.0
-          },
-          "matched_defect": "customer_null_company_name",
-          "best_recall": 1.0,
-          "failing_rows": 3,
-          "unexplained_rows": 0,
-          "unknown_rows": 0,
-          "recheck_ok": true
+          "reason": "Only 3 rows (0.09%) have a NULL company_name; the column is optional and the null rate is negligible, so no rule is needed."
         },
-        {
-          "table": "netsuite_customers",
-          "rule_name": "Email Valid Format",
-          "rule_expr": "email IS NULL OR email rlike '^[^@ ]+@[^@ ]+[.][A-Za-z]+$'",
-          "severity": "SOFT",
-          "defect_type": "invalid_email",
-          "candidate_id": "netsuite_customers:email_bad_format",
-          "status": "VALIDATED",
-          "problems": [],
-          "counts": {
-            "rows": "3300",
-            "passed": "3294",
-            "failed": "6",
-            "nulls": "0"
-          },
-          "recall": {
-            "customer_null_company_name": 0.0,
-            "customer_malformed_email": 1.0
-          },
-          "matched_defect": "customer_malformed_email",
-          "best_recall": 1.0,
-          "failing_rows": 6,
-          "unexplained_rows": 0,
-          "unknown_rows": 0,
-          "recheck_ok": true
-        },
-        {
-          "table": "netsuite_memberships",
-          "rule_name": "Membership ID Not Null",
-          "rule_expr": "membership_internal_id IS NOT NULL",
-          "severity": "HARD",
-          "defect_type": "null_business_key",
-          "candidate_id": "netsuite_memberships:null_business_key",
-          "status": "VALIDATED",
-          "problems": [],
-          "counts": {
-            "rows": "8338",
-            "passed": "8313",
-            "failed": "25",
-            "nulls": "0"
-          },
-          "recall": {
-            "invalid_enum": 0.0,
-            "end_before_start": 0.0,
-            "null_business_key": 1.0
-          },
-          "matched_defect": "null_business_key",
-          "best_recall": 1.0,
-          "failing_rows": 25,
-          "unexplained_rows": 0,
-          "unknown_rows": 0,
-          "recheck_ok": true
-        },
-        {
-          "table": "netsuite_memberships",
-          "rule_name": "Start Date Not Future",
-          "rule_expr": "start_date IS NULL OR start_date <= current_date()",
-          "severity": "SOFT",
-          "defect_type": "future_date",
-          "candidate_id": "netsuite_memberships:start_date_future",
-          "status": "VALIDATED",
-          "problems": [],
-          "counts": {
-            "rows": "8338",
-            "passed": "8308",
-            "failed": "30",
-            "nulls": "0"
-          },
-          "recall": {
-            "invalid_enum": 0.0,
-            "end_before_start": 0.3333333333333333,
-            "null_business_key": 0.0
-          },
-          "matched_defect": "end_before_start",
-          "best_recall": 0.3333333333333333,
-          "failing_rows": 30,
-          "unexplained_rows": 0,
-          "unknown_rows": 6,
-          "recheck_ok": true
-        },
-        {
-          "table": "netsuite_certifications",
-          "rule_name": "Certification End Not Before Start",
-          "rule_expr": "certification_end_date IS NULL OR certification_start_date IS NULL OR certification_end_date >= certification_start_date",
-          "severity": "SOFT",
-          "defect_type": "end_before_start",
-          "candidate_id": "netsuite_certifications:certification_end_date_before_certification_start_date",
-          "status": "VALIDATED",
-          "problems": [],
-          "counts": {
-            "rows": "6673",
-            "passed": "6593",
-            "failed": "80",
-            "nulls": "0"
-          },
-          "recall": {
-            "invalid_enum": 0.0,
-            "end_before_start": 1.0,
-            "null_business_key": 0.0
-          },
-          "matched_defect": "end_before_start",
-          "best_recall": 1.0,
-          "failing_rows": 80,
-          "unexplained_rows": 0,
-          "unknown_rows": 10,
-          "recheck_ok": true
-        },
-        {
-          "table": "netsuite_certifications",
-          "rule_name": "Certification ID Not Null",
-          "rule_expr": "certification_internal_id IS NOT NULL",
-          "severity": "HARD",
-          "defect_type": "null_business_key",
-          "candidate_id": "netsuite_certifications:null_business_key",
-          "status": "VALIDATED",
-          "problems": [],
-          "counts": {
-            "rows": "6673",
-            "passed": "6653",
-            "failed": "20",
-            "nulls": "0"
-          },
-          "recall": {
-            "invalid_enum": 0.0,
-            "end_before_start": 0.0,
-            "null_business_key": 1.0
-          },
-          "matched_defect": "null_business_key",
-          "best_recall": 1.0,
-          "failing_rows": 20,
-          "unexplained_rows": 0,
-          "unknown_rows": 0,
-          "recheck_ok": true
-        },
-        {
-          "table": "netsuite_certifications",
-          "rule_name": "Certification Start Not Future",
-          "rule_expr": "certification_start_date IS NULL OR certification_start_date <= current_date()",
-          "severity": "SOFT",
-          "defect_type": "future_date",
-          "candidate_id": "netsuite_certifications:certification_start_date_future",
-          "status": "VALIDATED",
-          "problems": [],
-          "counts": {
-            "rows": "6673",
-            "passed": "6626",
-            "failed": "47",
-            "nulls": "0"
-          },
-          "recall": {
-            "invalid_enum": 0.0,
-            "end_before_start": 0.6,
-            "null_business_key": 0.0
-          },
-          "matched_defect": "end_before_start",
-          "best_recall": 0.6,
-          "failing_rows": 47,
-          "unexplained_rows": 0,
-          "unknown_rows": 6,
-          "recheck_ok": true
-        },
-        {
-          "table": "netsuite_transactions",
-          "rule_name": "Transaction ID Not Null",
-          "rule_expr": "transaction_internal_id IS NOT NULL",
-          "severity": "HARD",
-          "defect_type": "null_business_key",
-          "candidate_id": "netsuite_transactions:null_business_key",
-          "status": "VALIDATED",
-          "problems": [],
-          "counts": {
-            "rows": "33368",
-            "passed": "33269",
-            "failed": "99",
-            "nulls": "0"
-          },
-          "recall": {
-            "invalid_enum": 0.0,
-            "null_business_key": 1.0
-          },
-          "matched_defect": "null_business_key",
-          "best_recall": 1.0,
-          "failing_rows": 99,
-          "unexplained_rows": 0,
-          "unknown_rows": 0,
-          "recheck_ok": true
-        },
-        {
-          "table": "netsuite_transactions",
-          "rule_name": "Transaction Type Valid",
-          "rule_expr": "type IN ('Cash Sale','Invoice')",
-          "severity": "SOFT",
-          "defect_type": "invalid_enum",
-          "candidate_id": "netsuite_transactions:type_rare_values",
-          "status": "VALIDATED",
-          "problems": [],
-          "counts": {
-            "rows": "33368",
-            "passed": "33002",
-            "failed": "366",
-            "nulls": "0"
-          },
-          "recall": {
-            "invalid_enum": 1.0,
-            "null_business_key": 0.0
-          },
-          "matched_defect": "invalid_enum",
-          "best_recall": 1.0,
-          "failing_rows": 366,
-          "unexplained_rows": 0,
-          "unknown_rows": 48,
-          "recheck_ok": true
-        },
-        {
-          "table": "netsuite_transactions",
-          "rule_name": "Transaction Date Not Future",
-          "rule_expr": "date IS NULL OR date <= current_date()",
-          "severity": "SOFT",
-          "defect_type": "future_date",
-          "candidate_id": "netsuite_transactions:date_future",
-          "status": "VALIDATION_FAILED",
-          "problems": [
-            "reserved name 'date' must be quoted as `date`"
-          ],
-          "counts": null
-        },
-        {
-          "table": "netsuite_transaction_lines",
-          "rule_name": "Amount Not Negative",
-          "rule_expr": "amount IS NULL OR amount >= 0",
-          "severity": "SOFT",
-          "defect_type": "negative_amount",
-          "candidate_id": "netsuite_transaction_lines:amount_negative",
-          "status": "VALIDATED",
-          "problems": [],
-          "counts": {
-            "rows": "100098",
-            "passed": "99798",
-            "failed": "300",
-            "nulls": "0"
-          },
-          "recall": {
-            "negative_amount": 1.0,
-            "amount_mismatch": 0.0022988505747126436,
-            "null_business_key": 0.0
-          },
-          "matched_defect": "negative_amount",
-          "best_recall": 1.0,
-          "failing_rows": 300,
-          "unexplained_rows": 0,
-          "unknown_rows": 0,
-          "recheck_ok": true
-        },
-        {
-          "table": "netsuite_transaction_lines",
-          "rule_name": "Transaction Line ID Not Null",
-          "rule_expr": "transaction_line_id IS NOT NULL",
-          "severity": "HARD",
-          "defect_type": "null_business_key",
-          "candidate_id": "netsuite_transaction_lines:null_business_key",
-          "status": "VALIDATED",
-          "problems": [],
-          "counts": {
-            "rows": "100098",
-            "passed": "99807",
-            "failed": "291",
-            "nulls": "0"
-          },
-          "recall": {
-            "negative_amount": 0.0,
-            "amount_mismatch": 0.0,
-            "null_business_key": 1.0
-          },
-          "matched_defect": "null_business_key",
-          "best_recall": 1.0,
-          "failing_rows": 291,
-          "unexplained_rows": 0,
-          "unknown_rows": 0,
-          "recheck_ok": true
-        }
-      ],
-      "findings": [
-        {
-          "table": "netsuite_memberships",
-          "finding_type": "duplicate_business_key"
-        },
-        {
-          "table": "netsuite_memberships",
-          "finding_type": "late_arriving_rows"
-        },
-        {
-          "table": "netsuite_certifications",
-          "finding_type": "duplicate_business_key"
-        },
-        {
-          "table": "netsuite_certifications",
-          "finding_type": "late_arriving_rows"
-        },
-        {
-          "table": "netsuite_transactions",
-          "finding_type": "duplicate_business_key"
-        },
-        {
-          "table": "netsuite_transactions",
-          "finding_type": "late_arriving_rows"
-        },
-        {
-          "table": "netsuite_transaction_lines",
-          "finding_type": "duplicate_business_key"
-        },
-        {
-          "table": "netsuite_transaction_lines",
-          "finding_type": "orphan_records"
-        },
-        {
-          "table": "netsuite_transaction_lines",
-          "finding_type": "late_arriving_rows"
-        }
-      ],
-      "skipped": [],
-      "dismissed": [
         {
           "candidate_id": "netsuite_memberships:end_date_before_start_date",
-          "reason": "Already covered by existing rule ID 5 (End Not Before Start) which enforces end_date >= start_date."
-        },
-        {
-          "candidate_id": "netsuite_memberships:end_date_future",
-          "reason": "Nearly 48% of rows have future end_date, which is normal for active memberships extending into the future."
+          "reason": "Already covered by the existing soft rule \"End Not Before Start\" on memberships."
         },
         {
           "candidate_id": "netsuite_memberships:membership_status_rare_values",
-          "reason": "Existing HARD rule restricts membership_status to ('Active','Suspended','Expired'), covering these rare/invalid values."
+          "reason": "Existing hard rule restricts membership_status to ('Active','Suspended','Expired'), which already rejects these rare values."
+        },
+        {
+          "candidate_id": "netsuite_memberships:end_date_future",
+          "reason": "Nearly half of the rows have future end dates, which is normal for active memberships; therefore not an error."
         },
         {
           "candidate_id": "netsuite_certifications:certification_type_rare_values",
-          "reason": "Existing HARD rule restricts certification_type to ('SCP','CP'), already rejecting these rare values."
+          "reason": "Existing hard rule limits certification_type to ('SCP','CP'), already handling these rare/invalid values."
         },
         {
           "candidate_id": "netsuite_certifications:certification_end_date_future",
-          "reason": "Future certification_end_date is common for active certifications (56% of rows); acceptable."
+          "reason": "More than half of certifications have future end dates, which is expected for ongoing certifications."
         },
         {
           "candidate_id": "netsuite_transaction_lines:amount_ne_quantity_x_rate",
-          "reason": "Existing rule \"Amount Equals Qty x Rate\" already flags rows where amount != quantity*rate."
+          "reason": "The existing soft rule \"Amount Equals Qty x Rate\" already flags mismatches; this candidate is covered."
+        },
+        {
+          "candidate_id": "netsuite_transaction_lines:amount_negative",
+          "reason": "Negative amounts can represent refunds or credits and are therefore legitimate business values."
         }
       ],
       "unanswered": []
