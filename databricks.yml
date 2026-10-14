@@ -72,6 +72,11 @@ variables:
       Application id of the data-generator service principal, the run identity of the dev-only source generator job
       (netsuite_daily_generator). Set in CI from the DATA_GENERATOR_SP repository variable.
     default: ""
+  dq_agent_sp:
+    description: >
+      Application id of the dq-agent service principal, the run identity of the dev-only DQ recommender job
+      (dq_recommender; plan #39 step 10). Set in CI from the DQ_AGENT_SP repository variable.
+    default: ""
 
 targets:
   dev:
@@ -157,14 +162,67 @@ targets:
                   # (SIGABRT on import) in this serverless environment (probed 2026-10-01)
                   - psycopg>=3.1
                   - databricks-sdk>=0.94.0
+        # The DQ rule recommender (plan #39 step 10; docs/dq_recommender_design.md). Dev-only, runs as dq-agent
+        # (Postgres role aidq_agent: SELECT, INSERT on config_proposals and incidents; UC SELECT on bronze, silver,
+        # rejects; warehouse CAN_USE). Manual runs only for now (the design's weekly trigger comes after the first
+        # reviewed cycle). Dry run unless started with write=true.
+        dq_recommender:
+          name: dq_recommender
+          description: DQ rule recommender, run as dq-agent (docs/phase5_dq_recommender_plan.md step 10)
+          run_as:
+            service_principal_name: ${var.dq_agent_sp}
+          max_concurrent_runs: 1
+          parameters:
+            - name: write
+              default: "false"
+          tasks:
+            - task_key: recommend
+              spark_python_task:
+                python_file: src/dq_recommender_job.py
+                parameters: ["--write", "{{job.parameters.write}}"]
+              environment_key: dq_agent
+          environments:
+            - environment_key: dq_agent
+              spec:
+                client: "3"
+                dependencies:
+                  - langgraph>=1.2,<2
+                  - mcp>=2.3,<3          # tool definitions (aidq_mcp.server); no MCP subprocess in the job
+                  - anthropic>=1.11,<2   # imported by aidq_agent.dbx (the shared chat client)
+                  - databricks-sdk>=0.147,<1
+                  - psycopg>=3.1         # plain psycopg: the binary wheel aborts here (generator, 2026-10-01)
+                  - pyyaml
+        # The validator for PENDING proposals (tools/validate_proposals.py), run as the deploying identity (ci-dev),
+        # which does SET LOCAL ROLE aidq_validator before any work. Manual, after a dq_recommender write run.
+        dq_validator:
+          name: dq_validator
+          description: Validates PENDING DQ proposals as aidq_validator (docs/phase5_dq_recommender_plan.md step 5)
+          max_concurrent_runs: 1
+          tasks:
+            - task_key: validate
+              spark_python_task:
+                python_file: tools/validate_proposals.py
+                parameters: ["--auth", "sdk"]
+              environment_key: validator
+          environments:
+            - environment_key: validator
+              spec:
+                client: "3"
+                dependencies:
+                  - sqlglot>=30,<31
+                  - databricks-sdk>=0.147,<1
+                  - psycopg>=3.1
+                  - pyyaml
         # failure email for the daily dev ingestion job too (merged into the job in resources/)
         netsuite_ingestion_daily:
           email_notifications:
             on_failure:
               - ${var.notification_email}
-    # data-generator must read the job's files in the deploying identity's bundle folder
+    # data-generator and dq-agent must read their jobs' files in the deploying identity's bundle folder
     permissions:
       - service_principal_name: ${var.data_generator_sp}
+        level: CAN_VIEW
+      - service_principal_name: ${var.dq_agent_sp}
         level: CAN_VIEW
 
   prod:

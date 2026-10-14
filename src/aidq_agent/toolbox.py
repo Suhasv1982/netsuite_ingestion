@@ -64,6 +64,32 @@ class McpToolBox:
             return {"status": "error", "error": f"non-JSON tool result: {text[:300]}"}
 
 
+class LocalToolBox:
+    """The aidq_mcp tools called in-process (a Databricks job: no MCP subprocess, no CLI). Same tool definitions and
+    the same result dicts as the MCP server, restricted to `only`."""
+
+    def __init__(self, tools, only: tuple[str, ...]):
+        self.tools, self.only = tools, only
+        self._defs: list[dict] | None = None
+
+    async def list_tools(self) -> list[dict]:
+        if self._defs is None:
+            from aidq_mcp.server import build_server
+
+            listed = await build_server(self.tools).list_tools()
+            self._defs = [{"name": t.name, "description": t.description or "", "input_schema": t.input_schema}
+                          for t in listed if t.name in self.only]
+        return self._defs
+
+    async def call(self, name: str, arguments: dict) -> dict:
+        if name not in self.only:
+            return {"status": "error", "error": f"tool {name!r} is not available here"}
+        try:
+            return getattr(self.tools, name)(**(arguments or {}))
+        except TypeError as e:          # unexpected argument names, as the MCP server would reject them
+            return {"status": "error", "error": f"bad arguments for {name}: {e}"}
+
+
 # the aidq_mcp tools' defaults, so {"days": 3} and an omitted days hit the same recording
 REPLAY_DEFAULTS = {"get_recent_job_runs": {"days": 3}, "get_pipeline_errors": {"hours": 24},
                    "get_recent_deploys": {"days": 7}}

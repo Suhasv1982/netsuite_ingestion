@@ -1,6 +1,7 @@
 """Validate PENDING ADD_DQ_RULE proposals (design v2 section 6; plan #39 step 5).
 
     python tools/validate_proposals.py --profile DEFAULT [--dry-run] [--as-caller]     # locally
+    python tools/validate_proposals.py --auth sdk                                       # the dq_validator job
     (job: run as ci-dev; it does SET LOCAL ROLE aidq_validator before any work)
 
 For each PENDING proposal (oldest first, locked FOR UPDATE SKIP LOCKED): static checks, dry run on dev bronze through
@@ -67,6 +68,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--profile", default=None, help="Databricks CLI profile (omit for environment auth)")
     p.add_argument("--dry-run", action="store_true", help="validate and print, then roll back")
     p.add_argument("--as-caller", action="store_true", help="do not SET ROLE aidq_validator (local tests only)")
+    p.add_argument("--auth", choices=["cli", "sdk"], default="cli",
+                   help="sdk: the run identity of a Databricks job (no CLI; plan #39 step 10)")
     args = p.parse_args(argv)
 
     sys.path.insert(0, str(ROOT / "tools"))
@@ -75,8 +78,15 @@ def main(argv: list[str] | None = None) -> int:
     from aidq_mcp.config import env_config
     from aidq_mcp.reads import Reads
 
-    reads = Reads(args.profile)
-    conn = migrate.connect("dev", args.profile)
+    if args.auth == "sdk":
+        from aidq_dq_agent.write_tools import sdk_connect
+        from aidq_mcp.sdk_reads import SdkReads
+
+        reads = SdkReads()
+        conn = sdk_connect(env_config("dev").metadata_endpoint)()
+    else:
+        reads = Reads(args.profile)
+        conn = migrate.connect("dev", args.profile)
     try:
         results = validate_all(conn, reads.sql, env_config("dev").catalog, set_role=not args.as_caller)
         if args.dry_run:

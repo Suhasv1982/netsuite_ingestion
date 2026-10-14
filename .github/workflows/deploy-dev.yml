@@ -104,6 +104,7 @@ jobs:
           DATABRICKS_AUTH_TYPE: oauth-m2m
           REBUILD: ${{ steps.mode.outputs.rebuild }}
           BUNDLE_VAR_data_generator_sp: ${{ vars.DATA_GENERATOR_SP }}
+          BUNDLE_VAR_dq_agent_sp: ${{ vars.DQ_AGENT_SP }}                 # run identity of the dq_recommender job
           BUNDLE_VAR_notification_email: ${{ vars.NOTIFICATION_EMAIL }}
         run: |
           set -euo pipefail
@@ -153,6 +154,7 @@ jobs:
           DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET_DEV }}
           DATABRICKS_AUTH_TYPE: oauth-m2m
           BUNDLE_VAR_data_generator_sp: ${{ vars.DATA_GENERATOR_SP }}
+          BUNDLE_VAR_dq_agent_sp: ${{ vars.DQ_AGENT_SP }}                 # run identity of the dq_recommender job
           BUNDLE_VAR_notification_email: ${{ vars.NOTIFICATION_EMAIL }}
         run: |
           set -euo pipefail
