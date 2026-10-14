@@ -29,6 +29,14 @@ grants:
     schemas: [generator]
     privileges: [USE_SCHEMA, SELECT]
 
+  # dq-agent writes the DQ recommender's MLflow traces into workspace.aidq_traces (plan #39 step 8; owner choice
+  # 2026-10-14). MLflow provisions the trace tables there (tools/setup_dq_traces.py). Owner-applied.
+  - principal: agent
+    applied_by: owner
+    optional: true
+    schemas: [aidq_traces]
+    privileges: [USE_SCHEMA, SELECT, MODIFY]
+
   # dq-agent, the DQ recommender's service principal (docs/dq_recommender_design_v2.md section 3): read bronze, silver
   # and rejects, use the SQL warehouse for profiling. Owner-applied (tools/setup_dq_roles.sh): CI can grant neither
   # USE CATALOG nor without the principal. No grant on the databricks-gpt-oss-120b endpoint: it is a pay-per-token

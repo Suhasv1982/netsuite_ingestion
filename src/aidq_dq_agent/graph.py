@@ -21,6 +21,7 @@ from typing import Any, Callable, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from .recommend import PROMPT_VERSION, Recommendation
+from .tracing import NullTracer
 
 EXIT_NO_RECOMMENDATION = 1      # the model gave no valid submission, also after escalation
 EXIT_METADATA_UNAVAILABLE = 2   # inputs or writes failed: the report has what could not be done
@@ -41,18 +42,30 @@ class State(TypedDict, total=False):
 
 
 def build_graph(toolbox, recommender, write_tools, tables: list[str],
-                now: Callable[[], dt.datetime] = lambda: dt.datetime.now(dt.timezone.utc)):
+                now: Callable[[], dt.datetime] = lambda: dt.datetime.now(dt.timezone.utc), tracer=None,
+                trace_meta: dict | None = None):
+    """`tracer`: spans for tool calls, the recommendation and each write (aidq_dq_agent.tracing; default none).
+    `trace_meta`: added to every proposal's and incident's evidence (e.g. trace_experiment_id, for the trace link)."""
+    tracer = tracer or NullTracer()
+    trace_meta = {k: v for k, v in (trace_meta or {}).items() if v is not None}
+
+    async def call(name: str, args: dict) -> dict:
+        with tracer.span(f"tool {name}", "TOOL", args) as span:
+            r = await toolbox.call(name, args)
+            span.set_outputs(r)
+            span.set_attributes({"status": r.get("status")})
+            return r
 
     async def collect(state: State) -> State:
         errors, collected = [], {}
         for name in ("get_dq_rules", "get_open_and_rejected_proposals", "get_rejects_summary"):
-            r = await toolbox.call(name, {"env": "dev"})
+            r = await call(name, {"env": "dev"})
             collected[name] = r
             if r.get("status") != "ok":
                 errors.append(f"{name}: {r.get('status')} {r.get('error') or ''}".strip())
         profiles = {}
         for t in tables:
-            r = await toolbox.call("profile_table", {"env": "dev", "table": t})
+            r = await call("profile_table", {"env": "dev", "table": t})
             profiles[t] = r
             if r.get("status") != "ok":
                 errors.append(f"profile_table {t}: {r.get('status')} {r.get('error') or ''}".strip())
@@ -64,7 +77,15 @@ def build_graph(toolbox, recommender, write_tools, tables: list[str],
         context = {"today": state["today"], "tables": [t for t in state["tables"]
                                                        if state["collected"]["profiles"][t].get("status") == "ok"],
                    **state["collected"]}
-        return {"recommendation": await recommender.recommend(context, toolbox)}
+        with tracer.span("recommend", "CHAIN", {"tables": context["tables"]}) as span:
+            rec = await recommender.recommend(context, toolbox)
+            span.set_attributes({"model": rec.model, "prompt_version": rec.prompt_version,
+                                 "input_tokens": (rec.usage or {}).get("input_tokens"),
+                                 "output_tokens": (rec.usage or {}).get("output_tokens"),
+                                 "tool_calls": len(rec.tool_calls), "error": rec.error,
+                                 "unanswered": len(rec.unanswered or [])})
+            span.set_outputs(rec.result if rec.result is not None else {"error": rec.error})
+        return {"recommendation": rec}
 
     async def submit(state: State) -> State:
         out, store_error = [], None
@@ -72,12 +93,12 @@ def build_graph(toolbox, recommender, write_tools, tables: list[str],
         for p in result.get("proposals", []):
             args = {k: v for k, v in p.items() if k not in ("defect_type", "candidate_id")}
             args["evidence"] = {**(p.get("evidence") or {}), "defect_type": p.get("defect_type"),
-                                "candidate_id": p.get("candidate_id"), "prompt_version": PROMPT_VERSION}
-            out.append(_try("proposal", p, lambda a=args: write_tools.submit_proposal(a)))
+                                "candidate_id": p.get("candidate_id"), "prompt_version": PROMPT_VERSION, **trace_meta}
+            out.append(_traced(tracer, "submit_proposal", "proposal", p, lambda a=args: write_tools.submit_proposal(a)))
         for f in result.get("findings", []):
             args = {k: v for k, v in f.items() if k != "candidate_id"}
-            args["evidence"] = {**(f.get("evidence") or {}), "candidate_id": f.get("candidate_id")}
-            out.append(_try("finding", f, lambda a=args: write_tools.report_finding(a)))
+            args["evidence"] = {**(f.get("evidence") or {}), "candidate_id": f.get("candidate_id"), **trace_meta}
+            out.append(_traced(tracer, "report_finding", "finding", f, lambda a=args: write_tools.report_finding(a)))
         failed = [o for o in out if o["result"].get("status") == "store_error"]
         if failed:
             store_error = failed[0]["result"]["error"]
@@ -135,6 +156,14 @@ def write_tools_writes(write_tools) -> bool:
     return not getattr(write_tools, "dry_run", False)
 
 
+def _traced(tracer, name: str, kind: str, item: dict, call) -> dict:
+    with tracer.span(f"write {name}", "TOOL", item) as span:
+        out = _try(kind, item, call)
+        span.set_outputs(out["result"])
+        span.set_attributes({"status": out["result"].get("status")})
+        return out
+
+
 def _try(kind: str, item: dict, call) -> dict:
     try:
         result = call()
@@ -164,6 +193,8 @@ def _line(s: dict) -> str:
     return f"- **{it.get('table')}** {it.get('finding_type')}: {it.get('summary')} {done}"
 
 
-async def run(toolbox, recommender, write_tools, tables: list[str], now=None, trace_id: str | None = None) -> dict:
-    graph = build_graph(toolbox, recommender, write_tools, tables, **({"now": now} if now else {}))
+async def run(toolbox, recommender, write_tools, tables: list[str], now=None, trace_id: str | None = None,
+              tracer=None, trace_meta: dict | None = None) -> dict:
+    graph = build_graph(toolbox, recommender, write_tools, tables, **({"now": now} if now else {}), tracer=tracer,
+                        trace_meta=trace_meta)
     return await graph.ainvoke({"trace_id": trace_id} if trace_id else {})

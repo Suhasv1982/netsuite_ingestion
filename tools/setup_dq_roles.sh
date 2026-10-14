@@ -14,6 +14,8 @@
 #      (grants/dev.yml), then a check
 #   5. "Service Principal User" on dq-agent for ci-dev, so deploy-dev can deploy the DQ recommender job that runs
 #      as dq-agent (grants/dev.yml service_principal_users; tools/sp_roles.py), then an exact-match check
+#   6. the DQ recommender's trace store: experiment /Shared/aidq/dq_recommender bound to workspace.aidq_traces
+#      (created in step 4), dq-agent CAN_EDIT on it (tools/setup_dq_traces.py; plan #39 step 8)
 # Requires migration 006 on dev (approved_severity) before step 3: deploy-dev applies it on merge.
 set -euo pipefail
 PROFILE="${1:?usage: setup_dq_roles.sh <databricks profile>}"
@@ -60,6 +62,13 @@ else
     --comment "Generator defect manifests (DQ recommender eval ground truth)" >/dev/null
   echo "created schema workspace.generator"
 fi
+if databricks schemas get workspace.aidq_traces --profile "$PROFILE" >/dev/null 2>&1; then
+  echo "schema workspace.aidq_traces exists"
+else
+  databricks schemas create aidq_traces workspace --profile "$PROFILE" \
+    --comment "MLflow traces of the DQ recommender (plan #39 step 8)" >/dev/null
+  echo "created schema workspace.aidq_traces"
+fi
 "$PY" tools/apply_grants.py --target dev --owner-applied --profile "$PROFILE" \
   --ci-principal "$CI" --owner-principal "$OWNER" --agent-principal "$AGENT" --data-generator-principal "$GEN"
 "$PY" tools/apply_grants.py --target dev --owner-applied --check --profile "$PROFILE" \
@@ -67,5 +76,8 @@ fi
 
 # 5. Service Principal User (who may deploy a job that runs as the service principal), then the exact-match check
 "$PY" tools/sp_roles.py --apply --profile "$PROFILE"
+
+# 6. trace store (experiment bound to workspace.aidq_traces, dq-agent CAN_EDIT), with its check
+"$PY" tools/setup_dq_traces.py --profile "$PROFILE"
 
 echo "done. dq-agent needs no OAuth secret: it runs as a Databricks job (run_as). Repository variable DQ_AGENT_SP=$AGENT"

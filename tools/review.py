@@ -55,6 +55,8 @@ def render(row: dict) -> str:
     lines = [f"Proposal {row['proposal_id']}  {row['proposal_type']}  on {row['source_table']}  [{row['status']}]",
              f"  by {row['proposed_by']}  at {row['created_at']}  confidence {row['confidence']}",
              f"  trace: {row['agent_trace_id'] or '-'}"]
+    if row.get("trace_url"):
+        lines.append(f"  trace link: {row['trace_url']}")
     if requires_rebuild(row["proposal_type"], row.get("load_mode")):
         lines.append("  ** requires bronze rebuild **")
     lines += ["", "Change:"] + [f"  {k}: {v}" for k, v in change.items()]
@@ -105,6 +107,22 @@ def reject(conn, pid: int, reviewer: str, reason: str) -> str:
     return f"Proposal {pid} rejected by {reviewer}"
 
 
+def trace_url(profile: str | None, row: dict) -> str | None:
+    """The MLflow trace link of a proposal (plan #39 step 8): the workspace host from the CLI profile, the experiment
+    id from the proposal's evidence. None for untraced runs; never fails `show`."""
+    exp = (row.get("evidence") or {}).get("trace_experiment_id")
+    if not exp or not row.get("agent_trace_id"):
+        return None
+    try:
+        sys.path.insert(0, str(ROOT.parent / "src"))
+        from aidq_dq_agent.tracing import trace_link
+        from databricks.sdk.core import Config
+
+        return trace_link(Config(profile=profile).host, str(exp), row["agent_trace_id"])
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--profile", default="DEFAULT")
@@ -136,6 +154,8 @@ def main(argv: list[str] | None = None) -> int:
             conn.rollback()
         elif args.cmd == "show":
             row = show(conn, args.proposal_id)
+            if row:
+                row["trace_url"] = trace_url(args.profile, row)
             print(render(row) if row else f"proposal {args.proposal_id} not found")
             conn.rollback()
         elif args.cmd == "approve":
