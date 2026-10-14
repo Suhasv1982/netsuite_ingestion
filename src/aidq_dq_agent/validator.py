@@ -68,6 +68,11 @@ def static_check(expr: str, active_columns: list[str]) -> StaticResult:
         problems.append("SQL comments are not allowed")
     if ";" in expr:
         problems.append("';' is not allowed")
+    if "\\" in expr:
+        # Spark SQL un-escapes string literals: '\s' becomes 's', so a regex like '^[^@\s]+@' silently rejects every
+        # value containing an 's' (DQ eval 2026-10-14: ~1,560 valid customer emails). Use classes: [ ], [.], [0-9].
+        problems.append("a backslash is not allowed: Spark SQL un-escapes string literals ('\\s' becomes 's'); use "
+                        "character classes such as [ ] or [.] instead")
     if problems:
         return StaticResult(False, problems)
     try:

@@ -60,6 +60,8 @@ How to read the candidates:
 * Allowed: comparisons, `AND` / `OR` / `NOT`, `IS [NOT] NULL`, `IN (...)`, `BETWEEN`, `LIKE`, arithmetic, `abs`,
   `round`, `coalesce`, `length`, `trim`, `lower` / `upper`, `rlike`, `datediff`, `cast`, `current_date()`,
   `current_timestamp()`. No subqueries, no comments, no `;`, nothing random.
+* No backslashes anywhere: Spark SQL un-escapes string literals (`'\s'` becomes `'s'`), which silently changes a
+  regex. Use character classes instead: `[ ]` for a space, `[.]` for a dot, `[0-9]` for a digit.
 * Severity: **SOFT** by default. **HARD** only when a failing row is unusable without doubt: a NULL business key.
   Wrong values that a person may still want to see (an end before a start, an unknown status, a negative amount,
   a mismatch) are SOFT; the reviewer can raise them.

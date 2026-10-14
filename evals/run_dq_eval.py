@@ -174,7 +174,8 @@ SCORING_RULES = [
     "truth.",
     "Attribution: a key belongs to the first snapshot in which the rule fails it (the generator re-emits keys with "
     "their latest values, so a defect carries into later snapshots).",
-    "Customers (full load, current state only): a manifest row counts while the current row still shows its defect.",
+    "Customers (full load, current state only): a manifest row counts while the current row still shows its defect, "
+    "and a failing row in no manifest is a false reject (there is no batch to attribute it to).",
     "Existing-rule coverage: a defect type an active rule already fails on >= 80% of its manifest rows is covered; "
     "proposing it again would be nagging (design v2 section 5), so it is reported but not required for recall.",
     "Found: a VALIDATED rule fails >= 80% of a type's manifest rows (NULL-key rows by count). Precise: a proposal "
@@ -263,9 +264,11 @@ def score_sql(relation: str, key: str, expr: str, table: str, defects: list[str]
     """(totals, caught). m_known: the target defects' manifest keys from known batches (recall). m_any: every
     manifest key of the table, any batch (a failing row whose key is in it is explained). first: the first
     snapshot in which the rule fails a key; only keys first failing in a known batch can be false rejects.
-    `snapshots` False (a full-load table: bronze holds the current state, no _snapshot_date): a row's batch is
-    unknown, so a failing row outside the manifests is unknown ground truth, never a false reject."""
+    `snapshots` False (a full-load table: bronze holds the current state, no _snapshot_date): there is no batch to
+    attribute a row to, and the current state is the ground truth, so a failing row in no manifest IS a false
+    reject. (Treating it as unknown hid a rule that rejected ~1,560 valid customer emails, 2026-10-14.)"""
     day = "cast(_snapshot_date AS string)" if snapshots else "CAST(NULL AS STRING)"
+    in_known = (lambda col: f"{col} IN ({_lits(known)})") if snapshots else (lambda col: "true")
     present = "" if snapshots else f" AND {still_present_filter(relation, key, defects)}"
     base = (f"WITH m_known AS (SELECT defect, business_key FROM {MANIFESTS} WHERE table_name = '{table}' AND defect IN "
             f"({_lits(defects)}) AND business_key IS NOT NULL AND cast(batch_date AS string) IN ({_lits(known)}){present}), "
@@ -274,11 +277,11 @@ def score_sql(relation: str, key: str, expr: str, table: str, defects: list[str]
             f"NOT coalesce(({expr}), false) AS fails FROM {relation}), "
             "first AS (SELECT k, min(d) AS fd FROM b WHERE fails AND k IS NOT NULL GROUP BY k)")
     totals = (base + " SELECT count_if(b.fails) AS failing_rows, "
-              f"count_if(b.fails AND b.k IS NULL AND b.d IN ({_lits(known)})) AS failing_null_key_rows, "
-              f"count_if(b.fails AND b.k IS NOT NULL AND b.k NOT IN (SELECT business_key FROM m_any) AND f.fd IN "
-              f"({_lits(known)})) AS unexplained_rows, "
-              f"count_if(b.fails AND (b.k IS NULL AND NOT coalesce(b.d IN ({_lits(known)}), false) OR b.k IS NOT NULL "
-              f"AND b.k NOT IN (SELECT business_key FROM m_any) AND NOT coalesce(f.fd IN ({_lits(known)}), false))) "
+              f"count_if(b.fails AND b.k IS NULL AND {in_known('b.d')}) AS failing_null_key_rows, "
+              f"count_if(b.fails AND b.k IS NOT NULL AND b.k NOT IN (SELECT business_key FROM m_any) AND "
+              f"{in_known('f.fd')}) AS unexplained_rows, "
+              f"count_if(b.fails AND (b.k IS NULL AND NOT coalesce({in_known('b.d')}, false) OR b.k IS NOT NULL "
+              f"AND b.k NOT IN (SELECT business_key FROM m_any) AND NOT coalesce({in_known('f.fd')}, false))) "
               "AS unknown_rows "
               "FROM b LEFT JOIN first f ON b.k = f.k")
     caught = (base + " SELECT m.defect, count(DISTINCT CASE WHEN b.fails THEN m.business_key END) AS caught "

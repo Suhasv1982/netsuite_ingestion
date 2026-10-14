@@ -92,10 +92,12 @@ def test_score_sql_scores_only_known_batches():
     assert "cast(_snapshot_date AS string) AS d" in totals
 
 
-def test_full_load_tables_have_no_snapshots_so_outside_rows_are_unknown():
+def test_full_load_tables_count_rows_outside_the_manifests_as_false_rejects():
     totals, _ = ev.score_sql("r", "k", "a > 0", "netsuite_customers", ["x"], ["2026-07-11"], snapshots=False)
     assert "CAST(NULL AS STRING) AS d" in totals and "_snapshot_date" not in totals
-    assert "NOT coalesce(f.fd IN ('2026-07-11'), false)" in totals
+    # current state is the ground truth: a failing row in no manifest is a false reject, never "unknown"
+    assert "NOT IN (SELECT business_key FROM m_any) AND true) AS unexplained_rows" in totals
+    assert "NOT coalesce(true, false)" in totals and "IN ('2026-07-11')) AS unexplained" not in totals
 
 
 def test_full_load_ground_truth_keeps_only_defects_still_present():
