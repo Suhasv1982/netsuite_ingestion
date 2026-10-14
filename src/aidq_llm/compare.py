@@ -38,7 +38,7 @@ def sign_test_p(b: int, c: int) -> float:
 
 def items_of(result: dict) -> dict[str, tuple[str, bool]]:
     """{item id: (kind, passed)} for one eval run result (run_agent_eval.run_case)."""
-    out = {f"check:{k}": ("check", bool(v)) for k, v in (result.get("checks") or {}).items()}
+    out = {f"check:{k}": ("check", bool(v)) for k, v in (result.get("checks") or {}).items() if k != "run_completed"}
     for j in result.get("judge") or []:
         out[f"{j['kind']}:{j['id']}"] = (j["kind"], bool(j.get("pass")))
     return out
@@ -65,14 +65,32 @@ class ItemStat:
         return self.candidate_pass >= self.target and self.b - self.c <= MAX_PAIRED_REGRESSION
 
 
+def completed(result: dict) -> bool:
+    """False for a run that crashed on infrastructure (routing_compare records run_completed=False)."""
+    return (result.get("checks") or {}).get("run_completed", True) is not False
+
+
+def valid_pairs(base_runs: list[dict], cand_runs: list[dict]) -> tuple[list[tuple[dict, dict]], int]:
+    """(pairs where both runs completed, number of pairs excluded). An infrastructure crash says nothing about a
+    model, so such a pair is excluded rather than counted as a failure."""
+    pairs = list(zip(base_runs, cand_runs))
+    ok = [(b, c) for b, c in pairs if completed(b) and completed(c)]
+    return ok, len(pairs) - len(ok)
+
+
+def excluded(baseline: dict[str, list[dict]], candidate: dict[str, list[dict]]) -> dict[str, int]:
+    return {case: valid_pairs(runs, candidate.get(case, []))[1] for case, runs in baseline.items()}
+
+
 def pair(baseline: dict[str, list[dict]], candidate: dict[str, list[dict]]) -> list[ItemStat]:
-    """`baseline` / `candidate`: {case id: [run results in run order]}. Items missing in a run count as failed."""
+    """`baseline` / `candidate`: {case id: [run results in run order]}. Pairs with a crashed run are excluded
+    (`excluded`); within a valid pair, an item missing from a run counts as failed."""
     stats = []
     for case, base_runs in baseline.items():
-        cand_runs = candidate.get(case, [])
-        n = min(len(base_runs), len(cand_runs))
-        b_items = [items_of(r) for r in base_runs[:n]]
-        c_items = [items_of(r) for r in cand_runs[:n]]
+        pairs, _ = valid_pairs(base_runs, candidate.get(case, []))
+        n = len(pairs)
+        b_items = [items_of(b) for b, _ in pairs]
+        c_items = [items_of(c) for _, c in pairs]
         names = sorted({k for d in b_items + c_items for k in d})
         for name in names:
             kind = next((d[name][0] for d in b_items + c_items if name in d), "check")

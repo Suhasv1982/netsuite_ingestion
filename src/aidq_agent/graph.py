@@ -147,12 +147,14 @@ def build_graph(toolbox: ToolBox, investigator, store: IncidentStore,
             lines += ["", f"## {inc['category']}  `{inc['fingerprint']}`"
                           + (f"  (incident {inc['incident_id']})" if inc.get("incident_id") else "  (not written)"),
                       inc["summary"]]
-            for e in rca.get("evidence", []):
-                lines.append(f"- [{e['tool']}] {e['finding']}")
+            # rendered defensively: the report must never crash on model output (2026-10-13)
+            for e in rca.get("evidence") or []:
+                e = e if isinstance(e, dict) else {"finding": e}
+                lines.append(f"- [{e.get('tool', '?')}] {e.get('finding', '(no finding given)')}")
             if rca.get("not_the_cause"):
-                lines.append("Ruled out: " + "; ".join(rca["not_the_cause"]))
+                lines.append("Ruled out: " + "; ".join(str(x) for x in rca["not_the_cause"]))
             if rca.get("open_questions"):
-                lines.append("Not verified: " + "; ".join(rca["open_questions"]))
+                lines.append("Not verified: " + "; ".join(str(x) for x in rca["open_questions"]))
             if inc.get("suggested_fix"):
                 lines.append(f"Next step: {inc['suggested_fix']}")
         new = [i for i in incidents if i.get("incident_id")]

@@ -30,11 +30,29 @@ from aidq_llm.router import load_routes  # noqa: E402
 from run_agent_eval import JUDGE_MODEL, run_case  # noqa: E402
 
 
+CRASH_RETRIES = 2
+CRASH_PAUSE_S = 60
+
+
 async def run_model(model: str, cases: list[dict], runs: int, chat, judge: str) -> dict[str, list[dict]]:
     out: dict[str, list[dict]] = {}
     for case in cases:
         for r in range(1, runs + 1):
-            res = await run_case(case, r, chat, model, judge)
+            errors = []
+            for attempt in range(1 + CRASH_RETRIES):   # an infrastructure crash is retried; a model answer never is
+                try:
+                    res = await run_case(case, r, chat, model, judge)
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(f"{type(exc).__name__}: {str(exc)[:300]}")
+                    print(f"{model} {case['id']} run {r}: CRASH (attempt {attempt + 1}): {errors[-1]}", file=sys.stderr)
+                    await asyncio.sleep(CRASH_PAUSE_S)
+                    continue
+                res["checks"] = {"run_completed": True, **res["checks"]}
+                res["crash_retries"] = errors
+                break
+            else:   # still crashing: recorded, and its pair is excluded from the comparison (compare.valid_pairs)
+                res = {"case": case["id"], "run": r, "checks": {"run_completed": False}, "judge": [],
+                       "errors": errors, "usage": []}
             out.setdefault(case["id"], []).append(res)
             print(f"{model} {case['id']} run {r}: checks={res['checks']}", file=sys.stderr)
     return out
@@ -55,10 +73,14 @@ def report(task: str, baseline: str, runs: int, base_res: dict, cands: dict[str,
     for model, res in cands.items():
         stats = compare.pair(base_res, res)
         ok, why = compare.decide(stats)
+        skipped = {c: n for c, n in compare.excluded(base_res, res).items() if n}
         t = usage_of(res)
         lines += ["", f"## `{model}`: {'MAY ROUTE' if ok else 'DO NOT ROUTE'}", "",
                   f"Tokens: {t[0]} in / {t[1]} out (baseline {bt[0]} / {bt[1]})", ""]
         lines += [f"- {w}" for w in why] or ["- meets every rule"]
+        if skipped:
+            lines.append("- pairs excluded after repeated infrastructure crashes (not model failures): "
+                         + ", ".join(f"{c} {n}" for c, n in skipped.items()))
         lines += ["", "| case | item | target | baseline | candidate | b | c | p |", "|---|---|---|---|---|---|---|---|"]
         lines += [f"| {s.case} | {s.item} | {s.target}/{s.runs} | {s.baseline_pass} | {s.candidate_pass} | {s.b} | "
                   f"{s.c} | {s.p:.3f} |" for s in stats]

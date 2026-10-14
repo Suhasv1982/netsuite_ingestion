@@ -13,7 +13,7 @@ import time
 import urllib.error
 import urllib.request
 
-from .investigate import MAX_TOOL_CALLS, RCA_SCHEMA, Investigation, _user_prompt, system_prompt
+from .investigate import MAX_TOOL_CALLS, RCA_SCHEMA, Investigation, _user_prompt, rca_problems, system_prompt
 from .toolbox import ToolBox
 
 SUBMIT = "submit_rca"
@@ -72,7 +72,7 @@ def _text(message: dict) -> str:
 
 
 def _rca_from_text(text: str) -> dict | None:
-    """An RCA given as JSON text (optionally fenced) with every required key, else None."""
+    """An RCA given as JSON text (optionally fenced) that is valid against RCA_SCHEMA, else None."""
     start, end = text.find("{"), text.rfind("}")
     if start < 0 or end <= start:
         return None
@@ -80,7 +80,7 @@ def _rca_from_text(text: str) -> dict | None:
         obj = json.loads(text[start:end + 1])
     except ValueError:
         return None
-    return obj if isinstance(obj, dict) and set(RCA_SCHEMA["required"]) <= set(obj) else None
+    return obj if not rca_problems(obj) else None
 
 
 def openai_tools(tools: list[dict]) -> list[dict]:
@@ -139,10 +139,11 @@ class DatabricksInvestigator:
                 except ValueError:
                     args = None
                 if name == SUBMIT:
-                    if isinstance(args, dict) and set(RCA_SCHEMA["required"]) <= set(args):
+                    problems = rca_problems(args) if isinstance(args, dict) else ["arguments must be an object"]
+                    if not problems:
                         return Investigation(args, calls, model=self.model, usage=usage)
-                    result = {"status": "error", "error": f"{SUBMIT} arguments must match the schema; required: "
-                                                          f"{RCA_SCHEMA['required']}"}
+                    result = {"status": "error", "error": f"{SUBMIT} arguments do not match the schema: "
+                                                          + "; ".join(problems[:8]) + ". Call it again, corrected."}
                 elif args is None:
                     result = {"status": "error", "error": "arguments are not valid JSON"}
                 elif len(calls) >= MAX_TOOL_CALLS:
@@ -167,4 +168,15 @@ class RoutedInvestigator:
             return await DatabricksInvestigator(chat, model, self.design_notes).investigate(
                 category, signals, notes, today, toolbox)
 
-        return await self.router.run("root_cause", attempt, lambda inv: (inv.rca is not None, inv.error))
+        return await self.router.run("root_cause", attempt, _rca_ok)
+
+
+def _rca_ok(inv: Investigation) -> tuple[bool, str | None]:
+    """For the router: a valid RCA is success; a failed model call is an endpoint failure (error/timeout), any other
+    missing RCA is a schema failure."""
+    if inv.rca is not None:
+        return True, None
+    err = inv.error or "no RCA"
+    if err.startswith("model call failed"):
+        return False, ("timeout: " if "timed out" in err.lower() else "error: ") + err
+    return False, err
