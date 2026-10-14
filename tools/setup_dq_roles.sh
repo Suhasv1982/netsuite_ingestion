@@ -12,6 +12,8 @@
 #      metadata_roles), in one transaction, then an exact-match check
 #   4. schema workspace.generator, then the owner-applied Unity Catalog grants for dq-agent and data-generator
 #      (grants/dev.yml), then a check
+#   5. "Service Principal User" on dq-agent for ci-dev, so deploy-dev can deploy the DQ recommender job that runs
+#      as dq-agent (grants/dev.yml service_principal_users; tools/sp_roles.py), then an exact-match check
 # Requires migration 006 on dev (approved_severity) before step 3: deploy-dev applies it on merge.
 set -euo pipefail
 PROFILE="${1:?usage: setup_dq_roles.sh <databricks profile>}"
@@ -63,4 +65,7 @@ fi
 "$PY" tools/apply_grants.py --target dev --owner-applied --check --profile "$PROFILE" \
   --ci-principal "$CI" --owner-principal "$OWNER" --agent-principal "$AGENT" --data-generator-principal "$GEN"
 
-echo "done. Next (ask first): an OAuth secret for dq-agent and its GitHub secrets; repository variable DQ_AGENT_SP=$AGENT"
+# 5. Service Principal User (who may deploy a job that runs as the service principal), then the exact-match check
+"$PY" tools/sp_roles.py --apply --profile "$PROFILE"
+
+echo "done. dq-agent needs no OAuth secret: it runs as a Databricks job (run_as). Repository variable DQ_AGENT_SP=$AGENT"

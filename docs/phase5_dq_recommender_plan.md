@@ -74,6 +74,9 @@ Found while preparing #36 and #37; each has a resolution below. Owner decisions 
 
 ## 3. Asks before implementation
 
-* "Service Principal User" on dq-agent for ci-dev (owner action): needed for the decided job route. It can be added to
-  `tools/setup_dq_roles.sh` (#37) on request.
+* "Service Principal User" on dq-agent for ci-dev (owner action): needed for the decided job route. Added as step 5
+  of `tools/setup_dq_roles.sh` (`grants/dev.yml` `service_principal_users`, `tools/sp_roles.py`; 2026-10-14).
+* Open until the first job run as dq-agent (step 10): whether dq-agent needs a project permission on `aidq-metadata`
+  to generate its database credential. A project permission covers the prod branch too, so it is the owner's
+  decision, not part of the setup script.
 * Any new secret (none planned with the job route).
