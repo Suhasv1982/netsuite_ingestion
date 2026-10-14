@@ -91,9 +91,10 @@ class LoggingChat:
     """Wraps a chat client (`complete(model, messages, tools, max_tokens)`) and logs every call."""
 
     def __init__(self, chat, log: CallLog, agent: str, task: str, prices: dict, trace_id: str | None,
-                 escalated: bool = False, escalation_reason: str | None = None):
+                 escalated: bool = False, escalation_reason: str | None = None, tracer=None):
         self.chat, self.log, self.agent, self.task, self.prices = chat, log, agent, task, prices
         self.trace_id, self.escalated, self.escalation_reason = trace_id, escalated, escalation_reason
+        self.tracer = tracer          # optional: span(name, kind, inputs) context manager (aidq_dq_agent.tracing)
 
     def _row(self, model, started, outcome, usage=None, error=None) -> CallRow:
         usage = usage or {}
@@ -106,6 +107,21 @@ class LoggingChat:
 
     async def complete(self, model: str, messages: list[dict], tools: list[dict] | None = None,
                        max_tokens: int = 4000) -> dict:
+        if self.tracer is None:
+            return await self._complete(model, messages, tools, max_tokens)
+        last = messages[-1] if messages else {}
+        with self.tracer.span(f"llm {self.task}", "CHAT_MODEL",
+                              {"model": model, "messages": len(messages), "tools": len(tools or []),
+                               "escalated": self.escalated, "last_message": last}) as span:
+            resp = await self._complete(model, messages, tools, max_tokens)
+            row = self.log.rows[-1]
+            span.set_attributes({"model": model, "input_tokens": row.input_tokens, "output_tokens": row.output_tokens,
+                                 "latency_ms": row.latency_ms, "escalated": self.escalated,
+                                 "escalation_reason": self.escalation_reason})
+            span.set_outputs((resp.get("choices") or [{}])[0].get("message"))
+            return resp
+
+    async def _complete(self, model, messages, tools, max_tokens) -> dict:
         started = time.monotonic()
         try:
             resp = await self.chat.complete(model, messages, tools, max_tokens=max_tokens)
@@ -118,8 +134,10 @@ class LoggingChat:
 
 class Router:
     def __init__(self, chat, agent: str, log: CallLog | None = None, routes: dict | None = None,
-                 pinned_model: str | None = None, trace_id: str | None = None):
-        """`pinned_model`: use this model for every task, never escalate (evals comparing models, --model)."""
+                 pinned_model: str | None = None, trace_id: str | None = None, tracer=None):
+        """`pinned_model`: use this model for every task, never escalate (evals comparing models, --model).
+        `tracer`: optional, a span per model call (aidq_dq_agent.tracing)."""
+        self.tracer = tracer
         self.routes = routes or load_routes()
         self.chat, self.agent, self.pinned, self.trace_id = chat, agent, pinned_model, trace_id
         self.log = log or CallLog(self.routes.get("retention_days", 90))
@@ -134,7 +152,8 @@ class Router:
         return Route(task, t["primary"], t.get("fallback"), int(t.get("max_tokens", 4000)))
 
     def chat_for(self, task: str, escalated: bool = False, reason: str | None = None) -> LoggingChat:
-        return LoggingChat(self.chat, self.log, self.agent, task, self.prices, self.trace_id, escalated, reason)
+        return LoggingChat(self.chat, self.log, self.agent, task, self.prices, self.trace_id, escalated, reason,
+                           tracer=self.tracer)
 
     async def run(self, task: str, attempt: Callable[[str, LoggingChat], Awaitable[T]],
                   ok: Callable[[T], tuple[bool, str | None]]) -> T:

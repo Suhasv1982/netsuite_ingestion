@@ -73,7 +73,7 @@ def test_job_entry_is_a_dry_run_unless_write_is_true(monkeypatch, capsys):
 
     seen = {}
 
-    async def fake_run(toolbox, recommender, wt, tables, trace_id=None):
+    async def fake_run(toolbox, recommender, wt, tables, trace_id=None, tracer=None, trace_meta=None):
         seen.update(dry_run=wt.dry_run, tables=tables, toolbox=type(toolbox).__name__)
         return {"report": "# report", "exit_code": 0}
 
@@ -96,9 +96,12 @@ def test_bundle_dev_jobs_run_as_dq_agent_and_the_deployer():
     assert rec["run_as"] == {"service_principal_name": "${var.dq_agent_sp}"}
     assert "run_as" not in val                       # the deploying identity (ci-dev), which SETs ROLE aidq_validator
     assert "schedule" not in rec and "schedule" not in val    # manual runs only for now
-    assert rec["parameters"] == [{"name": "write", "default": "false"}]
-    assert rec["tasks"][0]["spark_python_task"] == {"python_file": "src/dq_recommender_job.py",
-                                                    "parameters": ["--write", "{{job.parameters.write}}"]}
+    assert rec["parameters"] == [{"name": "write", "default": "false"},
+                                 {"name": "trace_experiment", "default": "/Shared/aidq/dq_recommender"}]
+    assert rec["tasks"][0]["spark_python_task"] == {
+        "python_file": "src/dq_recommender_job.py",
+        "parameters": ["--write", "{{job.parameters.write}}", "--trace-experiment", "{{job.parameters.trace_experiment}}"]}
+    assert any(d.startswith("mlflow-skinny") for d in rec["environments"][0]["spec"]["dependencies"])
     assert val["tasks"][0]["spark_python_task"]["parameters"] == ["--auth", "sdk"]
     for j in (rec, val):
         deps = j["environments"][0]["spec"]["dependencies"]
@@ -177,7 +180,7 @@ def test_the_job_runs_inside_a_kernel_like_environment(monkeypatch, capsys):
         def flush(self):
             pass
 
-    async def fake_run(toolbox, recommender, wt, tables, trace_id=None):
+    async def fake_run(toolbox, recommender, wt, tables, trace_id=None, tracer=None, trace_meta=None):
         await asyncio.sleep(0)
         return {"report": "# report", "exit_code": 0}
 

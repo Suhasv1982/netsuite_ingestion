@@ -103,3 +103,11 @@ def test_review_on_dev_rolled_back():
     finally:
         conn.rollback()
         conn.close()
+
+
+def test_show_prints_the_trace_link_when_the_run_was_traced():
+    text = review.render({**ROW, "agent_trace_id": "trace:/workspace.aidq_traces/abc",
+                          "trace_url": "https://h/ml/experiments/12/traces/abc"})
+    assert "trace link: https://h/ml/experiments/12/traces/abc" in text
+    assert "trace link" not in review.render(ROW)
+    assert review.trace_url(None, ROW) is None                        # untraced: no experiment id in the evidence

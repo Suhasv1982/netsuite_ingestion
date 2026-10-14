@@ -175,11 +175,15 @@ targets:
           parameters:
             - name: write
               default: "false"
+            # one MLflow trace per run (plan #39 step 8); an empty value turns tracing off
+            - name: trace_experiment
+              default: /Shared/aidq/dq_recommender
           tasks:
             - task_key: recommend
               spark_python_task:
                 python_file: src/dq_recommender_job.py
-                parameters: ["--write", "{{job.parameters.write}}"]
+                parameters: ["--write", "{{job.parameters.write}}",
+                             "--trace-experiment", "{{job.parameters.trace_experiment}}"]
               environment_key: dq_agent
           environments:
             - environment_key: dq_agent
@@ -192,6 +196,7 @@ targets:
                   - databricks-sdk>=0.147,<1
                   - psycopg>=3.1         # plain psycopg: the binary wheel aborts here (generator, 2026-10-01)
                   - pyyaml
+                  - mlflow-skinny>=3.11.1,<4   # tracing to a Unity Catalog trace location (step 8)
         # The validator for PENDING proposals (tools/validate_proposals.py), run as the deploying identity (ci-dev),
         # which does SET LOCAL ROLE aidq_validator before any work. Manual, after a dq_recommender write run.
         dq_validator:
