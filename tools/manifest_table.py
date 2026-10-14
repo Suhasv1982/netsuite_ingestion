@@ -106,9 +106,22 @@ def write_with_spark(spark, table: str, manifest: dict, source: str = "job", cod
 def _warehouse_sql(profile: str, warehouse_id: str, statement: str) -> None:
     import subprocess
 
+    import os
+    import tempfile
+
     def cli(*args, body=None):
-        cmd = ["databricks", *args, "-o", "json", "--profile", profile] + (["--json", json.dumps(body)] if body else [])
-        p = subprocess.run(cmd, capture_output=True, text=True)
+        # the body goes through a file (--json @path): a multi-row INSERT exceeds the Windows command-line limit
+        path = None
+        if body is not None:
+            fd, path = tempfile.mkstemp(suffix=".json")
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(body, f)
+        try:
+            cmd = ["databricks", *args, "-o", "json", "--profile", profile] + (["--json", f"@{path}"] if path else [])
+            p = subprocess.run(cmd, capture_output=True, text=True)
+        finally:
+            if path:
+                os.unlink(path)
         if p.returncode:
             raise RuntimeError(p.stderr.strip()[:300])
         return json.loads(p.stdout) if p.stdout.strip() else {}
@@ -136,6 +149,9 @@ def main(argv: list[str] | None = None) -> int:
         manifest = json.loads(f.read_text(encoding="utf-8"))
         if args.source == "recomputed" and not manifest.get("recomputed"):
             print(f"REFUSED {f}: not a verified recomputed manifest (tools/recompute_manifest.py)")
+            return 1
+        if args.source == "baseline" and not manifest.get("verified"):
+            print(f"REFUSED {f}: not a verified baseline manifest (tools/verify_manifest.py)")
             return 1
         version = args.code_version or (manifest.get("recomputed") or {}).get("code_dir_commit")
         rows = manifest_rows(manifest, args.source, version)
