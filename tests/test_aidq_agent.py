@@ -278,7 +278,7 @@ def test_crash_outside_the_store_still_publishes_a_report(tmp_path, monkeypatch)
         async def __aexit__(self, *a):
             return False
 
-    monkeypatch.setattr(cli, "McpToolBox", lambda profile: Boom())
+    monkeypatch.setattr(cli, "McpToolBox", lambda profile, only=None: Boom())
     out = tmp_path / "summary.md"
     args = type("A", (), {"profile": None, "write": False, "model": "databricks-gpt-oss-120b",
                           "report_file": str(out)})()

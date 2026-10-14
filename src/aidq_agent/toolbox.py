@@ -24,8 +24,9 @@ class ToolBox(Protocol):
 class McpToolBox:
     """Starts `python -m aidq_mcp` and talks MCP over stdio. Use as `async with McpToolBox(profile) as tb:`."""
 
-    def __init__(self, profile: str | None):
-        self.profile = profile
+    def __init__(self, profile: str | None, only: tuple[str, ...] | None = None):
+        """`only`: expose just these tools to the model (the monitor sees its five, not the DQ tools)."""
+        self.profile, self.only = profile, only
         self._stack = contextlib.AsyncExitStack()
         self._session = None
         self._tools: list[dict] | None = None
@@ -49,10 +50,12 @@ class McpToolBox:
         if self._tools is None:
             listed = await self._session.list_tools()
             self._tools = [{"name": t.name, "description": t.description or "", "input_schema": t.input_schema}
-                           for t in listed.tools]
+                           for t in listed.tools if self.only is None or t.name in self.only]
         return self._tools
 
     async def call(self, name: str, arguments: dict) -> dict:
+        if self.only is not None and name not in self.only:
+            return {"status": "error", "error": f"tool {name!r} is not available here"}
         res = await self._session.call_tool(name, arguments)
         text = "".join(getattr(c, "text", "") for c in (getattr(res, "content", None) or []))
         try:

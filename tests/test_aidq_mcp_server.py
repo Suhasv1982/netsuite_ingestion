@@ -103,10 +103,11 @@ def tools(**kw):
 
 # -- registration ---------------------------------------------------------------
 
-def test_five_read_only_tools_are_registered():
+def test_all_registered_tools_are_read_only():
     listed = asyncio.run(build_server(tools()).list_tools())
-    assert sorted(t.name for t in listed) == ["compare_bronze_to_source", "get_pipeline_errors",
-                                              "get_recent_deploys", "get_recent_job_runs", "get_table_health"]
+    assert sorted(t.name for t in listed) == sorted(
+        ["compare_bronze_to_source", "get_pipeline_errors", "get_recent_deploys", "get_recent_job_runs",
+         "get_table_health", "get_dq_rules", "get_open_and_rejected_proposals", "profile_table", "get_rejects_summary"])
     for t in listed:
         assert t.annotations.read_only_hint is True and t.annotations.destructive_hint is False
         assert t.description and "env" in t.input_schema["properties"]
