@@ -9,6 +9,10 @@ tasks:
     primary: databricks-gpt-oss-120b
     fallback: databricks-qwen3-next-80b-a3b-instruct
     max_tokens: 4000
+  rule_generation:          # the DQ recommender (src/aidq_dq_agent): read tools, then one submit_recommendations
+    primary: databricks-gpt-oss-120b
+    fallback: databricks-qwen3-next-80b-a3b-instruct
+    max_tokens: 8000
   eval_judge:               # evals/run_agent_eval.py: a fixed yardstick, never escalated
     primary: databricks-qwen35-122b-a10b
     fallback: null
