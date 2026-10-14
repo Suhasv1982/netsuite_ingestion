@@ -54,6 +54,14 @@ class TimeTravelReads(Reads):
         cut = self.now.timestamp() * 1000
         return [r for r in super().job_runs(job_id, since) if (r.get("start_time") or 0) <= cut]
 
+    def pipeline_updates(self, pipeline_id, limit=25):
+        cut = self.now.timestamp() * 1000
+        return [u for u in super().pipeline_updates(pipeline_id, limit) if (u.get("creation_time") or 0) <= cut]
+
+    def job_runs_with_tasks(self, job_id, since):
+        cut = self.now.timestamp() * 1000
+        return [r for r in super().job_runs_with_tasks(job_id, since) if (r.get("start_time") or 0) <= cut]
+
     def pipeline_events(self, pipeline_id, limit):
         return [e for e in super().pipeline_events(pipeline_id, limit)
                 if dt.datetime.fromisoformat(e["timestamp"].replace("Z", "+00:00")) <= self.now]
@@ -122,6 +130,9 @@ CASES = {
     "2026-10-09_after_daily_run": dt.datetime(2026, 10, 9, 12, 0, tzinfo=UTC),
     # second day of the 10-11..10-13 outage, at the monitor's usual (late) start: both jobs missed today
     "2026-10-11_afternoon": dt.datetime(2026, 10, 11, 13, 0, tzinfo=UTC),
+    # incident 6: a manual pipeline update at 01:11 UTC (not through the job) failed on an expired credential; the
+    # monitor saw it in its 12:01 run. Before the 16:38 deploy-dev run (the window ends at the case time).
+    "2026-10-14_credential_expired": dt.datetime(2026, 10, 14, 12, 0, tzinfo=UTC),
 }
 
 

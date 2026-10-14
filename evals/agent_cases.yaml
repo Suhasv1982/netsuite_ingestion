@@ -40,3 +40,11 @@ cases:
     fixture: 2026-10-11_scheduler_stopped_three_days
     watchdog: fake_success   # the watchdog triggered generator then ingestion, both SUCCESS (no real runs in an eval)
     note: second day of the 10-11..10-13 outage; one ORCHESTRATION incident labelled [self-healed] with the outcome
+
+  - id: credential_expired_manual_run_10_14
+    cassette: 2026-10-14_credential_expired
+    now: "2026-10-14T12:00:00+00:00"
+    expect_incident: true
+    categories: [CREDENTIAL_EXPIRED]
+    fixture: 2026-10-14_credential_expired_manual_run
+    note: incident 6; the monitor said OTHER (transient environment error). The token age is now a deterministic fact.

@@ -135,6 +135,30 @@ def actor_role(actor: str | None, roles: dict[str, str]) -> str:
     return "other"
 
 
+CREDENTIAL_TTL_MINUTES = 60     # Lakebase database credentials (generate-database-credential) last about an hour
+REFRESH_TASK = "refresh_credentials"
+
+
+def credential_checks(updates: list[dict], refreshes: list[dt.datetime], since: dt.datetime) -> list[dict]:
+    """For each FAILED pipeline update since `since`: who started it (JOB_TASK = through the job, whose first task
+    refreshes the stored database credentials) and how old the stored credential was then (the last successful
+    refresh_credentials task that ended before the update was created). Deterministic; no inference."""
+    out = []
+    for u in updates:
+        created = dt.datetime.fromtimestamp((u.get("creation_time") or 0) / 1000, dt.timezone.utc)
+        if u.get("state") != "FAILED" or created < since:
+            continue
+        before = [r for r in refreshes if r <= created]
+        last = max(before) if before else None
+        age = int((created - last).total_seconds() // 60) if last else None
+        out.append({"update_id": u.get("update_id"), "created": created.isoformat(timespec="seconds"),
+                    "cause": u.get("cause"), "started_by_job": u.get("cause") == "JOB_TASK",
+                    "last_credential_refresh": last.isoformat(timespec="seconds") if last else None,
+                    "credential_age_minutes": age,
+                    "credential_expired": None if age is None else age >= CREDENTIAL_TTL_MINUTES})
+    return out
+
+
 def truncate(text: str | None, limit: int = 500) -> str | None:
     if text is None or len(text) <= limit:
         return text

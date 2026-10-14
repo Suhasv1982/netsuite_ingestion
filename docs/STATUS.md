@@ -1,4 +1,4 @@
-# STATUS (updated 2026-10-13)
+# STATUS (updated 2026-10-14)
 
 Read this first, then run `git status` and check open PRs. Updated after every Phase 2 step.
 
@@ -40,6 +40,27 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
 
 **Source database (`netsuite-sample`):** production plus backups `pre-synthetic-backup-202609242053`,
 `...202609252235`, `...202609260101`, `...202609260109` (5 of 10 branches).
+
+## 0i. Incident 6 and the manual-run rule (2026-10-14)
+
+* **Rule (owner, 2026-10-14): manual pipeline runs go through the job, never directly on the pipeline.** The dev
+  job's first task, `refresh_credentials`, writes a fresh Lakebase database credential (they last about 60 min) to
+  the secret scope; a pipeline update started on the pipeline itself reads whatever token is stored there. To run
+  part of the job, use the job with `only` (for example `["refresh_credentials"]` first), not a pipeline update.
+* **Incident 6.** A manual pipeline update at 01:11 UTC (cause `API_CALL`, started directly on the pipeline during
+  the #46..#51 merges) failed in bronze with `OAuth: User is not authorized`: the stored credential was 4 h 27 min
+  old. The monitor (12:01 UTC run) wrote it as OTHER, "transient execution-environment error": the tool's error
+  text was truncated before the PSQLException. Owner: re-categorized CREDENTIAL_EXPIRED with the real cause and
+  RESOLVED (16:40 UTC); the monitor's original diagnosis is kept in `evidence.resolution`.
+* **Monitor fact.** `get_pipeline_errors` now returns, for each FAILED ingestion pipeline update, who started it
+  (`JOB_TASK` or not) and the stored credential's age then (the last successful `refresh_credentials` task before
+  it); `triage.credential_facts` turns that into a deterministic fact for the model. Eval case
+  `credential_expired_manual_run_10_14` (cassette `2026-10-14_credential_expired`): PASS, 3/3 CREDENTIAL_EXPIRED,
+  never "transient error" (`evals/results/2026-10-14_credential_expired_databricks-gpt-oss-120b.md`).
+* **DQ recommender, same day.** Steps 4 and 9 merged (#52, #54; roles #53). gpt-oss-20b does not qualify for
+  `root_cause` (#55; routing unchanged). Prompt v2 + candidate checklist + profiler signals + eval scoring on known
+  ground truth: #56. Step 10, `dq_recommender` (run_as dq-agent) and `dq_validator` jobs: #57. ci-dev got USE SCHEMA
+  + SELECT on `workspace.generator` (owner OK, 2026-10-14) for the DQ eval on GitHub (`dq-eval.yml`).
 
 ## 0h. Outage 10-11..10-13, clean cycle, follow-ups (2026-10-13)
 
@@ -495,6 +516,8 @@ copy that holds the owner's bundle state.
   (owner's note; this account already has two, so no new project can be added). Lakebase endpoints can end up
   disabled after inactivity.
 * **Full refresh is blocked unless `bronze_rebuild=true`.**
+* **Manual runs go through the job** (owner, 2026-10-14): never start a pipeline update directly. The job refreshes
+  the stored Lakebase credential first; a direct update uses a possibly expired token (incident 6, section 0i).
 * **Windows.** PowerShell 5.1 strips quotes inside JSON arguments to native commands: use Git Bash for
   `--json '...'`. `MSYS_NO_PATHCONV=1` for workspace paths starting with `/Users/...`.
 * **GitHub.** Protected `main`: every change through a PR. Never force-push; never `pull_request_target`.

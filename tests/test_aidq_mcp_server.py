@@ -52,6 +52,12 @@ class FakeReads:
                  "state": {"life_cycle_state": "TERMINATED", "result_state": "SUCCESS"}}
                 for d in (3, 4, 5) if ms(d, h, m) >= since.timestamp() * 1000]
 
+    def pipeline_updates(self, pid, limit=25):
+        return [{"update_id": "u-failed", "state": "FAILED", "cause": "API_CALL", "creation_time": 1_760_403_600_000}]
+
+    def job_runs_with_tasks(self, jid, since):
+        return []
+
     def pipeline_id(self, name):
         return {"[dev ci_dev] netsuite_ingestion_poc": "p-ingest", "[dev ci_dev] guard_canary": "p-canary"}.get(name)
 

@@ -165,8 +165,11 @@ class Tools(DqTools):
                                "update_id": (e.get("origin") or {}).get("update_id"),
                                "message": logic.truncate(e.get("message")),
                                "exception": logic.truncate(exc.get("message"))})
-            pipelines.append({"pipeline": alias, "name": name, "found": True,
-                              "events": logic.bounded(events, config.DEFAULT_LIMIT)})
+            entry = {"pipeline": alias, "name": name, "found": True,
+                     "events": logic.bounded(events, config.DEFAULT_LIMIT)}
+            if alias == "ingestion":
+                entry["failed_updates"] = self._credential_checks(cfg, pid, since)
+            pipelines.append(entry)
         try:
             failed = self.reads.pg_query(
                 cfg.metadata_endpoint,
@@ -179,6 +182,22 @@ class Tools(DqTools):
         except Unavailable as e:
             audit = {"unavailable": str(e)}
         return {"env": env, "since": _iso(since), "pipelines": pipelines, "failed_run_audit": audit}
+
+    def _credential_checks(self, cfg, pipeline_id: str, since: dt.datetime):
+        """Failed updates of the ingestion pipeline with who started them and the stored credential's age then
+        (logic.credential_checks). Refreshes: successful refresh_credentials tasks of the ingestion job, from two
+        days before the window (the credential in use may predate it)."""
+        try:
+            updates = self.reads.pipeline_updates(pipeline_id)
+            job_id = self.reads.job_id(cfg.jobs["ingestion"])
+            refreshes = []
+            for run in (self.reads.job_runs_with_tasks(job_id, since - dt.timedelta(days=2)) if job_id else []):
+                for t in run.get("tasks") or []:
+                    if t.get("task_key") == logic.REFRESH_TASK and (t.get("state") or {}).get("result_state") == "SUCCESS"                             and t.get("end_time"):
+                        refreshes.append(dt.datetime.fromtimestamp(t["end_time"] / 1000, dt.timezone.utc))
+            return logic.credential_checks(updates, refreshes, since)
+        except Exception as e:  # noqa: BLE001 -- an extra fact; it must never break the error report
+            return {"unavailable": logic.truncate(f"{type(e).__name__}: {e}")}
 
     # -- compare_bronze_to_source -------------------------------------------------------------
 
@@ -319,7 +338,9 @@ def build_server(tools: Tools) -> MCPServer:
     @server.tool(annotations=READ_ONLY)
     def get_pipeline_errors(env: str = "dev", hours: int | None = None) -> dict:
         """ERROR and WARN events from the ingestion and canary pipelines' event logs in the last `hours` (default
-        24, max 168), and run_audit rows with status FAILED in the same window."""
+        24, max 168), and run_audit rows with status FAILED in the same window. For the ingestion pipeline,
+        `failed_updates`: each FAILED update with who started it (cause JOB_TASK = through the job, whose first task
+        refreshes the stored database credentials) and the credential's age then (they expire after ~60 min)."""
         return tools.get_pipeline_errors(env, hours)
 
     @server.tool(annotations=READ_ONLY)

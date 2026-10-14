@@ -124,7 +124,33 @@ def context_notes(results: dict[str, dict]) -> list[str]:
     if guard.get("status") == "WARN" and guard.get("event_log_reads") == 2:
         notes.append("guard WARN with 2 event-log reads is the normal baseline (not a signal)")
     notes += schedule_facts(results)
+    notes += credential_facts(results)
     return notes
+
+
+def credential_facts(results: dict[str, dict]) -> list[str]:
+    """For each failed ingestion pipeline update: who started it and how old the stored database credential was, as
+    deterministic facts (get_pipeline_errors.failed_updates). Incident 6 (2026-10-14): a manual update started on the
+    pipeline, not through the job, skipped refresh_credentials and failed on an expired token; the model, seeing only
+    a truncated traceback, called it a transient environment error."""
+    out = []
+    for p in (results.get("get_pipeline_errors", {}) or {}).get("pipelines") or []:
+        fails = p.get("failed_updates")
+        if not isinstance(fails, list):
+            continue
+        for f in fails:
+            who = ("through the job (refresh_credentials ran first)" if f.get("started_by_job")
+                   else f"by {f.get('cause') or 'unknown'}, not through the job, so refresh_credentials did not run first")
+            if f.get("credential_age_minutes") is None:
+                age = "no successful credential refresh found in the 2 days before it"
+            else:
+                h, m = divmod(f["credential_age_minutes"], 60)
+                age = (f"the stored database credential was last refreshed {f['last_credential_refresh']}, {h} h {m} min "
+                       f"before ({'EXPIRED' if f.get('credential_expired') else 'still valid'}: credentials last about "
+                       f"60 min)")
+            out.append(f"fact (from get_pipeline_errors): pipeline update {str(f.get('update_id'))[:8]} failed at "
+                       f"{f.get('created')}; started {who}; {age}")
+    return out
 
 
 def schedule_facts(results: dict[str, dict]) -> list[str]:
