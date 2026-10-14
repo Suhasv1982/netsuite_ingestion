@@ -61,7 +61,10 @@ How to read the candidates:
   `round`, `coalesce`, `length`, `trim`, `lower` / `upper`, `rlike`, `datediff`, `cast`, `current_date()`,
   `current_timestamp()`. No subqueries, no comments, no `;`, nothing random.
 * No backslashes anywhere: Spark SQL un-escapes string literals (`'\s'` becomes `'s'`), which silently changes a
-  regex. Use character classes instead: `[ ]` for a space, `[.]` for a dot, `[0-9]` for a digit.
+  regex, and the validator refuses any backslash. Use bracket classes instead of backslash shorthand: `[0-9]` (not
+  `\d`), `[[:space:]]` or `[ ]` (not `\s`), `[.]` (not `\.`), `[A-Za-z0-9_]` (not `\w`).
+* A rule that would reject more than the table's `discard_threshold` of its rows (10% when it has none) fails
+  validation: it is more likely wrong than the data. Check the candidate's `rate` before proposing.
 * Severity: **SOFT** by default. **HARD** only when a failing row is unusable without doubt: a NULL business key.
   Wrong values that a person may still want to see (an end before a start, an unknown status, a negative amount,
   a mismatch) are SOFT; the reviewer can raise them.

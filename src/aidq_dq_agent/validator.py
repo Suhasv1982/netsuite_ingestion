@@ -11,7 +11,10 @@ VALIDATED only if every check passes; otherwise VALIDATION_FAILED with the reaso
 3. dry run on bronze: counts of rows where the expression is TRUE, FALSE and NULL.
 4. NULL check: any row where it is NULL fails the rule (dq.py treats NULL as a reject since #40, but a rule must
    not depend on that; owner decision 2026-10-08).
-5. impact: the would-be reject rate (FALSE / rows) is flagged, not failed, when above discard_threshold.
+5. impact: the would-be reject rate (FALSE / rows) fails the rule when it is above the table's discard_threshold,
+   or above DEFAULT_MAX_REJECT_RATE when the table has none (owner decision 2026-10-14; it was only a flag). A rule
+   that would reject that much is far more likely wrong than the data: the backslash-s email regex of the 2026-10-14
+   eval would have rejected ~47% of customers.
 """
 
 from __future__ import annotations
@@ -113,6 +116,9 @@ def dry_run_sql(relation: str, expr: str) -> str:
             f"count_if(({expr}) IS NULL) AS nulls FROM {relation}")
 
 
+DEFAULT_MAX_REJECT_RATE = 0.10   # when a table has no discard_threshold
+
+
 def judge(static: StaticResult, counts: dict | None, discard_threshold: float | None, spark_version: str | None) -> dict:
     """The validation_result document and the decision (status)."""
     result: dict = {"checks": {"static": static.ok}, "problems": list(static.problems), "columns": static.columns,
@@ -127,9 +133,15 @@ def judge(static: StaticResult, counts: dict | None, discard_threshold: float | 
         if nulls:
             result["problems"].append(f"the expression is NULL on {nulls} bronze rows (write it NULL-safe, e.g. "
                                       "`col IS NULL OR ...`)")
-        if discard_threshold is not None and rate is not None and rate > discard_threshold:
-            result["flags"].append(f"would-reject rate {rate:.4f} exceeds discard_threshold {discard_threshold}")
-    ok = static.ok and counts is not None and result["checks"].get("null_check", False)
+        limit, source = ((float(discard_threshold), "the table's discard_threshold") if discard_threshold is not None
+                         else (DEFAULT_MAX_REJECT_RATE, "the default limit (the table has no discard_threshold)"))
+        result["checks"]["reject_rate"] = rate is None or rate <= limit
+        result["max_reject_rate"] = limit
+        if not result["checks"]["reject_rate"]:
+            result["problems"].append(f"would reject {rate:.2%} of bronze rows ({failed} of {rows}), above {limit:.0%}, "
+                                      f"{source}: the rule is more likely wrong than the data")
+    ok = (static.ok and counts is not None and result["checks"].get("null_check", False)
+          and result["checks"].get("reject_rate", False))
     result["status"] = "VALIDATED" if ok else "VALIDATION_FAILED"
     result["summary"] = ("VALIDATED" if ok else "FAILED: " + "; ".join(result["problems"][:3])) + (
         f" | rows {result.get('rows')}, fail {result.get('failed')}, null {result.get('nulls')}" if counts else "")

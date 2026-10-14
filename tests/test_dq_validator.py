@@ -45,14 +45,32 @@ def test_unsafe_or_wrong_expressions_fail(expr, why):
     assert not r.ok and any(why in p for p in r.problems), r.problems
 
 
-def test_judge_null_results_fail_and_impact_is_only_a_flag():
+def test_judge_null_results_fail():
     ok = v.static_check("amount >= 0", COLS)
     nulls = v.judge(ok, {"rows": 100, "passed": 90, "failed": 5, "nulls": 5}, 0.05, "15.4")
     assert nulls["status"] == "VALIDATION_FAILED" and nulls["checks"]["null_check"] is False
     assert any("NULL on 5 bronze rows" in p for p in nulls["problems"])
+
+
+def test_judge_fails_a_reject_rate_above_the_discard_threshold():
+    ok = v.static_check("amount >= 0", COLS)
     high = v.judge(ok, {"rows": 100, "passed": 80, "failed": 20, "nulls": 0}, 0.05, "15.4")
-    assert high["status"] == "VALIDATED" and high["flags"] and high["would_reject_rate"] == 0.2
-    assert high["summary"].startswith("VALIDATED")
+    assert high["status"] == "VALIDATION_FAILED" and high["checks"]["reject_rate"] is False
+    assert high["would_reject_rate"] == 0.2 and high["max_reject_rate"] == 0.05
+    assert any("would reject 20.00% of bronze rows (20 of 100), above 5%, the table's discard_threshold" in p
+               for p in high["problems"])
+    at_limit = v.judge(ok, {"rows": 100, "passed": 95, "failed": 5, "nulls": 0}, 0.05, "15.4")
+    assert at_limit["status"] == "VALIDATED"                     # equal to the threshold is allowed
+    low = v.judge(ok, {"rows": 93828, "passed": 93528, "failed": 300, "nulls": 0}, 0.05, "15.4")
+    assert low["status"] == "VALIDATED" and low["summary"].startswith("VALIDATED")
+
+
+def test_judge_uses_ten_percent_when_the_table_has_no_threshold():
+    ok = v.static_check("amount >= 0", COLS)
+    assert v.judge(ok, {"rows": 100, "passed": 91, "failed": 9, "nulls": 0}, None, None)["status"] == "VALIDATED"
+    over = v.judge(ok, {"rows": 100, "passed": 89, "failed": 11, "nulls": 0}, None, None)
+    assert over["status"] == "VALIDATION_FAILED" and over["max_reject_rate"] == v.DEFAULT_MAX_REJECT_RATE == 0.10
+    assert any("the default limit (the table has no discard_threshold)" in p for p in over["problems"])
 
 
 def test_judge_without_a_dry_run_never_validates():
@@ -101,3 +119,16 @@ def test_a_backslash_is_refused_because_spark_unescapes_it():
     r = v.static_check(r"email IS NULL OR email rlike '^[^@\s]+@[^@\s]+\.[A-Za-z]+$'", ["email"])
     assert not r.ok and any("backslash is not allowed" in p for p in r.problems)
     assert v.static_check("email IS NULL OR email rlike '^[^@ ]+@[^@ ]+[.][A-Za-z]+$'", ["email"]).ok
+
+
+def test_the_backslash_email_rule_of_2026_10_14_fails_twice():
+    """The 2026-10-14 eval case: Spark reads '^[^@\\s]+@' as '^[^@s]+@', so the rule rejected every email containing
+    an 's' (~1,560 of ~3,300 customers). It must fail on the backslash and, if one ever got past that, on the rate."""
+    expr = r"email IS NULL OR email rlike '^[^@\s]+@[^@\s]+\.[A-Za-z]+$'"
+    static = v.static_check(expr, ["email"])
+    assert not static.ok and any("backslash is not allowed" in p for p in static.problems)
+    # the dry-run counts that rule produced on dev bronze (customers, 2026-10-14)
+    as_if_parsed = v.static_check("email IS NULL OR email rlike '^[^@s]+@[^@s]+.[A-Za-z]+$'", ["email"])
+    assert as_if_parsed.ok
+    result = v.judge(as_if_parsed, {"rows": 3300, "passed": 1740, "failed": 1560, "nulls": 0}, 0.05, None)
+    assert result["status"] == "VALIDATION_FAILED" and result["checks"]["reject_rate"] is False
