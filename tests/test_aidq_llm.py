@@ -283,3 +283,15 @@ def test_an_endpoint_failure_caught_inside_the_attempt_is_logged_as_an_error_not
 
     go(r.run("root_cause", attempt, lambda res: (res["ok"], None if res["ok"] else "error: HTTP 404")))
     assert r.log.rows == []                         # no calls were made in this fake; just the reason path
+
+
+def test_crashed_pairs_are_excluded_not_counted_as_failures():
+    crash = {"checks": {"run_completed": False}, "judge": []}
+    base = {"case": [res() for _ in range(12)]}
+    cand = {"case": [crash, crash] + [res() for _ in range(10)]}
+    stats = compare.pair(base, cand)
+    assert {s.runs for s in stats} == {10} and compare.excluded(base, cand) == {"case": 2}
+    assert compare.decide(stats)[0] is True                  # 10 valid pairs, all equal
+    cand2 = {"case": [crash] * 3 + [res() for _ in range(9)]}
+    ok, why = compare.decide(compare.pair(base, cand2))
+    assert not ok and "only 9 paired run(s)" in why[0]      # too few valid pairs: never routes
