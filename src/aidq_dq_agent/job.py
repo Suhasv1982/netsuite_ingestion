@@ -7,15 +7,31 @@ secret). Same graph as `python -m aidq_dq_agent`, wired for a serverless job:
 
 Started by src/dq_recommender_job.py. Default is a dry run; --write inserts. Exit codes as python -m aidq_dq_agent
 (a non-zero code fails the task, and the report is in the task's output).
+
+A serverless python task runs inside an IPython kernel (first runs, 2026-10-14): stdout is the kernel's stream (no
+reconfigure()), and an event loop may already be running, where asyncio.run() refuses to start. run_async() runs
+the graph on its own loop in a worker thread then.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import concurrent.futures
 import sys
 import traceback
 import uuid
+
+
+def run_async(coro):
+    """asyncio.run(coro), or, when an event loop is already running in this thread (an IPython kernel), the same on
+    a fresh loop in a worker thread."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -25,7 +41,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model", default=None, help="pin a model (default: routed, task rule_generation)")
     args = ap.parse_args(argv)
     write = str(args.write).strip().lower() == "true"
-    sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stdout, "reconfigure"):        # an IPython kernel's stream has none (and is UTF-8 already)
+        sys.stdout.reconfigure(encoding="utf-8")
 
     from aidq_agent.dbx import DatabricksChat
     from aidq_agent.toolbox import LocalToolBox
@@ -51,7 +68,7 @@ def main(argv: list[str] | None = None) -> int:
     router = Router(DatabricksChat(None), AGENT, pinned_model=args.model, trace_id=trace_id)
     print(f"DQ recommender job: {'WRITE' if write else 'dry run'}; trace {trace_id}", flush=True)
     try:
-        state = asyncio.run(run(LocalToolBox(Tools(reads), DQ_TOOLS), RoutedRecommender(router), write_tools,
+        state = run_async(run(LocalToolBox(Tools(reads), DQ_TOOLS), RoutedRecommender(router), write_tools,
                                 args.table or list(cfg.tables), trace_id=trace_id))
     except Exception as exc:  # noqa: BLE001 -- a crash still prints a report
         calls = router.log.flush(PgCallLogWriter(connect) if write else None)

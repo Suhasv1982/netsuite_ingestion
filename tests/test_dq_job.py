@@ -159,3 +159,34 @@ def test_the_validator_module_loads_without___file__(monkeypatch):
     g = {"__name__": "validate_proposals_as_job"}           # not __main__: load it, do not run main()
     exec(compile(path.read_text(encoding="utf-8"), str(path), "exec"), g)
     assert g["ROOT"] == ROOT and callable(g["main"])
+
+
+def test_the_job_runs_inside_a_kernel_like_environment(monkeypatch, capsys):
+    """Serverless python tasks run in an IPython kernel: stdout without reconfigure(), and a running event loop."""
+    from aidq_dq_agent import graph, job, write_tools
+
+    class KernelStream:
+        def __init__(self):
+            self.parts = []
+
+        def write(self, s):
+            self.parts.append(s)
+
+        def flush(self):
+            pass
+
+    async def fake_run(toolbox, recommender, wt, tables, trace_id=None):
+        await asyncio.sleep(0)
+        return {"report": "# report", "exit_code": 0}
+
+    monkeypatch.setattr(graph, "run", fake_run)
+    monkeypatch.setattr(write_tools, "sdk_connect", lambda endpoint: (lambda: None))
+    monkeypatch.setattr("aidq_mcp.sdk_reads.SdkReads.__init__", lambda self, client=None: None)
+    stream = KernelStream()
+    monkeypatch.setattr("sys.stdout", stream)
+
+    async def inside_a_running_loop():
+        return job.main(["--write", "false"])
+
+    assert asyncio.run(inside_a_running_loop()) == 0
+    assert "# report" in "".join(stream.parts)
