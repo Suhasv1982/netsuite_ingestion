@@ -41,6 +41,22 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
 **Source database (`netsuite-sample`):** production plus backups `pre-synthetic-backup-202609242053`,
 `...202609252235`, `...202609260101`, `...202609260109` (5 of 10 branches).
 
+## 0j. DQ recommender: first write run, review, tracing (2026-10-14)
+
+* **First write run as dq-agent** (job `dq_recommender`, write=true, 18:43 UTC): 11 PENDING proposals (12-22) and
+  9 DQ_NOT_EXPRESSIBLE incidents (7-15). dq-agent needed no Lakebase project permission (CAN_USE not granted).
+  `dq_validator` (ci-dev as aidq_validator): 10 VALIDATED, 1 VALIDATION_FAILED (#21, unquoted `date`).
+* **Owner review:** applied #20 (transactions type, proposed HARD, approved SOFT: rule 10), #14 (memberships key
+  not NULL, HARD: rule 11), #16 (certifications end before start, proposed SOFT, approved HARD); rejected #15
+  (reason recorded as "...", to be corrected with `review.py correct-reason`) and #21. Done-when item 2 met.
+  Open: the next daily run enforcing them, then the silver-only refresh demo (asks first).
+* **Trace storage: Unity Catalog.** Experiment `/Shared/aidq/dq_recommender` is bound to the trace location
+  `workspace.aidq_traces` (owner choice; `tools/setup_dq_traces.py`, run by the owner 2026-10-14:
+  `STORAGE: unity-catalog workspace.aidq_traces`). UC trace storage works on Free Edition, so the standard-storage
+  fallback (owner decision: automatic if UC fails) was not needed. dq-agent: USE SCHEMA, SELECT, MODIFY on the
+  schema and CAN_EDIT on the experiment. Verified with a traced dry run (20:15 UTC): one trace, 25 spans (8 tool
+  calls, recommend, 3 model calls with tokens and latency, 12 writes); the trace id is the run's agent_trace_id.
+
 ## 0i. Incident 6 and the manual-run rule (2026-10-14)
 
 * **Rule (owner, 2026-10-14): manual pipeline runs go through the job, never directly on the pipeline.** The dev

@@ -3,7 +3,8 @@
     python tools/review.py list                                  # pending and validated proposals
     python tools/review.py show 12                               # rationale, evidence, validation, trace
     python tools/review.py approve 12 [--severity HARD|SOFT] [--comment "..."]
-    python tools/review.py reject 12 --reason "..."
+    python tools/review.py reject 12 --reason "..."                # a real reason, at least 10 characters
+    python tools/review.py correct-reason 12 --reason "..."        # fix the reason of your own rejection
     (all take --profile DEFAULT; the dev metadata branch only)
 
 Every command runs as the caller in a transaction that starts with SET LOCAL ROLE aidq_reviewer (UPDATE of the
@@ -41,6 +42,10 @@ APPROVE_SQL = (
 REJECT_SQL = (
     "UPDATE aidq_metadata.config_proposals SET status = 'REJECTED', reviewed_by = %s, reviewed_at = now(), "
     "review_comment = %s WHERE proposal_id = %s AND status IN ('PENDING', 'VALIDATED', 'VALIDATION_FAILED', 'APPROVED')")
+CORRECT_REASON_SQL = (
+    "UPDATE aidq_metadata.config_proposals SET review_comment = %s WHERE proposal_id = %s AND status = 'REJECTED' "
+    "AND reviewed_by = %s")
+MIN_REASON = 10      # a rejection reason is shown to the agent (no-nagging) and is the audit trail: no placeholders
 REBUILD_HINT = ("This change alters the hashed column set of an incremental table: normal runs are blocked until\n"
                 "bronze is rebuilt. Dev: run the deploy-dev workflow with bronze_rebuild=true.")
 
@@ -98,10 +103,17 @@ def approve(conn, pid: int, reviewer: str, severity: str | None, comment: str | 
     return applied + (("\n" + REBUILD_HINT) if requires_rebuild(row["proposal_type"], row.get("load_mode")) else "")
 
 
+def check_reason(reason: str | None) -> str:
+    reason = (reason or "").strip()
+    if len(reason) < MIN_REASON:
+        raise SystemExit(f"--reason must be a real reason of at least {MIN_REASON} characters (it is shown to the agent "
+                         "so it does not propose this again, and it is the audit trail)")
+    return reason
+
+
 def reject(conn, pid: int, reviewer: str, reason: str) -> str:
-    if not reason or not reason.strip():
-        raise SystemExit("--reason is required (it is shown to the agent so it does not propose this again)")
-    n = conn.execute(REJECT_SQL, (reviewer, reason.strip(), pid)).rowcount
+    reason = check_reason(reason)
+    n = conn.execute(REJECT_SQL, (reviewer, reason, pid)).rowcount
     if n != 1:
         raise SystemExit(f"proposal {pid} was not rejected (not found, or already decided)")
     return f"Proposal {pid} rejected by {reviewer}"
@@ -123,6 +135,25 @@ def trace_url(profile: str | None, row: dict) -> str | None:
         return None
 
 
+def correct_reason(conn, pid: int, reviewer: str, reason: str, now: str) -> str:
+    """Replace the reason of a REJECTED proposal, by the reviewer who rejected it. The status, reviewer and review
+    time stay; the previous reason is kept at the end of the comment (audit trail)."""
+    reason = check_reason(reason)
+    row = show(conn, pid)
+    if row is None:
+        raise SystemExit(f"proposal {pid} not found")
+    if row["status"] != "REJECTED":
+        raise SystemExit(f"proposal {pid} is {row['status']}: only a REJECTED proposal's reason can be corrected")
+    if row["reviewed_by"] != reviewer:
+        raise SystemExit(f"proposal {pid} was rejected by {row['reviewed_by']}: only that reviewer can correct the reason")
+    old = (row["review_comment"] or "").split("\n[corrected ")[0]
+    comment = f"{reason}\n[corrected {now} by {reviewer}; was: {old!r}]"
+    n = conn.execute(CORRECT_REASON_SQL, (comment, pid, reviewer)).rowcount
+    if n != 1:
+        raise SystemExit(f"proposal {pid}: the reason was not corrected")
+    return f"Proposal {pid}: reason corrected by {reviewer}"
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--profile", default="DEFAULT")
@@ -137,6 +168,9 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("reject")
     r.add_argument("proposal_id", type=int)
     r.add_argument("--reason", required=True)
+    c = sub.add_parser("correct-reason", help="replace the reason of a proposal you rejected (the old one is kept)")
+    c.add_argument("proposal_id", type=int)
+    c.add_argument("--reason", required=True)
     args = p.parse_args(argv)
 
     sys.path.insert(0, str(ROOT))
@@ -160,6 +194,12 @@ def main(argv: list[str] | None = None) -> int:
             conn.rollback()
         elif args.cmd == "approve":
             print(approve(conn, args.proposal_id, reviewer, args.severity, args.comment))
+            conn.commit()
+        elif args.cmd == "correct-reason":
+            import datetime as dt
+
+            now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+            print(correct_reason(conn, args.proposal_id, reviewer, args.reason, now))
             conn.commit()
         else:
             print(reject(conn, args.proposal_id, reviewer, args.reason))
