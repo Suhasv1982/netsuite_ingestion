@@ -218,6 +218,51 @@ targets:
                   - databricks-sdk>=0.147,<1
                   - psycopg>=3.1
                   - pyyaml
+        # Silver-only refresh (plan #39 step 11, design v2 section 12 item 4): applying new HARD rules to history is
+        # an explicit decision. Manual runs only, each one after the owner's OK. refresh_credentials first (the rule
+        # since incident 6: manual pipeline runs go through a job), then one pipeline update that fully refreshes the
+        # silver tables and recomputes rejects and gold; bronze is not in the selection (tools/silver_refresh.py).
+        silver_refresh:
+          name: silver_refresh
+          description: Full refresh of the dev silver tables only, after new HARD rules (owner's OK per run)
+          max_concurrent_runs: 1
+          tasks:
+            - task_key: refresh_credentials
+              spark_python_task:
+                python_file: src/netsuite_ingestion/refresh_credentials.py
+                parameters:
+                  - "--secret-scope"
+                  - "${var.secret_scope}"
+                  - "--source-endpoint"
+                  - "projects/netsuite-sample/branches/production/endpoints/primary"
+                  - "--source-key"
+                  - "source_pg_token"
+                  - "--meta-endpoint"
+                  - "${var.meta_pg_endpoint}"
+                  - "--meta-key"
+                  - "${var.meta_pg_token_key}"
+                  - "--wake-endpoints"
+                  - "${var.wake_lakebase_endpoints}"
+              environment_key: default
+            - task_key: refresh_silver
+              depends_on:
+                - task_key: refresh_credentials
+              spark_python_task:
+                python_file: tools/silver_refresh.py
+                parameters:
+                  - "--pipeline-id"
+                  - "${resources.pipelines.netsuite_ingestion_poc.id}"
+                  - "--tables"
+                  - "poc_silver.netsuite_memberships,poc_silver.netsuite_certifications,poc_silver.netsuite_transactions,poc_silver.netsuite_transaction_lines"
+                  - "--also-refresh"
+                  - "poc_reject.rejected_rows,poc_gold.gold_customer_revenue,poc_gold.gold_customer_status"
+              environment_key: default
+          environments:
+            - environment_key: default
+              spec:
+                client: "3"
+                dependencies:
+                  - databricks-sdk>=0.94.0
         # failure email for the daily dev ingestion job too (merged into the job in resources/)
         netsuite_ingestion_daily:
           email_notifications:
