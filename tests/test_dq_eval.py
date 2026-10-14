@@ -156,3 +156,21 @@ def test_covered_targets_scores_existing_rules_like_proposals():
     rules = [{"source_table": "t", "rule_id": 1, "rule_name": "Not in List", "rule_expr": "s IN ('A')"},
              {"source_table": "other", "rule_id": 2, "rule_name": "x", "rule_expr": "true"}]
     assert ev.covered_targets(rules, tables, sql, ["2026-07-11"]) == {("t", "invalid_enum"): "rule 1 Not in List"}
+
+
+def test_report_lists_every_imprecise_proposal_with_why_and_the_scoring_rules():
+    future = {**prop("start_date IS NULL OR start_date <= current_date()", recall={"end_before_start": 0.0}),
+              "failing_rows": 36, "unknown_rows": 6, "candidate_id": "netsuite_memberships:start_date_future"}
+    failed = {"table": "netsuite_transactions", "rule_expr": "date <= current_date()", "severity": "SOFT",
+              "status": "VALIDATION_FAILED", "problems": ["reserved name 'date' must be quoted as `date`"],
+              "candidate_id": "netsuite_transactions:date_future"}
+    weak = {**prop("rate < 1000", recall={"amount_mismatch": 0.2}), "failing_rows": 50, "unknown_rows": 0}
+    runs = [{"proposals": [NEG, KEY, future, failed, weak], "findings": FINDINGS, "model": "m", "tokens": 1, "exit_code": 0}]
+    md = ev.render(ev.summarize(runs, GT), runs, {"date": "d", "model": "m", "prompt_version": "v2", "known_batches": []})
+    assert "## Proposals counted as imprecise (3)" in md
+    assert "no manifest defect type covers this check (36 failing rows, 6 of them from batches without a manifest)" in md
+    assert "validation failed before scoring: reserved name 'date' must be quoted as `date`" in md
+    assert "best match amount_mismatch at 20% of its manifest rows (needs 50%); 50 failing rows in known batches" in md
+    assert "## Scoring rules" in md
+    for rule in ("minus 10-02 and 10-03", "first snapshot", "current row still shows", "covered", "NULL counts"):
+        assert rule in md, rule

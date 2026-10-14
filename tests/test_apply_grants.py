@@ -68,7 +68,8 @@ ALL = {"ci": "sp-1", "owner": "owner@example.com", "data_generator": "gen-1", "a
 class TestPrincipalTypesAndOwnerApplied:
     def test_optional_entries_are_skipped_until_their_principal_exists(self):
         spec = yaml.safe_load((GRANTS_DIR / "dev.yml").read_text(encoding="utf-8"))
-        assert "workspace.generator" not in desired_grants(spec, PRINCIPALS)   # data-generator not set: skipped
+        # data-generator not set: its entry is skipped; ci-dev's owner-applied read entry (DQ eval) stays
+        assert desired_grants(spec, PRINCIPALS)["workspace.generator"] == {"sp-1": {"USE_SCHEMA", "SELECT"}}
         assert desired_grants(spec, ALL)["workspace.generator"]["gen-1"] == {"USE_SCHEMA", "CREATE_TABLE", "SELECT", "MODIFY"}
 
     def test_generator_grants_are_owner_applied_and_include_use_catalog(self):
@@ -80,7 +81,10 @@ class TestPrincipalTypesAndOwnerApplied:
 
     def test_ci_entries_are_unchanged(self):
         spec = yaml.safe_load((GRANTS_DIR / "dev.yml").read_text(encoding="utf-8"))
-        assert desired_grants(spec, ALL, owner_applied=False) == desired_grants(spec, PRINCIPALS)
+        assert desired_grants(spec, ALL, owner_applied=False) == desired_grants(spec, PRINCIPALS, owner_applied=False)
+        # the only owner-applied entry for ci-dev: read access to the manifests for the DQ eval workflow
+        owner_ci = {s: g["sp-1"] for s, g in desired_grants(spec, PRINCIPALS, owner_applied=True).items() if "sp-1" in g}
+        assert owner_ci == {"workspace.generator": {"USE_SCHEMA", "SELECT"}}
 
     def test_unknown_principal_type_is_an_error(self):
         with pytest.raises(ValueError, match="unknown principal type"):

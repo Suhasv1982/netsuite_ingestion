@@ -37,6 +37,7 @@ import asyncio
 import datetime as dt
 import itertools
 import json
+import os
 import pathlib
 import sys
 import uuid
@@ -166,6 +167,37 @@ def summarize(runs: list[dict], ground_truth: dict) -> dict:
     return m
 
 
+SCORING_RULES = [
+    "Ground truth: workspace.generator.manifests, only batches with known ground truth: the manifested batch dates "
+    "minus 10-02 and 10-03, which also hold rows the 10-01 run wrote without a manifest. Rows from unmanifested writes "
+    "(09-14 increment, 10-01 run, 10-09..10-13) are neither hits nor false rejects; they are listed as unknown ground "
+    "truth.",
+    "Attribution: a key belongs to the first snapshot in which the rule fails it (the generator re-emits keys with "
+    "their latest values, so a defect carries into later snapshots).",
+    "Customers (full load, current state only): a manifest row counts while the current row still shows its defect.",
+    "Existing-rule coverage: a defect type an active rule already fails on >= 80% of its manifest rows is covered; "
+    "proposing it again would be nagging (design v2 section 5), so it is reported but not required for recall.",
+    "Found: a VALIDATED rule fails >= 80% of a type's manifest rows (NULL-key rows by count). Precise: a proposal "
+    "fails >= 50% of some manifest type on its table, whatever its validation status.",
+    "NULL counts as a failure (like dq.py's HARD rules: coalesce((expr), false)).",
+]
+
+
+def imprecise_reason(p: dict) -> str:
+    """Why a proposal does not count as precise."""
+    if p.get("status") == "VALIDATION_FAILED" and not p.get("recall"):
+        return "validation failed before scoring: " + "; ".join(p.get("problems") or [])
+    if not p.get("failing_rows"):
+        return "fails no bronze rows"
+    best = p.get("matched_defect")
+    known = p.get("failing_rows", 0) - p.get("unknown_rows", 0)
+    if best is None or p.get("best_recall", 0) == 0:
+        return (f"no manifest defect type covers this check ({p.get('failing_rows')} failing rows, "
+                f"{p.get('unknown_rows', 0)} of them from batches without a manifest)")
+    return (f"best match {best} at {p['best_recall']:.0%} of its manifest rows (needs 50%); "
+            f"{known} failing rows in known batches")
+
+
 def render(m: dict, runs: list[dict], meta: dict) -> str:
     v = m["verdicts"]
     ok = lambda b: "PASS" if b else "FAIL"  # noqa: E731
@@ -193,6 +225,13 @@ def render(m: dict, runs: list[dict], meta: dict) -> str:
     if m["false_reject_rules"]:
         lines += ["", "## Rules with failing rows outside the manifests", ""]
         lines += [f"- {k}: {n} rows" for k, n in m["false_reject_rules"].items()]
+    imprecise = [(i, p) for i, run in enumerate(runs, 1) for p in run["proposals"]
+                 if p.get("best_recall", 0) < PRECISE_RECALL]
+    if imprecise:
+        lines += ["", f"## Proposals counted as imprecise ({len(imprecise)})", ""]
+        lines += [f"- run {i}: {p['table']} [{p.get('candidate_id')}] `{p['rule_expr']}`: {imprecise_reason(p)}"
+                  for i, p in imprecise]
+    lines += ["", "## Scoring rules", ""] + [f"- {r}" for r in SCORING_RULES]
     if m.get("unknown_ground_truth_rows"):
         lines += ["", "## Failing rows with unknown ground truth (first failing in a batch without a manifest)", ""]
         lines += [f"- {k}: {n} rows" for k, n in m["unknown_ground_truth_rows"].items()]
@@ -399,12 +438,15 @@ def context(profile: str) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--profile", required=True)
+    ap.add_argument("--profile", default=os.environ.get("AIDQ_PROFILE"),
+                    help="Databricks CLI profile (or AIDQ_PROFILE); omit in CI to use the DATABRICKS_* variables")
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--model", default=None, help="pin a model (default: routed, task rule_generation)")
     ap.add_argument("--out", default=str(ROOT / "evals" / "results"))
     args = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
+    if not args.profile and not os.environ.get("DATABRICKS_HOST"):
+        ap.error("--profile, AIDQ_PROFILE or DATABRICKS_* variables are required (no profile is chosen automatically)")
     from aidq_dq_agent.recommend import PROMPT_VERSION
     from aidq_llm.router import Router
 
