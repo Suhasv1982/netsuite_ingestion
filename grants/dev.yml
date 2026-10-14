@@ -59,3 +59,10 @@ metadata_roles:
     members: [ci, agent]
     insert: [llm_calls]
     execute: ["prune_llm_calls(integer)"]
+
+# "Service Principal User" (roles/servicePrincipal.user): who may deploy a job that runs as the service principal
+# (`run_as`). Owner-applied (tools/sp_roles.py --apply, run by tools/setup_dq_roles.sh); tools/sp_roles.py --check
+# verifies the exact holders. Display names, resolved at runtime.
+service_principal_users:
+  data-generator: [ci-dev]   # the generator job (granted 2026-10-01; listed here so the check covers it)
+  dq-agent: [ci-dev]         # the DQ recommender job, run_as dq-agent (plan #39 step 10; decided 2026-10-08)
