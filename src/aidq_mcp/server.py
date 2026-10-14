@@ -1,4 +1,5 @@
-"""The five read-only tools and the MCP server (docs/phase3_mcp_plan.md, section 3).
+"""The read-only tools and the MCP server: the monitor's five (docs/phase3_mcp_plan.md, section 3) and the DQ
+recommender's four (dq_tools.py; docs/dq_recommender_design.md section 4).
 
 Each tool returns {"status": "ok" | "unavailable" | "error", ...}; results pass through logic.redact. `Tools` holds
 the logic and takes a Reads-like object and a clock, so tests run it with fakes.
@@ -14,6 +15,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
 from . import config, logic
+from .dq_tools import DqTools
 from .reads import Unavailable
 
 UTC = dt.timezone.utc
@@ -43,7 +45,12 @@ def tool_result(fn: Callable) -> Callable:
     return wrapper
 
 
-class Tools:
+MONITOR_TOOLS = ("get_recent_job_runs", "get_table_health", "get_pipeline_errors", "compare_bronze_to_source",
+                 "get_recent_deploys")
+DQ_TOOLS = ("get_dq_rules", "get_open_and_rejected_proposals", "profile_table", "get_rejects_summary")
+
+
+class Tools(DqTools):
     def __init__(self, reads, now: Callable[[], dt.datetime] = lambda: dt.datetime.now(UTC)):
         self.reads, self.now = reads, now
 
@@ -279,6 +286,10 @@ class Tools:
         return changes
 
 
+for _name in DQ_TOOLS:   # the same status / redaction wrapper as the monitor's tools
+    setattr(Tools, _name, tool_result(getattr(DqTools, _name)))
+
+
 INSTRUCTIONS = (
     "Read-only diagnostics for the NetSuite ingestion platform (dev only in phase 3). Start with "
     "get_recent_job_runs (did the daily generator and ingestion run? missed_schedules), then get_table_health and "
@@ -324,5 +335,31 @@ def build_server(tools: Tools) -> MCPServer:
         changes (create/update/reset/delete/permission changes) on this env's jobs and pipelines from the audit
         log, with the actor as a role (owner, ci-dev, data-generator, system, other)."""
         return tools.get_recent_deploys(env, days)
+
+    @server.tool(annotations=READ_ONLY)
+    def get_dq_rules(env: str = "dev", table: str | None = None) -> dict:
+        """Data-quality rules per table (active and inactive): rule_id, name, SQL expression, severity HARD/SOFT,
+        who created it and the proposal it came from."""
+        return tools.get_dq_rules(env, table)
+
+    @server.tool(annotations=READ_ONLY)
+    def get_open_and_rejected_proposals(env: str = "dev", table: str | None = None, days: int | None = None) -> dict:
+        """config_proposals that are open (PENDING / VALIDATED / VALIDATION_FAILED) and those REJECTED in the last
+        `days` (default 30, max 90), with the reviewer's reason. Use it to avoid proposing again."""
+        return tools.get_open_and_rejected_proposals(env, table, days)
+
+    @server.tool(annotations=READ_ONLY)
+    def profile_table(env: str = "dev", table: str | None = None) -> dict:
+        """Profile of one table on BRONZE (aggregates only, no raw rows): per active column type, null rate,
+        distinct count, min/max, top values for low-cardinality columns, future-date and negative counts; candidate
+        checks (end before start, amount vs quantity x rate, NULL business key); duplicates (same key and day,
+        different created_date) vs normal same-day versions; references to keys missing in another table."""
+        return tools.profile_table(env, table)
+
+    @server.tool(annotations=READ_ONLY)
+    def get_rejects_summary(env: str = "dev", table: str | None = None, runs: int | None = None) -> dict:
+        """Rows currently in poc_reject.rejected_rows per table and failed HARD rule, and the reject counts of the
+        last `runs` runs (default 7, max 30) from run_audit."""
+        return tools.get_rejects_summary(env, table, runs)
 
     return server

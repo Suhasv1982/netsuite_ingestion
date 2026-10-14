@@ -15,6 +15,7 @@ import sys
 import traceback
 
 from aidq_mcp.config import env_config
+from aidq_mcp.server import MONITOR_TOOLS
 from aidq_mcp.reads import Reads
 
 from aidq_llm.router import PgCallLogWriter, Router
@@ -94,7 +95,7 @@ async def amain(args) -> int:
     store = PgIncidentStore(Reads(args.profile), env_config("dev").metadata_endpoint) if args.write else DryRunStore()
     investigator, router = make_investigator(args, trace_id)
     try:
-        async with McpToolBox(args.profile) as toolbox:
+        async with McpToolBox(args.profile, only=MONITOR_TOOLS) as toolbox:
             state = await run(toolbox, investigator, store, trace_id=trace_id, watchdog_result=watchdog_result)
     except Exception as exc:  # noqa: BLE001 -- a crash still produces a report
         calls = flush_calls(router, store)
