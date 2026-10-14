@@ -132,3 +132,67 @@ def test_a_real_mlflow_trace_on_a_local_store(tmp_path, monkeypatch):
     assert {"tool profile_table", "recommend", "write submit_proposal"} <= set(spans)
     assert all(s.parent_id == root.span_id for n, s in spans.items() if n != "dq_recommender")
     assert wt.proposals[0]["evidence"]["trace_experiment_id"] == t.experiment_id
+
+
+class FakeMlflow:
+    """mlflow as the setup script uses it: UC binding fails (as it might on Free Edition)."""
+
+    def __init__(self, uc_works: bool):
+        self.uc_works, self.exp, self.created = uc_works, None, []
+
+    def set_tracking_uri(self, uri):
+        pass
+
+    def get_experiment_by_name(self, name):
+        return self.exp
+
+    def set_experiment(self, experiment_name=None, trace_location=None):
+        if not self.uc_works:
+            raise RuntimeError("trace locations are not supported in this workspace")
+        self.exp = types.SimpleNamespace(experiment_id="77", trace_location=trace_location)
+        return self.exp
+
+    def create_experiment(self, name):
+        self.created.append(name)
+        self.exp = types.SimpleNamespace(experiment_id="77", trace_location=None)
+        return "77"
+
+
+def _run_setup(monkeypatch, capsys, uc_works):
+    import sys
+
+    from mlflow.entities.trace_location import UnityCatalog  # noqa: F401  (the real class, for isinstance)
+
+    sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[1] / "tools"))
+    import setup_dq_traces as st
+
+    fake = FakeMlflow(uc_works)
+    monkeypatch.setitem(sys.modules, "mlflow", fake)
+    calls = []
+
+    def cli(profile, *args, body=None):
+        calls.append(args[:2])
+        if args[:2] == ("service-principals", "list"):
+            return [{"displayName": "dq-agent", "applicationId": "agent-app"}]
+        if args[:2] == ("warehouses", "list"):
+            return [{"id": "wh"}]
+        if args[:2] == ("experiments", "get-permissions"):
+            return {"access_control_list": []}
+        return {}
+
+    monkeypatch.setattr(st, "_cli", cli)
+    rc = st.main(["--profile", "DEFAULT"])
+    return rc, capsys.readouterr().out, fake, calls
+
+
+def test_setup_binds_to_unity_catalog_when_it_works(monkeypatch, capsys):
+    rc, out, fake, calls = _run_setup(monkeypatch, capsys, uc_works=True)
+    assert rc == 0 and "STORAGE: unity-catalog workspace.aidq_traces" in out and not fake.created
+    assert ("experiments", "update-permissions") in calls
+
+
+def test_setup_falls_back_to_standard_storage_when_unity_catalog_fails(monkeypatch, capsys):
+    rc, out, fake, calls = _run_setup(monkeypatch, capsys, uc_works=False)
+    assert rc == 0 and fake.created == ["/Shared/aidq/dq_recommender"]
+    assert "STORAGE: experiment (standard MLflow storage); Unity Catalog trace storage failed: RuntimeError" in out
+    assert ("experiments", "update-permissions") in calls          # dq-agent CAN_EDIT either way

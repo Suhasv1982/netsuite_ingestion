@@ -5,7 +5,10 @@ tools/setup_dq_roles.sh, step 6); idempotent.
 
 1. the MLflow experiment /Shared/aidq/dq_recommender, bound to the Unity Catalog trace location
    workspace.aidq_traces (owner choice 2026-10-14). MLflow provisions its trace tables there; a binding is
-   permanent, so an experiment already bound elsewhere is reported, never re-bound;
+   permanent, so an experiment already bound elsewhere is reported, never re-bound. If Unity Catalog trace storage
+   cannot be set up (e.g. not available on Free Edition), the experiment uses standard MLflow experiment storage
+   instead: owner decision 2026-10-14, no question asked; the output says which storage is used and why
+   (`STORAGE:` line), for STATUS.md;
 2. dq-agent CAN_EDIT on the experiment (it writes the traces), added to the experiment's permissions (nothing is
    removed).
 The schema itself and dq-agent's USE SCHEMA / SELECT / MODIFY on it come from setup_dq_roles.sh step 4
@@ -61,28 +64,44 @@ def main(argv: list[str] | None = None) -> int:
     os.environ["MLFLOW_TRACING_SQL_WAREHOUSE_ID"] = warehouses[0]["id"]
     mlflow.set_tracking_uri(f"databricks://{args.profile}")
 
-    failed = False
+    failed, uc_error = False, None
     exp = mlflow.get_experiment_by_name(EXPERIMENT)
     if exp is None and not args.check:
         _cli(args.profile, "workspace", "mkdirs", EXPERIMENT.rsplit("/", 1)[0])
-        exp = mlflow.set_experiment(experiment_name=EXPERIMENT,
-                                    trace_location=UnityCatalog(catalog_name=CATALOG, schema_name=SCHEMA))
-        print(f"created experiment {EXPERIMENT}, bound to {CATALOG}.{SCHEMA}")
+        try:
+            exp = mlflow.set_experiment(experiment_name=EXPERIMENT,
+                                        trace_location=UnityCatalog(catalog_name=CATALOG, schema_name=SCHEMA))
+            print(f"created experiment {EXPERIMENT}, bound to {CATALOG}.{SCHEMA}")
+        except Exception as exc:  # noqa: BLE001 -- owner decision: fall back to standard experiment storage
+            uc_error = f"{type(exc).__name__}: {str(exc)[:300]}"
+            if mlflow.get_experiment_by_name(EXPERIMENT) is None:
+                mlflow.create_experiment(EXPERIMENT)
+            print(f"created experiment {EXPERIMENT} with standard experiment storage (Unity Catalog trace storage "
+                  f"failed: {uc_error})")
     elif exp is not None and getattr(exp, "trace_location", None) is None and not args.check:
-        exp = mlflow.set_experiment(experiment_name=EXPERIMENT,
-                                    trace_location=UnityCatalog(catalog_name=CATALOG, schema_name=SCHEMA))
-        print(f"bound experiment {EXPERIMENT} to {CATALOG}.{SCHEMA}")
+        try:
+            exp = mlflow.set_experiment(experiment_name=EXPERIMENT,
+                                        trace_location=UnityCatalog(catalog_name=CATALOG, schema_name=SCHEMA))
+            print(f"bound experiment {EXPERIMENT} to {CATALOG}.{SCHEMA}")
+        except Exception as exc:  # noqa: BLE001
+            uc_error = f"{type(exc).__name__}: {str(exc)[:300]}"
+            print(f"kept standard experiment storage for {EXPERIMENT} (Unity Catalog trace storage failed: {uc_error})")
     exp = mlflow.get_experiment_by_name(EXPERIMENT)
     loc = getattr(exp, "trace_location", None) if exp else None
     if exp is None:
         print(f"FAIL experiment {EXPERIMENT} does not exist")
         failed = True
-    elif not (isinstance(loc, UnityCatalog) and loc.catalog_name == CATALOG and loc.schema_name == SCHEMA):
+    elif isinstance(loc, UnityCatalog) and loc.catalog_name == CATALOG and loc.schema_name == SCHEMA:
+        print(f"OK experiment {EXPERIMENT} ({exp.experiment_id}) -> {CATALOG}.{SCHEMA}")
+        print(f"STORAGE: unity-catalog {CATALOG}.{SCHEMA}")
+    elif loc is None:
+        print(f"OK experiment {EXPERIMENT} ({exp.experiment_id}) with standard experiment storage")
+        print("STORAGE: experiment (standard MLflow storage)"
+              + (f"; Unity Catalog trace storage failed: {uc_error}" if uc_error else "; not bound to Unity Catalog"))
+    else:
         print(f"FAIL experiment {EXPERIMENT} trace location is {loc!r}, expected {CATALOG}.{SCHEMA} (a binding is "
               "permanent: not changed)")
         failed = True
-    else:
-        print(f"OK experiment {EXPERIMENT} ({exp.experiment_id}) -> {CATALOG}.{SCHEMA}")
 
     if exp is not None:
         acl = _cli(args.profile, "experiments", "get-permissions", exp.experiment_id).get("access_control_list") or []
