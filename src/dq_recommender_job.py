@@ -16,4 +16,8 @@ if _here not in sys.path:
 
 from aidq_dq_agent.job import main  # noqa: E402
 
-sys.exit(main())
+# Only a failure exits: in the task's IPython kernel even sys.exit(0) raises SystemExit and marks the run FAILED
+# (dry run as dq-agent, 2026-10-14). Finishing normally is success.
+_code = main()
+if _code:
+    raise SystemExit(_code)

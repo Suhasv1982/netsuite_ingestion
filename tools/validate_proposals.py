@@ -112,4 +112,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # only a failure exits: in a job's IPython kernel even sys.exit(0) marks the run FAILED
+    _code = main()
+    if _code:
+        sys.exit(_code)
