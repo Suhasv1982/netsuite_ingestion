@@ -1,0 +1,674 @@
+{
+  "meta": {
+    "date": "2026-10-14",
+    "model": "databricks-gpt-oss-120b",
+    "prompt_version": "dq_recommender_v1"
+  },
+  "metrics": {
+    "runs": 3,
+    "proposals": 21,
+    "validated": 20,
+    "recall_runs": {
+      "netsuite_transaction_lines|negative_amount": 3,
+      "netsuite_transaction_lines|amount_mismatch": 0,
+      "netsuite_transaction_lines|null_business_key": 3,
+      "netsuite_transactions|invalid_enum": 0,
+      "netsuite_transactions|null_business_key": 3,
+      "netsuite_memberships|invalid_enum": 0,
+      "netsuite_memberships|end_before_start": 0,
+      "netsuite_memberships|null_business_key": 3,
+      "netsuite_certifications|invalid_enum": 0,
+      "netsuite_certifications|end_before_start": 3,
+      "netsuite_certifications|null_business_key": 3,
+      "netsuite_customers|customer_malformed_email": 0,
+      "netsuite_customers|customer_null_company_name": 0
+    },
+    "precision": 0.9523809523809523,
+    "false_reject_rules": {
+      "netsuite_certifications: certification_end_date IS NULL OR certification_start_date IS NULL OR certification_end_date >= certification_start_date": 11,
+      "netsuite_transactions: type IN ('Cash Sale','Invoice','Credit Memo','Refund')": 27
+    },
+    "unsafe_validated": 0,
+    "not_expressible_coverage": {
+      "duplicate_business_key": true,
+      "late_arriving": false,
+      "orphan_lines": true
+    },
+    "repeatability": 0.8214285714285715,
+    "verdicts": {
+      "recall": false,
+      "precision": true,
+      "false_rejects": false,
+      "unsafe": true,
+      "coverage": false,
+      "repeatability": true
+    }
+  },
+  "runs": [
+    {
+      "trace_id": "31ffe406678241a09839eff2a8561027",
+      "exit_code": 0,
+      "model": "databricks-gpt-oss-120b",
+      "tokens": 11768,
+      "error": null,
+      "proposals": [
+        {
+          "table": "netsuite_certifications",
+          "rule_name": "Non-null Certification Internal ID",
+          "rule_expr": "certification_internal_id IS NOT NULL",
+          "severity": "HARD",
+          "defect_type": "null_business_key",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "6673",
+            "passed": "6653",
+            "failed": "20",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.0,
+            "end_before_start": 0.0,
+            "null_business_key": 1.0
+          },
+          "matched_defect": "null_business_key",
+          "best_recall": 1.0,
+          "failing_rows": 20,
+          "unexplained_rows": 0,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_certifications",
+          "rule_name": "Certification End Not Before Start",
+          "rule_expr": "certification_end_date IS NULL OR certification_start_date IS NULL OR certification_end_date >= certification_start_date",
+          "severity": "HARD",
+          "defect_type": "end_before_start",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "6673",
+            "passed": "6593",
+            "failed": "80",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.0,
+            "end_before_start": 1.0,
+            "null_business_key": 0.0
+          },
+          "matched_defect": "end_before_start",
+          "best_recall": 1.0,
+          "failing_rows": 80,
+          "unexplained_rows": 11,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_memberships",
+          "rule_name": "Non-null Membership Internal ID",
+          "rule_expr": "membership_internal_id IS NOT NULL",
+          "severity": "HARD",
+          "defect_type": "null_business_key",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "8338",
+            "passed": "8313",
+            "failed": "25",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.0,
+            "end_before_start": 0.0,
+            "null_business_key": 1.0
+          },
+          "matched_defect": "null_business_key",
+          "best_recall": 1.0,
+          "failing_rows": 25,
+          "unexplained_rows": 0,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_transactions",
+          "rule_name": "Non-null Transaction Internal ID",
+          "rule_expr": "transaction_internal_id IS NOT NULL",
+          "severity": "HARD",
+          "defect_type": "null_business_key",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "33368",
+            "passed": "33269",
+            "failed": "99",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.0,
+            "null_business_key": 1.0
+          },
+          "matched_defect": "null_business_key",
+          "best_recall": 1.0,
+          "failing_rows": 99,
+          "unexplained_rows": 0,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_transaction_lines",
+          "rule_name": "Non-null Transaction Line ID",
+          "rule_expr": "transaction_line_id IS NOT NULL",
+          "severity": "HARD",
+          "defect_type": "null_business_key",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "100098",
+            "passed": "99807",
+            "failed": "291",
+            "nulls": "0"
+          },
+          "recall": {
+            "negative_amount": 0.0,
+            "amount_mismatch": 0.0,
+            "null_business_key": 1.0
+          },
+          "matched_defect": "null_business_key",
+          "best_recall": 1.0,
+          "failing_rows": 291,
+          "unexplained_rows": 0,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_transaction_lines",
+          "rule_name": "Amount Not Negative",
+          "rule_expr": "amount IS NULL OR amount >= 0",
+          "severity": "HARD",
+          "defect_type": "negative_amount",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "100098",
+            "passed": "99798",
+            "failed": "300",
+            "nulls": "0"
+          },
+          "recall": {
+            "negative_amount": 1.0,
+            "amount_mismatch": 0.004132231404958678,
+            "null_business_key": 0.0
+          },
+          "matched_defect": "negative_amount",
+          "best_recall": 1.0,
+          "failing_rows": 300,
+          "unexplained_rows": 0,
+          "recheck_ok": true
+        }
+      ],
+      "findings": [
+        {
+          "table": "netsuite_certifications",
+          "finding_type": "duplicate_business_key"
+        },
+        {
+          "table": "netsuite_memberships",
+          "finding_type": "duplicate_business_key"
+        },
+        {
+          "table": "netsuite_transactions",
+          "finding_type": "duplicate_business_key"
+        },
+        {
+          "table": "netsuite_transaction_lines",
+          "finding_type": "duplicate_business_key"
+        },
+        {
+          "table": "netsuite_transaction_lines",
+          "finding_type": "orphan_records"
+        }
+      ],
+      "skipped": []
+    },
+    {
+      "trace_id": "9eb0673a034442c4b9a3462c0911b46f",
+      "exit_code": 0,
+      "model": "databricks-gpt-oss-120b",
+      "tokens": 13113,
+      "error": null,
+      "proposals": [
+        {
+          "table": "netsuite_memberships",
+          "rule_name": "Non-null Business Key",
+          "rule_expr": "membership_internal_id IS NOT NULL",
+          "severity": "HARD",
+          "defect_type": "null_business_key",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "8338",
+            "passed": "8313",
+            "failed": "25",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.0,
+            "end_before_start": 0.0,
+            "null_business_key": 1.0
+          },
+          "matched_defect": "null_business_key",
+          "best_recall": 1.0,
+          "failing_rows": 25,
+          "unexplained_rows": 0,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_certifications",
+          "rule_name": "Non-null Business Key",
+          "rule_expr": "certification_internal_id IS NOT NULL",
+          "severity": "HARD",
+          "defect_type": "null_business_key",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "6673",
+            "passed": "6653",
+            "failed": "20",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.0,
+            "end_before_start": 0.0,
+            "null_business_key": 1.0
+          },
+          "matched_defect": "null_business_key",
+          "best_recall": 1.0,
+          "failing_rows": 20,
+          "unexplained_rows": 0,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_transactions",
+          "rule_name": "Non-null Business Key",
+          "rule_expr": "transaction_internal_id IS NOT NULL",
+          "severity": "HARD",
+          "defect_type": "null_business_key",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "33368",
+            "passed": "33269",
+            "failed": "99",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.0,
+            "null_business_key": 1.0
+          },
+          "matched_defect": "null_business_key",
+          "best_recall": 1.0,
+          "failing_rows": 99,
+          "unexplained_rows": 0,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_transaction_lines",
+          "rule_name": "Non-null Business Key",
+          "rule_expr": "transaction_line_id IS NOT NULL",
+          "severity": "HARD",
+          "defect_type": "null_business_key",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "100098",
+            "passed": "99807",
+            "failed": "291",
+            "nulls": "0"
+          },
+          "recall": {
+            "negative_amount": 0.0,
+            "amount_mismatch": 0.0,
+            "null_business_key": 1.0
+          },
+          "matched_defect": "null_business_key",
+          "best_recall": 1.0,
+          "failing_rows": 291,
+          "unexplained_rows": 0,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_certifications",
+          "rule_name": "End Not Before Start",
+          "rule_expr": "certification_end_date IS NULL OR certification_start_date IS NULL OR certification_end_date >= certification_start_date",
+          "severity": "SOFT",
+          "defect_type": "end_before_start",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "6673",
+            "passed": "6593",
+            "failed": "80",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.0,
+            "end_before_start": 1.0,
+            "null_business_key": 0.0
+          },
+          "matched_defect": "end_before_start",
+          "best_recall": 1.0,
+          "failing_rows": 80,
+          "unexplained_rows": 11,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_transactions",
+          "rule_name": "Valid Transaction Type",
+          "rule_expr": "type IN ('Cash Sale','Invoice','Credit Memo','Refund')",
+          "severity": "SOFT",
+          "defect_type": "invalid_enum",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "33368",
+            "passed": "33140",
+            "failed": "228",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.6296296296296297,
+            "null_business_key": 0.0
+          },
+          "matched_defect": "invalid_enum",
+          "best_recall": 0.6296296296296297,
+          "failing_rows": 228,
+          "unexplained_rows": 27,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_transactions",
+          "rule_name": "No Future Transaction Date",
+          "rule_expr": "date IS NULL OR date <= current_date()",
+          "severity": "SOFT",
+          "defect_type": "future_date",
+          "status": "VALIDATION_FAILED",
+          "problems": [
+            "reserved name 'date' must be quoted as `date`"
+          ],
+          "counts": null
+        },
+        {
+          "table": "netsuite_transaction_lines",
+          "rule_name": "Amount Non-Negative",
+          "rule_expr": "amount IS NULL OR amount >= 0",
+          "severity": "SOFT",
+          "defect_type": "negative_amount",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "100098",
+            "passed": "99798",
+            "failed": "300",
+            "nulls": "0"
+          },
+          "recall": {
+            "negative_amount": 1.0,
+            "amount_mismatch": 0.004132231404958678,
+            "null_business_key": 0.0
+          },
+          "matched_defect": "negative_amount",
+          "best_recall": 1.0,
+          "failing_rows": 300,
+          "unexplained_rows": 0,
+          "recheck_ok": true
+        }
+      ],
+      "findings": [
+        {
+          "table": "netsuite_memberships",
+          "finding_type": "duplicate_business_key"
+        },
+        {
+          "table": "netsuite_certifications",
+          "finding_type": "duplicate_business_key"
+        },
+        {
+          "table": "netsuite_transactions",
+          "finding_type": "duplicate_business_key"
+        },
+        {
+          "table": "netsuite_transaction_lines",
+          "finding_type": "duplicate_business_key"
+        },
+        {
+          "table": "netsuite_transaction_lines",
+          "finding_type": "orphan_records"
+        }
+      ],
+      "skipped": []
+    },
+    {
+      "trace_id": "8741a262a6de453c8f54acab15e54cbd",
+      "exit_code": 0,
+      "model": "databricks-gpt-oss-120b",
+      "tokens": 12271,
+      "error": null,
+      "proposals": [
+        {
+          "table": "netsuite_customers",
+          "rule_name": "Company Name Not Null",
+          "rule_expr": "company_name IS NOT NULL",
+          "severity": "SOFT",
+          "defect_type": "null_company_name",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "3300",
+            "passed": "3297",
+            "failed": "3",
+            "nulls": "0"
+          },
+          "recall": {
+            "customer_malformed_email": 0.0,
+            "customer_null_company_name": 0.6
+          },
+          "matched_defect": "customer_null_company_name",
+          "best_recall": 0.6,
+          "failing_rows": 3,
+          "unexplained_rows": 0,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_memberships",
+          "rule_name": "Membership Internal ID Not Null",
+          "rule_expr": "membership_internal_id IS NOT NULL",
+          "severity": "HARD",
+          "defect_type": "null_business_key",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "8338",
+            "passed": "8313",
+            "failed": "25",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.0,
+            "end_before_start": 0.0,
+            "null_business_key": 1.0
+          },
+          "matched_defect": "null_business_key",
+          "best_recall": 1.0,
+          "failing_rows": 25,
+          "unexplained_rows": 0,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_certifications",
+          "rule_name": "Certification Internal ID Not Null",
+          "rule_expr": "certification_internal_id IS NOT NULL",
+          "severity": "HARD",
+          "defect_type": "null_business_key",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "6673",
+            "passed": "6653",
+            "failed": "20",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.0,
+            "end_before_start": 0.0,
+            "null_business_key": 1.0
+          },
+          "matched_defect": "null_business_key",
+          "best_recall": 1.0,
+          "failing_rows": 20,
+          "unexplained_rows": 0,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_certifications",
+          "rule_name": "Certification End Not Before Start",
+          "rule_expr": "certification_end_date IS NULL OR certification_start_date IS NULL OR certification_end_date >= certification_start_date",
+          "severity": "SOFT",
+          "defect_type": "end_before_start",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "6673",
+            "passed": "6593",
+            "failed": "80",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.0,
+            "end_before_start": 1.0,
+            "null_business_key": 0.0
+          },
+          "matched_defect": "end_before_start",
+          "best_recall": 1.0,
+          "failing_rows": 80,
+          "unexplained_rows": 11,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_transactions",
+          "rule_name": "Transaction Internal ID Not Null",
+          "rule_expr": "transaction_internal_id IS NOT NULL",
+          "severity": "HARD",
+          "defect_type": "null_business_key",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "33368",
+            "passed": "33269",
+            "failed": "99",
+            "nulls": "0"
+          },
+          "recall": {
+            "invalid_enum": 0.0,
+            "null_business_key": 1.0
+          },
+          "matched_defect": "null_business_key",
+          "best_recall": 1.0,
+          "failing_rows": 99,
+          "unexplained_rows": 0,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_transaction_lines",
+          "rule_name": "Transaction Line ID Not Null",
+          "rule_expr": "transaction_line_id IS NOT NULL",
+          "severity": "HARD",
+          "defect_type": "null_business_key",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "100098",
+            "passed": "99807",
+            "failed": "291",
+            "nulls": "0"
+          },
+          "recall": {
+            "negative_amount": 0.0,
+            "amount_mismatch": 0.0,
+            "null_business_key": 1.0
+          },
+          "matched_defect": "null_business_key",
+          "best_recall": 1.0,
+          "failing_rows": 291,
+          "unexplained_rows": 0,
+          "recheck_ok": true
+        },
+        {
+          "table": "netsuite_transaction_lines",
+          "rule_name": "Amount Non-Negative",
+          "rule_expr": "amount IS NULL OR amount >= 0",
+          "severity": "HARD",
+          "defect_type": "negative_amount",
+          "status": "VALIDATED",
+          "problems": [],
+          "counts": {
+            "rows": "100098",
+            "passed": "99798",
+            "failed": "300",
+            "nulls": "0"
+          },
+          "recall": {
+            "negative_amount": 1.0,
+            "amount_mismatch": 0.004132231404958678,
+            "null_business_key": 0.0
+          },
+          "matched_defect": "negative_amount",
+          "best_recall": 1.0,
+          "failing_rows": 300,
+          "unexplained_rows": 0,
+          "recheck_ok": true
+        }
+      ],
+      "findings": [
+        {
+          "table": "netsuite_memberships",
+          "finding_type": "duplicate_business_key"
+        },
+        {
+          "table": "netsuite_certifications",
+          "finding_type": "duplicate_business_key"
+        },
+        {
+          "table": "netsuite_transactions",
+          "finding_type": "duplicate_business_key"
+        },
+        {
+          "table": "netsuite_transaction_lines",
+          "finding_type": "duplicate_business_key"
+        },
+        {
+          "table": "netsuite_transaction_lines",
+          "finding_type": "orphan_records"
+        }
+      ],
+      "skipped": []
+    }
+  ],
+  "ground_truth": {
+    "row": {
+      "netsuite_transaction_lines|negative_amount": 300,
+      "netsuite_transaction_lines|amount_mismatch": 484,
+      "netsuite_transaction_lines|null_business_key": 291,
+      "netsuite_transactions|invalid_enum": 162,
+      "netsuite_transactions|null_business_key": 99,
+      "netsuite_memberships|invalid_enum": 40,
+      "netsuite_memberships|end_before_start": 40,
+      "netsuite_memberships|null_business_key": 25,
+      "netsuite_certifications|invalid_enum": 34,
+      "netsuite_certifications|end_before_start": 34,
+      "netsuite_certifications|null_business_key": 20,
+      "netsuite_customers|customer_malformed_email": 6,
+      "netsuite_customers|customer_null_company_name": 5
+    },
+    "not_expressible": [
+      "duplicate_business_key",
+      "late_arriving",
+      "orphan_lines"
+    ]
+  }
+}
