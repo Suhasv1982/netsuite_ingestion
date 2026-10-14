@@ -69,6 +69,14 @@ class Reads:
     def pipeline_id(self, name: str) -> str | None:
         return next((p["pipeline_id"] for p in self.cli("pipelines", "list-pipelines") if p["name"] == name), None)
 
+    def pipeline_updates(self, pipeline_id: str, limit: int = 25) -> list[dict]:
+        """Recent updates: update_id, state, cause (JOB_TASK, API_CALL, ...), creation_time (ms)."""
+        return (self.cli("pipelines", "list-updates", pipeline_id, "--max-results", str(limit)) or {}).get("updates") or []
+
+    def job_runs_with_tasks(self, job_id: int, since: dt.datetime) -> list[dict]:
+        return self.cli("jobs", "list-runs", "--job-id", str(job_id), "--start-time-from",
+                        str(int(since.timestamp() * 1000)), "--expand-tasks", "--limit", "25") or []
+
     def pipeline_events(self, pipeline_id: str, limit: int) -> list[dict]:
         return self.cli("pipelines", "list-pipeline-events", pipeline_id, "--filter", "level in ('ERROR','WARN')",
                         "--limit", str(limit)) or []
