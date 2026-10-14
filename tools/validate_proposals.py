@@ -16,10 +16,21 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+
+def _here() -> Path:
+    """This file's directory. A Databricks serverless python task runs the file without `__file__` (2026-10-14:
+    NameError); its working directory is then the file's directory, so fall back to that."""
+    try:
+        return Path(__file__).resolve().parent
+    except NameError:
+        return Path(os.getcwd())
+
+
+ROOT = _here().parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from aidq_dq_agent import validator  # noqa: E402

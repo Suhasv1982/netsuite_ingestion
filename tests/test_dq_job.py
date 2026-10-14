@@ -135,3 +135,27 @@ def test_validator_job_mode_uses_the_sdk(monkeypatch):
     monkeypatch.setattr(vp, "validate_all", lambda conn, sql, catalog, set_role=True: seen.update(set_role=set_role) or [])
     assert vp.main(["--auth", "sdk"]) == 0
     assert seen == {"set_role": True, "commit": True}
+
+
+def _exec_like_a_job(path: pathlib.Path, monkeypatch):
+    """Run a task file the way a serverless python task does: exec'd, without __file__, cwd = its directory."""
+    monkeypatch.chdir(path.parent)
+    code = compile(path.read_text(encoding="utf-8"), str(path), "exec")
+    exec(code, {"__name__": "__main__"})
+
+
+def test_the_recommender_entry_runs_without___file__(monkeypatch):
+    import aidq_dq_agent.job as job
+
+    monkeypatch.setattr(job, "main", lambda argv=None: 0)
+    with pytest.raises(SystemExit) as e:
+        _exec_like_a_job(ROOT / "src" / "dq_recommender_job.py", monkeypatch)
+    assert e.value.code == 0
+
+
+def test_the_validator_module_loads_without___file__(monkeypatch):
+    path = ROOT / "tools" / "validate_proposals.py"
+    monkeypatch.chdir(path.parent)
+    g = {"__name__": "validate_proposals_as_job"}           # not __main__: load it, do not run main()
+    exec(compile(path.read_text(encoding="utf-8"), str(path), "exec"), g)
+    assert g["ROOT"] == ROOT and callable(g["main"])
