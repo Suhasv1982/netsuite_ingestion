@@ -43,6 +43,20 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
 **Source database (`netsuite-sample`):** production plus backups `pre-synthetic-backup-202609242053`,
 `...202609252235`, `...202609260101`, `...202609260109` (5 of 10 branches).
 
+## 0l. Next agents started (2026-10-15)
+
+* **Migration 008** (shared foundation, schema only, owner-approved): merged (#68) and applied on dev by deploy-dev.
+  `DEACTIVATE_COLUMN`, `ONBOARD_TABLE` (table_id NULL only for it), `requires_rebuild` (set only with validation),
+  incident category `SCHEMA_TYPE_CHANGE`, the two `apply_proposal` branches, change log on `source_table_def`
+  inserts, and the table_id sequence moved past the existing ids (it collided with table 1 on dev). Not applied in prod.
+* **Plans open, waiting for owner decisions (nothing built):** schema drift agent #69 (dq-agent read access to the
+  source schema; `aidq_validator` UPDATE on `requires_rebuild`; the customers columns; 07:30 UTC trigger) and
+  RAG + lineage #70 (schema `workspace.knowledge` and its grants; `vs_endpoint_1` CAN_USE for ci-dev; embedding
+  model). Two Vector Search endpoints exist, so no demo index has to be removed.
+* **Drift today (read-only):** source has `netsuite_customers.created_date` / `updated_date` and
+  `netsuite_transactions.custbody_region` that the metadata lacks; nothing else.
+* Onboarding agent: plan after the drift agent is built (owner order).
+
 ## 0k. DQ recommender done-when items (2026-10-15)
 
 * **Enforcement (item 3):** the scheduled 05:30 dev run on 10-15 (all tasks SUCCESS; generator 05:00 and monitor
