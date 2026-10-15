@@ -43,6 +43,20 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
 **Source database (`netsuite-sample`):** production plus backups `pre-synthetic-backup-202609242053`,
 `...202609252235`, `...202609260101`, `...202609260109` (5 of 10 branches).
 
+## 0m. Schema drift agent built; done-when evidence ready for review (2026-10-15)
+
+* **Grants applied by the owner** (#71, `setup_dq_roles.sh` 17:0x UTC, all checks exact): dq-agent reads the source
+  (Lakebase role on netsuite-sample/production, USAGE on `netsuite`, SELECT on the 5 tables); `aidq_validator` UPDATE
+  on `requires_rebuild`; `workspace.knowledge` created with ci-dev / dq-agent grants; ci-dev CAN_USE on
+  `vs_endpoint_1` (no demo index touched).
+* **Drift agent merged** (#72): job `schema_drift` daily 07:30 UTC as dq-agent; `dq_validator` daily 07:45 and 08:45.
+  Eval on the dev branch `drift-eval` of netsuite-sample (7-day TTL; deleting it early is asked first): PASS.
+* **Real run (17:24 UTC, write, traced):** proposals 46, 47 (`netsuite_customers.created_date` / `updated_date`,
+  full load, `requires_rebuild` false) and 48 (`netsuite_transactions.custbody_region`, incremental,
+  `requires_rebuild` true), all VALIDATED. Waiting for the owner's review; then (if 48 is approved) the guard fails
+  closed on the next run and the dev rebuild runs with the owner's OK (design 3.8).
+* `review.py` prints UTF-8 (a rationale held a narrow no-break space and crashed `show` on the Windows console).
+
 ## 0l. Next agents started (2026-10-15)
 
 * **Migration 008** (shared foundation, schema only, owner-approved): merged (#68) and applied on dev by deploy-dev.
