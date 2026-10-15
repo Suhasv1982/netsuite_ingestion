@@ -22,6 +22,10 @@ tasks:
     fallback: null
     max_tokens: 2000
 
+# Embedding endpoints (not routed: no fallback; changing one means re-embedding the corpus)
+embeddings:
+  knowledge_docs: databricks-gte-large-en   # the docs vector index of the RAG tools (plan #70, owner decision 2026-10-15)
+
 # Illustrative cost estimate only: USD per 1M tokens (input, output). Free Edition is free, and these are NOT
 # Databricks list prices; replace them with the price list before using cost numbers for a decision.
 illustrative_prices_usd_per_1m_tokens:

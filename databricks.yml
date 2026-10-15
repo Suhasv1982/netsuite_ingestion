@@ -249,6 +249,35 @@ targets:
                   - pyyaml
                   - mlflow-skinny>=3.11.1,<4
                   - sqlglot>=30,<31
+        # The knowledge store of the RAG + lineage tools (plan #70): rebuilds the lineage graph and the metadata corpus
+        # in workspace.knowledge and syncs the docs vector index (vs_endpoint_1, databricks-gte-large-en). Runs as the
+        # deploying identity (ci-dev; grants in grants/dev.yml, owner-applied). Daily 07:15 UTC, after the 05:30 dev
+        # run and before schema_drift (07:30), so get_impact is current; also manual.
+        knowledge_refresh:
+          name: knowledge_refresh
+          description: Rebuild the lineage graph, the metadata corpus and its vector index (docs/phase7_rag_lineage_plan.md)
+          schedule:
+            quartz_cron_expression: "0 15 7 * * ?"
+            timezone_id: UTC
+            pause_status: UNPAUSED
+          email_notifications:
+            on_failure:
+              - ${var.notification_email}
+          max_concurrent_runs: 1
+          tasks:
+            - task_key: refresh
+              spark_python_task:
+                python_file: src/knowledge_refresh_job.py
+              environment_key: knowledge
+          environments:
+            - environment_key: knowledge
+              spec:
+                client: "3"
+                dependencies:
+                  - sqlglot>=30,<31
+                  - databricks-sdk>=0.147,<1
+                  - psycopg>=3.1
+                  - pyyaml
         # The validator for PENDING proposals (tools/validate_proposals.py), run as the deploying identity (ci-dev),
         # which does SET LOCAL ROLE aidq_validator before any work. Daily 07:45 (after schema_drift) and 08:45 UTC
         # (after the Sunday dq_recommender), so the owner reviews VALIDATED proposals; a run with nothing PENDING is a
