@@ -1,0 +1,38 @@
+{
+  "checks": {
+    "clean: no change detected": true,
+    "clean: no model call": true,
+    "clean: nothing written": true,
+    "injected: exactly the injected changes detected": true,
+    "injected: netsuite_transactions:added:custcol_eval_channel -> ADD_COLUMN proposal": true,
+    "injected: netsuite_transactions:added:custcol_eval_channel validated, requires_rebuild=True": true,
+    "injected: netsuite_memberships:removed:membership_type -> DEACTIVATE_COLUMN proposal": true,
+    "injected: netsuite_memberships:removed:membership_type validated, requires_rebuild=True": true,
+    "injected: netsuite_transaction_lines:type_changed:line_number -> SCHEMA_TYPE_CHANGE incident": true,
+    "injected: rebuild sentence in every incremental proposal rationale": true
+  },
+  "rows": [
+    {
+      "change": "netsuite_transactions:added:custcol_eval_channel",
+      "expected": "ADD_COLUMN proposal",
+      "written": "ADD_COLUMN proposal",
+      "kind_ok": true,
+      "validator_rebuild_ok": true
+    },
+    {
+      "change": "netsuite_memberships:removed:membership_type",
+      "expected": "DEACTIVATE_COLUMN proposal",
+      "written": "DEACTIVATE_COLUMN proposal",
+      "kind_ok": true,
+      "validator_rebuild_ok": true
+    },
+    {
+      "change": "netsuite_transaction_lines:type_changed:line_number",
+      "expected": "SCHEMA_TYPE_CHANGE incident",
+      "written": "SCHEMA_TYPE_CHANGE incident",
+      "kind_ok": true,
+      "validator_rebuild_ok": null
+    }
+  ],
+  "branch": "drift-eval"
+}

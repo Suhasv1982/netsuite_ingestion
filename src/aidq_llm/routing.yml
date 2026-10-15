@@ -13,6 +13,10 @@ tasks:
     primary: databricks-gpt-oss-120b
     fallback: databricks-qwen3-next-80b-a3b-instruct
     max_tokens: 16000         # v2 answers every candidate (about 35) in one submission
+  drift_rationale:          # the schema drift agent (src/aidq_drift): rationale + relevance per detected change
+    primary: databricks-gpt-oss-120b     # the design's "small model" only once an eval shows one qualifies
+    fallback: databricks-qwen3-next-80b-a3b-instruct
+    max_tokens: 6000
   eval_judge:               # evals/run_agent_eval.py: a fixed yardstick, never escalated
     primary: databricks-qwen35-122b-a10b
     fallback: null

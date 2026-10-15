@@ -206,14 +206,58 @@ targets:
                   - psycopg>=3.1         # plain psycopg: the binary wheel aborts here (generator, 2026-10-01)
                   - pyyaml
                   - mlflow-skinny>=3.11.1,<4   # tracing to a Unity Catalog trace location (step 8)
+        # The schema drift agent (plan #69; docs/phase6_schema_drift_plan.md). Dev-only, runs as dq-agent (read-only
+        # source grants, grants/source.yml dq_agent). Daily 07:30 UTC (owner, 2026-10-15), after the 05:30 dev run;
+        # the model is called only when there is drift. Writes ADD_COLUMN / DEACTIVATE_COLUMN proposals and
+        # SCHEMA_TYPE_CHANGE / SCHEMA_DRIFT incidents; dq_validator follows at 07:45. Traces go to the same
+        # experiment as the DQ recommender (root span "schema_drift").
+        schema_drift:
+          name: schema_drift
+          description: Schema drift agent, run as dq-agent (docs/phase6_schema_drift_plan.md)
+          run_as:
+            service_principal_name: ${var.dq_agent_sp}
+          schedule:
+            quartz_cron_expression: "0 30 7 * * ?"
+            timezone_id: UTC
+            pause_status: UNPAUSED
+          email_notifications:
+            on_failure:
+              - ${var.notification_email}
+          max_concurrent_runs: 1
+          parameters:
+            - name: write
+              default: "true"
+            - name: trace_experiment
+              default: /Shared/aidq/dq_recommender
+          tasks:
+            - task_key: detect_and_propose
+              spark_python_task:
+                python_file: src/schema_drift_job.py
+                parameters: ["--write", "{{job.parameters.write}}",
+                             "--trace-experiment", "{{job.parameters.trace_experiment}}"]
+              environment_key: dq_agent
+          environments:
+            - environment_key: dq_agent
+              spec:
+                client: "3"
+                dependencies:
+                  - langgraph>=1.2,<2
+                  - mcp>=2.3,<3
+                  - anthropic>=1.11,<2
+                  - databricks-sdk>=0.147,<1
+                  - psycopg>=3.1
+                  - pyyaml
+                  - mlflow-skinny>=3.11.1,<4
+                  - sqlglot>=30,<31
         # The validator for PENDING proposals (tools/validate_proposals.py), run as the deploying identity (ci-dev),
-        # which does SET LOCAL ROLE aidq_validator before any work. Weekly, Sundays 08:45 UTC, after the
-        # dq_recommender run (which takes a few minutes), so the owner reviews VALIDATED proposals; also manual.
+        # which does SET LOCAL ROLE aidq_validator before any work. Daily 07:45 (after schema_drift) and 08:45 UTC
+        # (after the Sunday dq_recommender), so the owner reviews VALIDATED proposals; a run with nothing PENDING is a
+        # no-op. Also manual.
         dq_validator:
           name: dq_validator
           description: Validates PENDING DQ proposals as aidq_validator (docs/phase5_dq_recommender_plan.md step 5)
           schedule:
-            quartz_cron_expression: "0 45 8 ? * SUN"
+            quartz_cron_expression: "0 45 7,8 * * ?"
             timezone_id: UTC
             pause_status: UNPAUSED
           email_notifications:
