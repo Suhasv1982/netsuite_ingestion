@@ -41,6 +41,18 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
 **Source database (`netsuite-sample`):** production plus backups `pre-synthetic-backup-202609242053`,
 `...202609252235`, `...202609260101`, `...202609260109` (5 of 10 branches).
 
+## 0k. DQ recommender done-when items (2026-10-15)
+
+* **Enforcement (item 3):** the scheduled 05:30 dev run on 10-15 (all tasks SUCCESS; generator 05:00 and monitor
+  11:38 normal) enforced the approved rules: rule 12 rejects 80 -> 84 with the day's 4 new violating rows, none in
+  silver; rule 11 rejects 25 (no new NULL keys that day).
+* **Silver-only refresh (item 4), owner's OK 2026-10-15:** job `silver_refresh` (refresh_credentials, then one update:
+  full refresh of the 4 silver tables, rejects and gold recomputed; bronze not in the selection), 15:13-15:17 UTC,
+  nothing else running. Bronze unchanged (rows and content checksums); silver violations of rule 11: 1 -> 0, rule 12:
+  17 -> 0 (silver certifications -13: 4 keys keep an earlier valid version). Report: the "Silver-only refresh" section
+  of `evals/results/dq_eval_2026-10-14_v2.md`; numbers in `evals/results/silver_refresh_2026-10-15.json`.
+* All five done-when items of design v2 section 12 are met (eval report committed with #56/#65).
+
 ## 0j. DQ recommender: first write run, review, tracing (2026-10-14)
 
 * **First write run as dq-agent** (job `dq_recommender`, write=true, 18:43 UTC): 11 PENDING proposals (12-22) and
