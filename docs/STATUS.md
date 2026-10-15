@@ -43,6 +43,20 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
 **Source database (`netsuite-sample`):** production plus backups `pre-synthetic-backup-202609242053`,
 `...202609252235`, `...202609260101`, `...202609260109` (5 of 10 branches).
 
+## 0o. Schema drift agent done-when completed (2026-10-15)
+
+* **Owner approved** proposals 46, 47 (`netsuite_customers.created_date` / `updated_date`, full load) and 48
+  (`netsuite_transactions.custbody_region`, incremental); applied 19:5x UTC.
+* **Guard fails closed as designed:** a dev job run at 20:01 UTC failed in `run_pipeline` with `BLOCKED: the hashed
+  column set of netsuite_transactions changed in source_columns (added custbody_region)` (4 pipeline retries); the
+  other tasks completed.
+* **Dev bronze rebuild** (owner's OK): deploy-dev with `bronze_rebuild=true` 20:20-20:36 UTC, success; dev job
+  SUCCESS; ledger check exact on all four tables; redeployed with `bronze_rebuild=false`.
+* **Columns landed:** `custbody_region` in bronze (25,410 of 35,508 filled, 4 values) and silver (14,664 of 16,902,
+  4 values); the customers dates in bronze on all 3,400 rows. Bronze lines = 106,518 = the source; the ledger's
+  106,497 counts exact duplicate rows once (21 in the source), by design.
+* All items of design 3.8 are met.
+
 ## 0n. RAG + lineage built; done-when evidence ready for review (2026-10-15)
 
 * **Knowledge store live** (#74; job `knowledge_refresh` as ci-dev, daily 07:15 UTC): `workspace.knowledge.nodes`
