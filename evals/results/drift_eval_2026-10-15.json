@@ -9,6 +9,7 @@
     "injected: netsuite_memberships:removed:membership_type -> DEACTIVATE_COLUMN proposal": true,
     "injected: netsuite_memberships:removed:membership_type validated, requires_rebuild=True": true,
     "injected: netsuite_transaction_lines:type_changed:line_number -> SCHEMA_TYPE_CHANGE incident": true,
+    "injected: the removed column's proposal carries get_impact evidence": true,
     "injected: rebuild sentence in every incremental proposal rationale": true
   },
   "rows": [

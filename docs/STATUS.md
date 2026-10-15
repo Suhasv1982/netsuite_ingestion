@@ -43,6 +43,25 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
 **Source database (`netsuite-sample`):** production plus backups `pre-synthetic-backup-202609242053`,
 `...202609252235`, `...202609260101`, `...202609260109` (5 of 10 branches).
 
+## 0n. RAG + lineage built; done-when evidence ready for review (2026-10-15)
+
+* **Knowledge store live** (#74; job `knowledge_refresh` as ci-dev, daily 07:15 UTC): `workspace.knowledge.nodes`
+  (165) / `edges` (241) / `docs` (295, CDF on) and the Delta-sync index `docs_index` on `vs_endpoint_1`
+  (databricks-gte-large-en), READY. No demo index touched.
+* **Owner read grant** on `workspace.knowledge` (USE SCHEMA, SELECT, as approved in #71) applied by hand 2026-10-15:
+  `apply_grants.py` had skipped it because it treated the schema owner as covered, but owning a schema does not give
+  SELECT on tables ci-dev created there. Fixed: no owner exemption on schemas.
+* **Tools** (aidq_mcp, read-only): `get_impact`, `get_upstream`, `explain_history`, `search_metadata` (REST query:
+  the CLI's `query-index` fails to parse the response; hits below 0.55 dropped).
+* **Eval** (`evals/results/rag_eval_2026-10-15.md`): PASS. Impact / upstream 10/10 exact; history recall@5 90% (the
+  miss: "loaded in full every run" vs the table doc's "FullLoad"); 5/5 off-topic questions with no hit above 0.55
+  (relevant hits 0.62-0.76, best off-topic 0.45-0.50); a citation on every hit; explain_history checks pass.
+* **Drift agent uses get_impact** in its evidence (removed / retyped column: the column's downstream; added column:
+  the table's). Drift eval re-run (repeatable now): PASS, the removed column's proposal carries the impact. The open
+  real proposals 46-48 predate this; the next real drift writes it.
+* Using the tools from Claude Code: the existing `aidq_mcp` server (`python -m aidq_mcp --profile DEFAULT`) now lists
+  the four tools.
+
 ## 0m. Schema drift agent built; done-when evidence ready for review (2026-10-15)
 
 * **Grants applied by the owner** (#71, `setup_dq_roles.sh` 17:0x UTC, all checks exact): dq-agent reads the source

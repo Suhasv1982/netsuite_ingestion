@@ -145,25 +145,44 @@ def rationale_for(c: Change, model_text: str) -> str:
     return text
 
 
-def submit(changes: list[Change], reviews: dict[str, dict], profiles: dict, write_tools, meta: dict) -> list[dict]:
+def impact_of(get_impact, c: Change) -> dict | str:
+    """The lineage impact for the evidence (plan #70's get_impact): for a removed or retyped column, the column's
+    downstream; for an added column or a table, the table's (what consumes the table today). Best effort."""
+    if get_impact is None:
+        return "not available (no lineage graph)"
+    obj = f"{c.table}.{c.column}" if c.kind in ("removed", "type_changed") else c.table
+    try:
+        out = get_impact("dev", obj)
+    except Exception as exc:  # noqa: BLE001 -- evidence only
+        return f"not available ({type(exc).__name__}: {str(exc)[:100]})"
+    if out.get("status") != "ok":
+        return f"not available ({out.get('error') or out.get('reason')})"
+    nodes = (out.get("nodes") or {}).get("items", [])
+    return {"object": out["object"], "counts": out.get("counts"),
+            "gold_and_rules": [n["node"] for n in nodes if n["node"].startswith(("gold:", "rule:"))],
+            "source": "get_impact (lineage graph, workspace.knowledge)"}
+
+
+def submit(changes: list[Change], reviews: dict[str, dict], profiles: dict, write_tools, meta: dict,
+           get_impact=None) -> list[dict]:
     """Every change through the write toolbox; returns [{change, kind, result}]."""
     out = []
     for c in changes:
         r = reviews[c.id]
         evidence = {"change": c.as_dict(), "profile": profiles.get(c.id), "relevance": r["relevance"],
-                    "impact": "not available (the lineage graph, plan #70, is not built yet)", **meta}
+                    "impact": impact_of(get_impact, c), **meta}
         text = rationale_for(c, r["rationale"])
         if c.kind == "added" and c.proposed_type:
             res = write_tools.submit_column_proposal({"proposal_type": "ADD_COLUMN", "table": c.table,
                                                       "column_name": c.column, "data_type": c.proposed_type,
                                                       "ordinal": c.ordinal, "rationale": text, "evidence": evidence,
                                                       "confidence": r["confidence"]})
-            out.append({"change": c, "written": "ADD_COLUMN proposal", "result": res})
+            out.append({"change": c, "written": "ADD_COLUMN proposal", "result": res, "evidence": evidence})
         elif c.kind == "removed" and not c.key_column:
             res = write_tools.submit_column_proposal({"proposal_type": "DEACTIVATE_COLUMN", "table": c.table,
                                                       "column_name": c.column, "rationale": text,
                                                       "evidence": evidence, "confidence": r["confidence"]})
-            out.append({"change": c, "written": "DEACTIVATE_COLUMN proposal", "result": res})
+            out.append({"change": c, "written": "DEACTIVATE_COLUMN proposal", "result": res, "evidence": evidence})
         else:
             category = "SCHEMA_TYPE_CHANGE" if c.kind == "type_changed" else "SCHEMA_DRIFT"
             why = {"type_changed": "type changed", "removed": "the business key or watermark column is gone",
@@ -174,12 +193,12 @@ def submit(changes: list[Change], reviews: dict[str, dict], profiles: dict, writ
                 "suggested_fix": ("onboard the table (onboarding agent)" if c.kind == "unonboarded"
                                   else "decide by hand; no proposal is made for this change"),
                 "evidence": evidence})
-            out.append({"change": c, "written": f"{category} incident", "result": res})
+            out.append({"change": c, "written": f"{category} incident", "result": res, "evidence": evidence})
     return out
 
 
 async def run(pg_query, source_endpoint: str, metadata_endpoint: str, reviewer, write_tools, trace_id: str,
-              meta: dict | None = None, now=None, tracer=None) -> dict:
+              meta: dict | None = None, now=None, tracer=None, get_impact=None) -> dict:
     """One run. Returns {report, exit_code, changes, submitted}."""
     from aidq_dq_agent.tracing import NullTracer
 
@@ -207,7 +226,8 @@ async def run(pg_query, source_endpoint: str, metadata_endpoint: str, reviewer, 
     store_error = None
     with tracer.span("submit", "TOOL", {"changes": len(changes)}) as span:
         try:
-            submitted = submit(changes, reviews, profiles, write_tools, {"prompt_version": PROMPT_VERSION, **(meta or {})})
+            submitted = submit(changes, reviews, profiles, write_tools, {"prompt_version": PROMPT_VERSION, **(meta or {})},
+                               get_impact)
         except Exception as exc:  # noqa: BLE001 -- keep the review in the report
             store_error = f"{type(exc).__name__}: {str(exc)[:300]}"
         span.set_outputs([{"change": s["change"].id, "result": s["result"]} for s in submitted])

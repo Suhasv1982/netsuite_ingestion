@@ -107,7 +107,9 @@ class KnowledgeTools:
         if not (question or "").strip():
             raise config.ConfigError("search_metadata needs a question")
         k = config.clamp("k", k, 5, MAX_K)
-        res = self.reads.cli("vector-search-indexes", "query-index", INDEX,
+        # the REST endpoint, not `databricks vector-search-indexes query-index`: the CLI fails to parse the response
+        # (2026-10-15); `api post` is the same path the warehouse statements use, and SdkReads maps it in a job
+        res = self.reads.cli("api", "post", f"/api/2.0/vector-search/indexes/{INDEX}/query",
                              body={"query_text": question, "num_results": k,
                                    "columns": ["id", "type", "object", "source", "text"]})
         cols = [c["name"] for c in (res.get("manifest") or {}).get("columns", [])]

@@ -176,3 +176,20 @@ def test_review_uses_the_validators_requires_rebuild():
 @pytest.mark.parametrize("t", ["date", "integer", "text", "timestamp without time zone", "bigint", "numeric"])
 def test_type_map_covers_the_source_types(t):
     assert detect.metadata_type(t)
+
+
+def test_impact_evidence_uses_the_column_for_removals_and_the_table_for_additions():
+    asked = []
+
+    def get_impact(env, obj):
+        asked.append(obj)
+        return {"status": "ok", "object": f"source:{obj}", "counts": {"gold": 1},
+                "nodes": {"items": [{"node": "gold:g", "path": "x"}, {"node": "silver:t.c", "path": "y"}]}}
+
+    removed = Change("t", "removed", "c", incremental=True)
+    added = Change("t", "added", "d", incremental=True)
+    assert agent.impact_of(get_impact, removed)["gold_and_rules"] == ["gold:g"]
+    agent.impact_of(get_impact, added)
+    assert asked == ["t.c", "t"]
+    assert agent.impact_of(None, removed).startswith("not available")
+    assert agent.impact_of(lambda e, o: {"status": "error", "error": "unknown object"}, removed).startswith("not available")

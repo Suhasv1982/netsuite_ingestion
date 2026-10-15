@@ -67,10 +67,12 @@ def execute(*, sdk: bool, profile: str | None, write: bool, source_endpoint: str
             wt = WriteTools(connect, f"schema_drift@{VERSION}", trace_id, dry_run=not write)
             router = ctx["router"] = Router(DatabricksChat(profile), AGENT, pinned_model=model, trace_id=trace_id,
                                             tracer=tracer if tracer.enabled else None)
+            from aidq_mcp.server import Tools
+
             state = await run(reads.pg_query, source_endpoint or cfg.source_endpoint, cfg.metadata_endpoint,
                               ModelReviewer(router), wt, trace_id,
                               meta={"trace_experiment_id": tracer.experiment_id} if tracer.enabled else None,
-                              tracer=tracer)
+                              tracer=tracer, get_impact=Tools(reads).get_impact)
             root.set_outputs({"exit_code": state["exit_code"], "report": state["report"]})
             return state
 

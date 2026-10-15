@@ -116,7 +116,7 @@ class FakeReads:
         raise AssertionError(statement)
 
     def cli(self, *args, body=None):
-        assert args[:2] == ("vector-search-indexes", "query-index") and body["num_results"] <= 10
+        assert args[:2] == ("api", "post") and args[2] == "/api/2.0/vector-search/indexes/workspace.knowledge.docs_index/query" and body["num_results"] <= 10
         return {"manifest": {"columns": [{"name": c} for c in ("id", "type", "object", "source", "text", "score")]},
                 "result": {"data_array": list(self.search_rows)}}
 

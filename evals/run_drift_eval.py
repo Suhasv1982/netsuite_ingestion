@@ -32,6 +32,10 @@ CLEAN_DDL = [
     "ALTER TABLE netsuite.netsuite_customers DROP COLUMN IF EXISTS created_date",
     "ALTER TABLE netsuite.netsuite_customers DROP COLUMN IF EXISTS updated_date",
     "ALTER TABLE netsuite.netsuite_transactions DROP COLUMN IF EXISTS custbody_region",
+    # undo a previous run's injection, so the eval can be repeated on the same branch
+    "ALTER TABLE netsuite.netsuite_transactions DROP COLUMN IF EXISTS custcol_eval_channel",
+    "ALTER TABLE netsuite.netsuite_memberships ADD COLUMN IF NOT EXISTS membership_type text",
+    "ALTER TABLE netsuite.netsuite_transaction_lines ALTER COLUMN line_number TYPE integer",
 ]
 INJECT_DDL = [
     "ALTER TABLE netsuite.netsuite_transactions ADD COLUMN IF NOT EXISTS custcol_eval_channel text",
@@ -81,7 +85,10 @@ def phase(profile: str, endpoint: str) -> dict:
     cfg, reads = env_config("dev"), Reads(profile)
     wt = WriteTools(cli_connect(reads, cfg.metadata_endpoint), f"schema_drift@{VERSION}-eval", "eval", dry_run=True)
     reviewer = CountingReviewer(agent.ModelReviewer(Router(DatabricksChat(profile), "aidq_drift_eval", trace_id="eval")))
-    state = asyncio.run(agent.run(reads.pg_query, endpoint, cfg.metadata_endpoint, reviewer, wt, "eval"))
+    from aidq_mcp.server import Tools
+
+    state = asyncio.run(agent.run(reads.pg_query, endpoint, cfg.metadata_endpoint, reviewer, wt, "eval",
+                                  get_impact=Tools(reads).get_impact))
     return {"state": state, "model_calls": reviewer.calls, "reads": reads, "endpoint": endpoint}
 
 
@@ -119,6 +126,9 @@ def score(clean: dict, injected: dict) -> dict:
         checks[f"injected: {cid} -> {written}"] = ok_kind
         if ok_rebuild is not None:
             checks[f"injected: {cid} validated, requires_rebuild={rebuild}"] = ok_rebuild
+    removed = next((s for s in injected["state"]["submitted"] if s["change"].kind == "removed"), None)
+    checks["injected: the removed column's proposal carries get_impact evidence"] = bool(
+        removed and isinstance(removed["evidence"]["impact"], dict) and removed["evidence"]["impact"]["object"])
     report = injected["state"]["report"]
     checks["injected: rebuild sentence in every incremental proposal rationale"] = report.count("bronze rebuild") >= 2
     return {"checks": checks, "rows": rows, "pass": all(checks.values())}
