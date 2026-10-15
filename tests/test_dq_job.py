@@ -95,8 +95,11 @@ def test_bundle_dev_jobs_run_as_dq_agent_and_the_deployer():
     rec, val = jobs["dq_recommender"], jobs["dq_validator"]
     assert rec["run_as"] == {"service_principal_name": "${var.dq_agent_sp}"}
     assert "run_as" not in val                       # the deploying identity (ci-dev), which SETs ROLE aidq_validator
-    assert "schedule" not in rec and "schedule" not in val    # manual runs only for now
-    assert rec["parameters"] == [{"name": "write", "default": "false"},
+    # weekly, Sundays, outside the daily 05:00-07:00 window; the validator after the agent (owner, 2026-10-15)
+    assert rec["schedule"] == {"quartz_cron_expression": "0 0 8 ? * SUN", "timezone_id": "UTC", "pause_status": "UNPAUSED"}
+    assert val["schedule"]["quartz_cron_expression"] == "0 45 8 ? * SUN" and val["schedule"]["pause_status"] == "UNPAUSED"
+    assert rec["email_notifications"] == val["email_notifications"] == {"on_failure": ["${var.notification_email}"]}
+    assert rec["parameters"] == [{"name": "write", "default": "true"},
                                  {"name": "trace_experiment", "default": "/Shared/aidq/dq_recommender"}]
     assert rec["tasks"][0]["spark_python_task"] == {
         "python_file": "src/dq_recommender_job.py",
