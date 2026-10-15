@@ -35,7 +35,8 @@ def test_the_agent_can_only_read_and_insert(spec):
 
 def test_validator_and_reviewer_columns(spec):
     sql = dr.role_sql(spec, P)
-    assert 'GRANT UPDATE ("status", "validation_result") ON aidq_metadata."config_proposals" TO "aidq_validator"' in sql
+    assert ('GRANT UPDATE ("status", "validation_result", "requires_rebuild") ON aidq_metadata."config_proposals" '
+            'TO "aidq_validator"') in sql
     assert any('"approved_severity"' in s and '"aidq_reviewer"' in s for s in sql)
     assert not any('"approved_severity"' in s and '"aidq_validator"' in s for s in sql)
     assert 'GRANT EXECUTE ON FUNCTION aidq_metadata.apply_proposal(bigint, text) TO "aidq_reviewer"' in sql
@@ -63,7 +64,8 @@ def _actual(spec, **over):
                          "aidq_llm_logger": {("llm_calls", "INSERT")}},
          "select_complete": {r: True for r in spec},
          "column_privs": {"aidq_validator": {("config_proposals", "status", "UPDATE"),
-                                            ("config_proposals", "validation_result", "UPDATE")},
+                                            ("config_proposals", "validation_result", "UPDATE"),
+                                            ("config_proposals", "requires_rebuild", "UPDATE")},
                           "aidq_reviewer": {("config_proposals", c, "UPDATE") for c in
                                             ("status", "reviewed_by", "reviewed_at", "review_comment", "approved_severity")}},
          "exec": {"aidq_reviewer": {"apply_proposal"}, "aidq_llm_logger": {"prune_llm_calls"}}}

@@ -1,7 +1,12 @@
-"""Verify (CI) or apply (owner) the source grants in grants/source.yml for the data-generator role.
+"""Verify (CI) or apply (owner) the source grants in grants/source.yml, for every role listed there (data-generator,
+dq-agent).
 
-    python tools/apply_pg_grants.py --check                     # CI, as ci-dev: exact match or exit 1
-    python tools/apply_pg_grants.py --apply --profile DEFAULT   # the owner: GRANT what is missing
+    python tools/apply_pg_grants.py --check                                 # CI, as ci-dev: exact match or exit 1
+    python tools/apply_pg_grants.py --apply --profile DEFAULT               # the owner: GRANT what is missing
+    python tools/apply_pg_grants.py --apply --only dq_agent --role <app id> --profile DEFAULT
+
+A role is identified by its role_variable (e.g. DATA_GENERATOR_SP) or, with --only, by --role; a role without an id in
+this environment is skipped and reported, never failed (CI passes only the variables its step has).
 
 --check fails on anything missing AND on anything extra: a privilege not listed for a table (e.g. DELETE, TRUNCATE,
 UPDATE on an append-only table), ownership of a source table, or membership in another role. --apply only grants
@@ -100,15 +105,37 @@ def main(argv: list[str] | None = None) -> int:
     mode = p.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true")
     mode.add_argument("--apply", action="store_true")
-    p.add_argument("--role", help="Postgres role (default: the role_variable environment variable)")
+    p.add_argument("--only", help="one role key from grants/source.yml (e.g. dq_agent)")
+    p.add_argument("--role", help="with --only: the Postgres role (default: its role_variable environment variable)")
     p.add_argument("--profile")
     args = p.parse_args(argv)
 
-    spec = yaml.safe_load(SPEC.read_text(encoding="utf-8"))
-    role = args.role or os.environ.get(spec["role_variable"])
-    if not role:
-        print(f"FAILED: no role (set {spec['role_variable']} or --role)")
+    roles = load_roles()
+    if args.only:
+        if args.only not in roles:
+            print(f"FAILED: unknown role key {args.only!r} (one of {sorted(roles)})")
+            return 1
+        roles = {args.only: roles[args.only]}
+    elif args.role:
+        print("FAILED: --role needs --only")
         return 1
+    failed = 0
+    for key, spec in roles.items():
+        role = args.role or os.environ.get(spec["role_variable"])
+        if not role:
+            print(f"SKIPPED  {key}: {spec['role_variable']} is not set here (not checked)")
+            continue
+        print(f"== {key}")
+        failed += one_role(args, role, spec)
+    return 1 if failed else 0
+
+
+def load_roles(path: Path = SPEC) -> dict[str, dict]:
+    """role key -> spec (role_variable, schema_usage, tables, database)."""
+    return yaml.safe_load(path.read_text(encoding="utf-8"))["roles"]
+
+
+def one_role(args, role: str, spec: dict) -> int:
     with connect(args.profile) as conn:
         info = inspect(conn, role, spec)
         if not info["exists"]:

@@ -37,6 +37,26 @@ grants:
     schemas: [aidq_traces]
     privileges: [USE_SCHEMA, SELECT, MODIFY]
 
+  # The knowledge store of the RAG + lineage agent (plan #70; owner decisions 2026-10-15): schema workspace.knowledge
+  # (nodes, edges, docs and the docs vector index). The refresh job writes it as ci-dev; the agents read it as
+  # dq-agent; the owner reads it from Claude Code. Owner-applied (the owner creates and owns the schema).
+  - principal: ci
+    applied_by: owner
+    schemas: [knowledge]
+    privileges: [USE_SCHEMA, CREATE_TABLE, SELECT, MODIFY]
+    # the docs index lives on the existing endpoint vs_endpoint_1 (no demo index is removed)
+    vector_search_endpoints:
+      - {name: vs_endpoint_1, level: CAN_USE}
+  - principal: agent
+    applied_by: owner
+    optional: true
+    schemas: [knowledge]
+    privileges: [USE_SCHEMA, SELECT]
+  - principal: owner
+    applied_by: owner
+    schemas: [knowledge]
+    privileges: [USE_SCHEMA, SELECT]
+
   # dq-agent, the DQ recommender's service principal (docs/dq_recommender_design_v2.md section 3): read bronze, silver
   # and rejects, use the SQL warehouse for profiling. Owner-applied (tools/setup_dq_roles.sh): CI can grant neither
   # USE CATALOG nor without the principal. No grant on the databricks-gpt-oss-120b endpoint: it is a pay-per-token
@@ -63,7 +83,9 @@ metadata_roles:
     members: [ci]
     select_all: true
     update:
-      config_proposals: [status, validation_result]
+      # requires_rebuild (migration 008): set for ADD_COLUMN / DEACTIVATE_COLUMN on incremental tables only
+      # (owner decision 2026-10-15, plan #69)
+      config_proposals: [status, validation_result, requires_rebuild]
   aidq_reviewer:       # tools/review.py, run by a person
     members: [owner]
     select_all: true

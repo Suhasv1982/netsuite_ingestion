@@ -80,6 +80,24 @@ def desired_warehouse_permissions(spec: dict, principals: dict[str, str], owner_
     return out
 
 
+def desired_vs_endpoint_permissions(spec: dict, principals: dict[str, str],
+                                     owner_applied: bool | None = None) -> dict[str, dict[str, str]]:
+    """Vector Search endpoint name -> principal -> permission level."""
+    out: dict[str, dict[str, str]] = {}
+    for g, who in _entries(spec, principals, owner_applied):
+        for e in g.get("vector_search_endpoints", []):
+            out.setdefault(e["name"], {})[who] = e["level"]
+    return out
+
+
+VS_LEVELS = ["CAN_CREATE", "CAN_USE", "CAN_MANAGE"]
+
+
+def has_vs_level(have: set[str], want: str) -> bool:
+    """CAN_MANAGE includes CAN_USE; CAN_CREATE (every workspace user's default) does not count as CAN_USE."""
+    return want in have or "CAN_MANAGE" in have
+
+
 def missing_privileges(desired: dict[str, set[str]], current: dict[str, set[str]], owner: str | None = None) -> dict[str, list[str]]:
     """principal -> privileges still to grant. The securable's owner, and ALL_PRIVILEGES, cover everything."""
     out = {}
@@ -123,6 +141,16 @@ def current_grants(profile, kind: str, name: str) -> dict[str, set[str]]:
     return {a["principal"]: set(a.get("privileges") or []) for a in d.get("privilege_assignments", [])}
 
 
+def permission_acl(profile, object_type: str, object_id: str) -> dict[str, set[str]]:
+    """principal -> permission levels on a workspace object (warehouses, vector-search-endpoints, ...)."""
+    d = _cli(profile, "permissions", "get", object_type, object_id)
+    out: dict[str, set[str]] = {}
+    for a in d.get("access_control_list", []):
+        who = a.get("service_principal_name") or a.get("user_name") or a.get("group_name")
+        out.setdefault(who, set()).update(p.get("permission_level") for p in a.get("all_permissions", []))
+    return out
+
+
 def warehouse_acl(profile, warehouse_id: str) -> dict[str, set[str]]:
     d = _cli(profile, "permissions", "get", "warehouses", warehouse_id)
     out: dict[str, set[str]] = {}
@@ -164,14 +192,28 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"FAILED   {label}: {who} += {', '.join(privs)}: {exc}")
                 failed += 1
 
+    def not_inspectable(label, exc, report_only) -> bool:
+        """An owner-applied securable this identity cannot read (not created yet, or no permission to read its
+        ACL): reported as pending, not a failure, in report-only mode (CI). True when it is only reported."""
+        if report_only:
+            print(f"PENDING  {label}: not inspectable here ({str(exc)[:120]}); the owner applies it")
+            return True
+        print(f"FAILED   {label}: {str(exc)[:200]}")
+        return False
+
     # CI applies the plain entries and only reports the owner-applied ones; --owner-applied does the reverse.
     for owner_applied in (False, True):
         report_only = owner_applied != args.owner_applied
         if args.owner_applied and not owner_applied:
             continue
         for schema, wanted in desired_grants(spec, principals, owner_applied).items():
-            need = missing_privileges(wanted, current_grants(args.profile, "schema", schema),
-                                      securable_owner(args.profile, "schema", schema))
+            try:
+                need = missing_privileges(wanted, current_grants(args.profile, "schema", schema),
+                                          securable_owner(args.profile, "schema", schema))
+            except RuntimeError as exc:
+                if not not_inspectable(schema, exc, report_only):
+                    failed += 1
+                continue
             if not need:
                 print(f"OK       {schema}")
             handle(schema, need, lambda pr, pv, s=schema: _cli(args.profile, "grants", "update", "schema", s,
@@ -197,6 +239,21 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"OK       warehouse {wname}")
             handle(f"warehouse {wname}", need, lambda pr, pv, wid=ids[0]: _cli(
                 args.profile, "permissions", "update", "warehouses", wid,
+                body={"access_control_list": [{"service_principal_name": pr, "permission_level": pv[0]}]}),
+                report_only)
+        for ename, levels in desired_vs_endpoint_permissions(spec, principals, owner_applied).items():
+            try:
+                eid = _cli(args.profile, "vector-search-endpoints", "get-endpoint", ename)["id"]
+                acl = permission_acl(args.profile, "vector-search-endpoints", eid)
+            except RuntimeError as exc:
+                if not not_inspectable(f"vector search endpoint {ename}", exc, report_only):
+                    failed += 1
+                continue
+            need = {pr: [lvl] for pr, lvl in levels.items() if not has_vs_level(acl.get(pr, set()), lvl)}
+            if not need:
+                print(f"OK       vector search endpoint {ename}")
+            handle(f"vector search endpoint {ename}", need, lambda pr, pv, i=eid: _cli(
+                args.profile, "permissions", "update", "vector-search-endpoints", i,
                 body={"access_control_list": [{"service_principal_name": pr, "permission_level": pv[0]}]}),
                 report_only)
     return 1 if failed else 0

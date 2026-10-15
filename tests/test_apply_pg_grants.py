@@ -4,9 +4,10 @@ import pytest
 
 yaml = pytest.importorskip("yaml")
 
-from apply_pg_grants import SPEC, diff_table_privileges, grant_statements  # noqa: E402
+from apply_pg_grants import diff_table_privileges, grant_statements, load_roles  # noqa: E402
 
-TABLES = yaml.safe_load(SPEC.read_text(encoding="utf-8"))["tables"]
+ROLES = load_roles()
+TABLES = ROLES["data_generator"]["tables"]
 
 
 def test_spec_is_least_privilege():
@@ -37,3 +38,22 @@ def test_grant_statements_quote_the_role():
         'GRANT CREATE ON DATABASE databricks_postgres TO "9ae7-x"',
         'GRANT UPDATE ON netsuite.netsuite_customers TO "9ae7-x"',
     ]
+
+
+def test_dq_agent_reads_the_five_source_tables_and_nothing_else():
+    dq = ROLES["dq_agent"]
+    assert dq["role_variable"] == "DQ_AGENT_SP" and dq["schema_usage"] == ["netsuite"] and dq["database"] == ["CONNECT"]
+    assert set(dq["tables"]) == set(TABLES)                      # the same five tables as the generator
+    assert all(privs == ["SELECT"] for privs in dq["tables"].values())
+
+
+def test_a_role_without_an_id_is_skipped_not_failed(monkeypatch, capsys):
+    import apply_pg_grants as g
+
+    monkeypatch.delenv("DATA_GENERATOR_SP", raising=False)
+    monkeypatch.delenv("DQ_AGENT_SP", raising=False)
+    monkeypatch.setattr(g, "connect", lambda profile: (_ for _ in ()).throw(AssertionError("no connection expected")))
+    assert g.main(["--check"]) == 0
+    out = capsys.readouterr().out
+    assert "SKIPPED  data_generator: DATA_GENERATOR_SP is not set here" in out and "SKIPPED  dq_agent" in out
+    assert g.main(["--check", "--role", "x"]) == 1                # --role needs --only

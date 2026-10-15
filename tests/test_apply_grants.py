@@ -82,9 +82,10 @@ class TestPrincipalTypesAndOwnerApplied:
     def test_ci_entries_are_unchanged(self):
         spec = yaml.safe_load((GRANTS_DIR / "dev.yml").read_text(encoding="utf-8"))
         assert desired_grants(spec, ALL, owner_applied=False) == desired_grants(spec, PRINCIPALS, owner_applied=False)
-        # the only owner-applied entry for ci-dev: read access to the manifests for the DQ eval workflow
+        # owner-applied for ci-dev: read the manifests (DQ eval workflow), write the knowledge store (plan #70)
         owner_ci = {s: g["sp-1"] for s, g in desired_grants(spec, PRINCIPALS, owner_applied=True).items() if "sp-1" in g}
-        assert owner_ci == {"workspace.generator": {"USE_SCHEMA", "SELECT"}}
+        assert owner_ci == {"workspace.generator": {"USE_SCHEMA", "SELECT"},
+                            "workspace.knowledge": {"USE_SCHEMA", "CREATE_TABLE", "SELECT", "MODIFY"}}
 
     def test_unknown_principal_type_is_an_error(self):
         with pytest.raises(ValueError, match="unknown principal type"):

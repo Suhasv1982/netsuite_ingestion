@@ -1,19 +1,38 @@
-# Postgres grants on the source, Lakebase netsuite-sample / production, database databricks_postgres, for the
-# data-generator service principal (run identity of the daily generator job). Least privilege, derived from the SQL the
-# generator runs for --increment with --backup schema (tools/pg_writer.py):
-#   SELECT  reads existing rows, the backup copy, and the customers upsert (ON CONFLICT DO UPDATE)
-#   INSERT  COPY ... FROM STDIN of the new rows, and the customers upsert
-#   UPDATE  customers only (the upsert); the four incremental tables are append-only
-#   CREATE on the database: its own netsuite_backup_daily_<stamp> schemas (it owns, and later drops, only those)
-# Applied by the owner (tools/apply_pg_grants.py --apply); verified in CI (--check), which also fails on any privilege
-# not listed here (DELETE, TRUNCATE, ...), on ownership of a source table and on membership in another role.
+# Postgres grants on the source, Lakebase netsuite-sample / production, database databricks_postgres, one entry per
+# service principal. Applied by the owner (tools/apply_pg_grants.py --apply); verified in CI (--check), which also
+# fails on any privilege not listed here (DELETE, TRUNCATE, ...), on ownership of a source table and on membership in
+# another role. A role whose id variable is not set in that environment is skipped and reported (e.g. dq-agent in a
+# CI step that does not pass DQ_AGENT_SP).
 # ALTER (schema drift) is owner-only and never granted: drift experiments use an on-demand dev branch of the source.
-role_variable: DATA_GENERATOR_SP
-schema_usage: [netsuite]
-tables:
-  netsuite.netsuite_customers: [SELECT, INSERT, UPDATE]
-  netsuite.netsuite_memberships: [SELECT, INSERT]
-  netsuite.netsuite_certifications: [SELECT, INSERT]
-  netsuite.netsuite_transactions: [SELECT, INSERT]
-  netsuite.netsuite_transaction_lines: [SELECT, INSERT]
-database: [CONNECT, CREATE]
+roles:
+  # data-generator, run identity of the daily generator job. Least privilege, derived from the SQL the generator runs
+  # for --increment with --backup schema (tools/pg_writer.py):
+  #   SELECT  reads existing rows, the backup copy, and the customers upsert (ON CONFLICT DO UPDATE)
+  #   INSERT  COPY ... FROM STDIN of the new rows, and the customers upsert
+  #   UPDATE  customers only (the upsert); the four incremental tables are append-only
+  #   CREATE on the database: its own netsuite_backup_daily_<stamp> schemas (it owns, and later drops, only those)
+  data_generator:
+    role_variable: DATA_GENERATOR_SP
+    schema_usage: [netsuite]
+    tables:
+      netsuite.netsuite_customers: [SELECT, INSERT, UPDATE]
+      netsuite.netsuite_memberships: [SELECT, INSERT]
+      netsuite.netsuite_certifications: [SELECT, INSERT]
+      netsuite.netsuite_transactions: [SELECT, INSERT]
+      netsuite.netsuite_transaction_lines: [SELECT, INSERT]
+    database: [CONNECT, CREATE]
+
+  # dq-agent, run identity of the DQ recommender and the schema drift agent (owner decision 2026-10-15, plan #69):
+  # read only. The drift agent compares the source information_schema.columns with the metadata (Postgres shows a
+  # table's columns only to a role with a privilege on it) and profiles a new column (null rate, distinct count) for
+  # its evidence. A newly onboarded source table (e.g. netsuite_items) needs the same SELECT (onboarding plan).
+  dq_agent:
+    role_variable: DQ_AGENT_SP
+    schema_usage: [netsuite]
+    tables:
+      netsuite.netsuite_customers: [SELECT]
+      netsuite.netsuite_memberships: [SELECT]
+      netsuite.netsuite_certifications: [SELECT]
+      netsuite.netsuite_transactions: [SELECT]
+      netsuite.netsuite_transaction_lines: [SELECT]
+    database: [CONNECT]
