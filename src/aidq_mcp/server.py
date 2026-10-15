@@ -16,6 +16,7 @@ from mcp.types import ToolAnnotations
 
 from . import config, logic
 from .dq_tools import DqTools
+from .knowledge_tools import KnowledgeTools
 from .reads import Unavailable
 
 UTC = dt.timezone.utc
@@ -48,9 +49,10 @@ def tool_result(fn: Callable) -> Callable:
 MONITOR_TOOLS = ("get_recent_job_runs", "get_table_health", "get_pipeline_errors", "compare_bronze_to_source",
                  "get_recent_deploys")
 DQ_TOOLS = ("get_dq_rules", "get_open_and_rejected_proposals", "profile_table", "get_rejects_summary")
+KNOWLEDGE_TOOLS = ("get_impact", "get_upstream", "explain_history", "search_metadata")
 
 
-class Tools(DqTools):
+class Tools(DqTools, KnowledgeTools):
     def __init__(self, reads, now: Callable[[], dt.datetime] = lambda: dt.datetime.now(UTC)):
         self.reads, self.now = reads, now
 
@@ -307,6 +309,8 @@ class Tools(DqTools):
 
 for _name in DQ_TOOLS:   # the same status / redaction wrapper as the monitor's tools
     setattr(Tools, _name, tool_result(getattr(DqTools, _name)))
+for _name in KNOWLEDGE_TOOLS:
+    setattr(Tools, _name, tool_result(getattr(KnowledgeTools, _name)))
 
 
 INSTRUCTIONS = (
@@ -382,5 +386,31 @@ def build_server(tools: Tools) -> MCPServer:
         """Rows currently in poc_reject.rejected_rows per table and failed HARD rule, and the reject counts of the
         last `runs` runs (default 7, max 30) from run_audit."""
         return tools.get_rejects_summary(env, table, runs)
+
+    @server.tool(annotations=READ_ONLY)
+    def get_impact(env: str = "dev", object: str | None = None) -> dict:  # noqa: A002
+        """Everything downstream of a table, column, gold table/column or rule:<id>, from the lineage graph (bronze,
+        silver, gold columns derived from it, gold tables that filter or join on it, DQ rules that validate it), each
+        with its path. Deterministic: use it for "what breaks if I change X"."""
+        return tools.get_impact(env, object)
+
+    @server.tool(annotations=READ_ONLY)
+    def get_upstream(env: str = "dev", object: str | None = None) -> dict:  # noqa: A002
+        """Everything upstream of an object in the lineage graph (for a gold column: the source columns it is derived
+        from and the columns its table filters and joins on), each with its path. For root-cause questions."""
+        return tools.get_upstream(env, object)
+
+    @server.tool(annotations=READ_ONLY)
+    def explain_history(env: str = "dev", object: str | None = None) -> dict:  # noqa: A002
+        """Proposals (with rationale and the reviewer's comment) and incidents for a table, table.column or
+        rule:<id>, oldest first: "why was this rule added?", "what happened to this table?"."""
+        return tools.explain_history(env, object)
+
+    @server.tool(annotations=READ_ONLY)
+    def search_metadata(env: str = "dev", question: str | None = None, k: int | None = None) -> dict:
+        """Semantic search over the platform's metadata, rules, proposals, incidents, changes and repo docs (top k,
+        default 5, max 10). Each hit has its document id and source: cite them. No hits means nothing relevant was
+        found: say so, do not answer from memory."""
+        return tools.search_metadata(env, question, k)
 
     return server
