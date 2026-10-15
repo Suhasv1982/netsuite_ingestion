@@ -1,6 +1,6 @@
 # Phase 6 plan: schema drift agent
 
-Status: **plan only** (2026-10-15). Design: `docs/agents_next_design.md` section 3. Dev only. Builds on the shared
+Status: **decided, building** (owner decisions 2026-10-15). Design: `docs/agents_next_design.md` section 3. Dev only. Builds on the shared
 foundation (migration 008, merged 2026-10-15) and on the DQ recommender's identity, toolbox, validator, review CLI,
 routing and tracing. Every step below is a separate PR unless noted.
 
@@ -17,27 +17,15 @@ routing and tracing. Every step below is a separate PR unless noted.
 | Generator | `BRONZE_DROPS` says customers' `created_date` / `updated_date` are "pre-existing drift we do NOT fix" (a deliberate earlier choice) |
 | Migration 008 | `DEACTIVATE_COLUMN`, `requires_rebuild`, `SCHEMA_TYPE_CHANGE` exist on dev |
 
-## 1. Open decisions (owner)
+## 1. Decisions (owner, 2026-10-15)
 
-1. **dq-agent needs to read the source schema.** Drift detection compares the source `information_schema.columns`
-   with `source_columns`. In Postgres, `information_schema.columns` shows only columns of tables the role has some
-   privilege on, and dq-agent has no access to `netsuite-sample` today. Options:
-   - **(a, recommended)** a source grant for dq-agent: `USAGE` on schema `netsuite` and `SELECT` on the five tables
-     (`grants/source.yml`, owner-applied; read only). The drift agent can then also profile a new column (null rate,
-     distinct count) for its evidence, as the design asks. It also needs a Lakebase role on `netsuite-sample` and
-     possibly CAN_USE on that project (test first, like dq-agent on aidq-metadata, which needed none).
-   - (b) a narrower grant that exposes only the catalog (no `SELECT`): Postgres has no column-metadata-only privilege
-     short of `REFERENCES`/`SELECT` on columns, so (b) means `SELECT` on no column, which hides the columns: not
-     workable.
-   - (c) detection runs as ci-dev (which already reads the source) in its own job and hands the diff to the agent
-     (as dq-agent) through a table: two jobs and a new hand-off table for a cheap check.
-2. **`aidq_validator` needs `UPDATE (requires_rebuild)` on `config_proposals`** (grant change in `grants/dev.yml`
-   `metadata_roles`, applied by the owner's role script). The validator sets it for `ADD_COLUMN` /
-   `DEACTIVATE_COLUMN` on incremental tables.
-3. **The customers columns.** They were deliberately left out (generator `BRONZE_DROPS`). The agent will propose them
-   (they are real drift); approving or rejecting them is a review decision. If approved: FullLoad, so no rebuild.
-4. **Trigger time.** Daily as the design says, after the dev pipeline: proposed **07:30 UTC** (after the 05:30 run,
-   outside the 05:00-07:00 window), the LLM called only when the diff is non-empty.
+1. **dq-agent reads the source schema:** USAGE on schema `netsuite` and SELECT on the five tables (`grants/source.yml`
+   `dq_agent`, owner-applied, PR #71), plus its Lakebase login role on netsuite-sample / production. The onboarding
+   plan must note that a newly onboarded table (e.g. `netsuite_items`) needs the same SELECT.
+2. **`aidq_validator` gets UPDATE on `requires_rebuild`** (PR #71). The validator sets it **only for incremental
+   tables**: customers is full load, has no row hash, and needs no rebuild.
+3. **The customers date columns:** the agent proposes them; the owner decides at review.
+4. **Trigger:** daily at **07:30 UTC**.
 
 ## 2. Steps
 
