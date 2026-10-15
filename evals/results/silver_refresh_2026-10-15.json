@@ -1,0 +1,234 @@
+{
+  "before": {
+    "bronze": {
+      "netsuite_memberships": {
+        "rows": 8873,
+        "checksum": "-21961499421369333207"
+      },
+      "netsuite_certifications": {
+        "rows": 7101,
+        "checksum": "108326810484524435257"
+      },
+      "netsuite_transactions": {
+        "rows": 35508,
+        "checksum": "451463523612073901380"
+      },
+      "netsuite_transaction_lines": {
+        "rows": 106518,
+        "checksum": "-16596617462460724244"
+      },
+      "netsuite_customers": {
+        "rows": 3400,
+        "checksum": null
+      }
+    },
+    "silver": {
+      "netsuite_memberships": 4215,
+      "netsuite_certifications": 3340,
+      "netsuite_transactions": 16902,
+      "netsuite_transaction_lines": 50710
+    },
+    "gold": {
+      "gold_customer_revenue": 9185,
+      "gold_customer_status": 2505
+    },
+    "rejects": {
+      "netsuite_certifications": 165,
+      "netsuite_memberships": 77
+    },
+    "rules": [
+      {
+        "rule_id": 1,
+        "table": "netsuite_memberships",
+        "rule_name": "Not in List",
+        "proposal_id": null,
+        "silver_violations": 0,
+        "reject_rows": 52
+      },
+      {
+        "rule_id": 2,
+        "table": "netsuite_certifications",
+        "rule_name": "Not in List",
+        "proposal_id": null,
+        "silver_violations": 0,
+        "reject_rows": 82
+      },
+      {
+        "rule_id": 3,
+        "table": "netsuite_certifications",
+        "rule_name": "Date Range",
+        "proposal_id": null,
+        "silver_violations": 0,
+        "reject_rows": 46
+      },
+      {
+        "rule_id": 11,
+        "table": "netsuite_memberships",
+        "rule_name": "Membership ID Not Null",
+        "proposal_id": 14,
+        "silver_violations": 1,
+        "reject_rows": 25
+      },
+      {
+        "rule_id": 12,
+        "table": "netsuite_certifications",
+        "rule_name": "Certification End After Start",
+        "proposal_id": 16,
+        "silver_violations": 17,
+        "reject_rows": 84
+      }
+    ],
+    "phase": "before",
+    "taken_at": "2026-10-15T15:13:16+00:00",
+    "date": "2026-10-15"
+  },
+  "after": {
+    "bronze": {
+      "netsuite_memberships": {
+        "rows": 8873,
+        "checksum": "-21961499421369333207"
+      },
+      "netsuite_certifications": {
+        "rows": 7101,
+        "checksum": "108326810484524435257"
+      },
+      "netsuite_transactions": {
+        "rows": 35508,
+        "checksum": "451463523612073901380"
+      },
+      "netsuite_transaction_lines": {
+        "rows": 106518,
+        "checksum": "-16596617462460724244"
+      },
+      "netsuite_customers": {
+        "rows": 3400,
+        "checksum": null
+      }
+    },
+    "silver": {
+      "netsuite_memberships": 4214,
+      "netsuite_certifications": 3327,
+      "netsuite_transactions": 16902,
+      "netsuite_transaction_lines": 50710
+    },
+    "gold": {
+      "gold_customer_revenue": 9185,
+      "gold_customer_status": 2505
+    },
+    "rejects": {
+      "netsuite_certifications": 165,
+      "netsuite_memberships": 77
+    },
+    "rules": [
+      {
+        "rule_id": 1,
+        "table": "netsuite_memberships",
+        "rule_name": "Not in List",
+        "proposal_id": null,
+        "silver_violations": 0,
+        "reject_rows": 52
+      },
+      {
+        "rule_id": 2,
+        "table": "netsuite_certifications",
+        "rule_name": "Not in List",
+        "proposal_id": null,
+        "silver_violations": 0,
+        "reject_rows": 82
+      },
+      {
+        "rule_id": 3,
+        "table": "netsuite_certifications",
+        "rule_name": "Date Range",
+        "proposal_id": null,
+        "silver_violations": 0,
+        "reject_rows": 46
+      },
+      {
+        "rule_id": 11,
+        "table": "netsuite_memberships",
+        "rule_name": "Membership ID Not Null",
+        "proposal_id": 14,
+        "silver_violations": 0,
+        "reject_rows": 25
+      },
+      {
+        "rule_id": 12,
+        "table": "netsuite_certifications",
+        "rule_name": "Certification End After Start",
+        "proposal_id": 16,
+        "silver_violations": 0,
+        "reject_rows": 84
+      }
+    ],
+    "phase": "after",
+    "taken_at": "2026-10-15T15:18:21+00:00",
+    "date": "2026-10-15"
+  },
+  "comparison": {
+    "bronze_unchanged": true,
+    "rules": [
+      {
+        "rule_id": 1,
+        "table": "netsuite_memberships",
+        "rule_name": "Not in List",
+        "proposal_id": null,
+        "silver_violations": 0,
+        "reject_rows": 52,
+        "silver_before": 0,
+        "rejects_before": 52,
+        "from_proposal": false,
+        "moved": null
+      },
+      {
+        "rule_id": 2,
+        "table": "netsuite_certifications",
+        "rule_name": "Not in List",
+        "proposal_id": null,
+        "silver_violations": 0,
+        "reject_rows": 82,
+        "silver_before": 0,
+        "rejects_before": 82,
+        "from_proposal": false,
+        "moved": null
+      },
+      {
+        "rule_id": 3,
+        "table": "netsuite_certifications",
+        "rule_name": "Date Range",
+        "proposal_id": null,
+        "silver_violations": 0,
+        "reject_rows": 46,
+        "silver_before": 0,
+        "rejects_before": 46,
+        "from_proposal": false,
+        "moved": null
+      },
+      {
+        "rule_id": 11,
+        "table": "netsuite_memberships",
+        "rule_name": "Membership ID Not Null",
+        "proposal_id": 14,
+        "silver_violations": 0,
+        "reject_rows": 25,
+        "silver_before": 1,
+        "rejects_before": 25,
+        "from_proposal": true,
+        "moved": true
+      },
+      {
+        "rule_id": 12,
+        "table": "netsuite_certifications",
+        "rule_name": "Certification End After Start",
+        "proposal_id": 16,
+        "silver_violations": 0,
+        "reject_rows": 84,
+        "silver_before": 17,
+        "rejects_before": 84,
+        "from_proposal": true,
+        "moved": true
+      }
+    ],
+    "violating_rows_moved": true
+  }
+}
