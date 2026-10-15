@@ -15,6 +15,9 @@
 #   5. "Service Principal User" on dq-agent for ci-dev, so deploy-dev can deploy the DQ recommender job that runs
 #      as dq-agent (grants/dev.yml service_principal_users; tools/sp_roles.py), then an exact-match check
 #   6. the DQ recommender's trace store: experiment /Shared/aidq/dq_recommender bound to workspace.aidq_traces
+#   7. dq-agent reads the source (schema drift agent, plan #69): its Lakebase login role on netsuite-sample /
+#      production, then USAGE on schema netsuite and SELECT on the five tables (grants/source.yml dq_agent), checked
+#   (step 4 also creates workspace.knowledge for the RAG + lineage store, plan #70, and applies its grants)
 #      (created in step 4), dq-agent CAN_EDIT on it (tools/setup_dq_traces.py; plan #39 step 8)
 # Requires migration 006 on dev (approved_severity) before step 3: deploy-dev applies it on merge.
 set -euo pipefail
@@ -62,6 +65,13 @@ else
     --comment "Generator defect manifests (DQ recommender eval ground truth)" >/dev/null
   echo "created schema workspace.generator"
 fi
+if databricks schemas get workspace.knowledge --profile "$PROFILE" >/dev/null 2>&1; then
+  echo "schema workspace.knowledge exists"
+else
+  databricks schemas create knowledge workspace --profile "$PROFILE" \
+    --comment "Lineage graph, metadata corpus and its vector index (plan #70)" >/dev/null
+  echo "created schema workspace.knowledge"
+fi
 if databricks schemas get workspace.aidq_traces --profile "$PROFILE" >/dev/null 2>&1; then
   echo "schema workspace.aidq_traces exists"
 else
@@ -79,5 +89,18 @@ fi
 
 # 6. trace store (experiment bound to workspace.aidq_traces, dq-agent CAN_EDIT), with its check
 "$PY" tools/setup_dq_traces.py --profile "$PROFILE"
+
+# 7. dq-agent on the source (read only): Lakebase login role on netsuite-sample/production, then the grants, then the
+#    exact-match check for that role
+SRC_BRANCH=projects/netsuite-sample/branches/production
+if databricks postgres get-role "$SRC_BRANCH/roles/dq-agent" --profile "$PROFILE" >/dev/null 2>&1; then
+  echo "Lakebase role dq-agent exists on the source"
+else
+  databricks postgres create-role "$SRC_BRANCH" --role-id dq-agent --profile "$PROFILE" \
+    --json "{\"spec\": {\"identity_type\": \"SERVICE_PRINCIPAL\", \"postgres_role\": \"$AGENT\", \"auth_method\": \"LAKEBASE_OAUTH_V1\"}}" >/dev/null
+  echo "created Lakebase role dq-agent ($AGENT) on $SRC_BRANCH"
+fi
+"$PY" tools/apply_pg_grants.py --apply --only dq_agent --role "$AGENT" --profile "$PROFILE"
+"$PY" tools/apply_pg_grants.py --check --only dq_agent --role "$AGENT" --profile "$PROFILE"
 
 echo "done. dq-agent needs no OAuth secret: it runs as a Databricks job (run_as). Repository variable DQ_AGENT_SP=$AGENT"
