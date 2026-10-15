@@ -1,6 +1,6 @@
 # Phase 7 plan: RAG over metadata, with a lineage graph
 
-Status: **plan only** (2026-10-15). Design: `docs/agents_next_design.md` section 4. Dev only, read-only for every
+Status: **decided, building** (owner decisions 2026-10-15). Design: `docs/agents_next_design.md` section 4. Dev only, read-only for every
 consumer. Can run in parallel with the schema drift agent (phase 6). Every step below is a separate PR unless noted.
 
 ## 0. Facts (checked 2026-10-15, read-only)
@@ -13,18 +13,14 @@ consumer. Can run in parallel with the schema drift agent (phase 6). Every step 
 | Gold SQL | `src/netsuite_ingestion/gold_sql.py`: parseable with sqlglot (already a dev dependency) |
 | Metadata | `source_table_def`, `source_columns`, `data_quality_rules`, `config_proposals`, `config_change_log`, `incidents` |
 
-## 1. Open decisions (owner)
+## 1. Decisions (owner, 2026-10-15)
 
-1. **A new dev schema `workspace.knowledge`** for `nodes`, `edges` and `docs` (Delta). The owner creates it (as with
-   `workspace.generator` and `workspace.aidq_traces`) and grants (`grants/dev.yml`, owner-applied):
-   - ci-dev: `USE SCHEMA`, `CREATE TABLE`, `SELECT`, `MODIFY` (the refresh job writes the graph and the corpus);
-   - dq-agent: `USE SCHEMA`, `SELECT` (the drift and DQ agents read impact and history);
-   - the owner: `SELECT` (Claude Code as an MCP client).
-2. **Which Vector Search endpoint** gets the index: **`vs_endpoint_1`** (recommended; generic name) or
-   `dbdemos_vs_endpoint`. Either way **no demo index is removed**. The index is a Delta-sync index on
-   `workspace.knowledge.docs`, created by ci-dev; ci-dev needs `CAN_USE` on the endpoint (endpoint permission: a grant
-   change), and dq-agent / the owner need `SELECT` on the index (UC).
-3. **Embedding model:** `databricks-gte-large-en` (recommended: the design's first choice, English docs).
+1. **Schema `workspace.knowledge`** (owner-created) with grants (PR #71): ci-dev USE_SCHEMA, CREATE_TABLE, SELECT,
+   MODIFY; dq-agent USE_SCHEMA, SELECT; the owner USE_SCHEMA, SELECT.
+2. **Endpoint `vs_endpoint_1`**, no demo index removed: ci-dev CAN_USE (PR #71). dq-agent gets CAN_USE only if one of
+   its agents calls `search_metadata` under its identity (the drift agent's `get_impact` reads the graph tables, not
+   the index): asked when needed.
+3. **Embedding model `databricks-gte-large-en`.**
 
 ## 2. Steps
 
