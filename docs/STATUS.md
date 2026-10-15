@@ -1,4 +1,4 @@
-# STATUS (updated 2026-10-14)
+# STATUS (updated 2026-10-15)
 
 Read this first, then run `git status` and check open PRs. Updated after every Phase 2 step.
 
@@ -25,9 +25,10 @@ branches and PRs; merging a PR once all checks are green and it touches no prod 
 
 **Schedules** (2026-10-15). Dev: generator 05:00 and `[dev ci_dev] netsuite_ingestion_daily` 05:30 UTC, UNPAUSED (they
 do not always fire on Free Edition: section 0h); `guard_canary_check` PAUSED. Prod `netsuite_ingestion_daily` PAUSED.
-Monitor (GitHub `monitor-dev.yml`): daily, the external watchdog. DQ recommender (owner, 2026-10-15): `dq_recommender`
-Sundays 08:00 UTC as dq-agent, writing proposals (write=true), then `dq_validator` 08:45; the owner reviews weekly
-with `tools/review.py`. `silver_refresh`: manual only, each run after the owner's OK.
+Monitor (GitHub `monitor-dev.yml`): daily ~06:17 UTC, the external watchdog. `knowledge_refresh` daily 07:15 (ci-dev);
+`schema_drift` daily 07:30 (dq-agent); `dq_validator` daily 07:45 and 08:45 (ci-dev); `dq_recommender` Sundays 08:00
+UTC as dq-agent, writing proposals (write=true); the owner reviews with `tools/review.py`. `silver_refresh`: manual
+only, each run after the owner's OK. Full list: section 0p.
 
 **Lakebase endpoints.** Found disabled on 2026-09-30 (since 2026-09-27) and again at about 20:15 UTC the same day,
 about 3.5 h after last use; most likely the Free Edition compute quota (not verified). Re-enabled: dev metadata and
@@ -42,6 +43,48 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
 
 **Source database (`netsuite-sample`):** production plus backups `pre-synthetic-backup-202609242053`,
 `...202609252235`, `...202609260101`, `...202609260109` (5 of 10 branches).
+
+## 0p. End of day 2026-10-15: RAG done-when, what is merged, waiting, scheduled
+
+**RAG + lineage agent against design 4.8** (checked 21:10 UTC):
+
+| Done-when item | Status |
+|---|---|
+| The four tools work from Claude Code | **Met at the MCP level, not registered.** Over MCP stdio (`python -m aidq_mcp --profile DEFAULT`, the transport Claude Code uses) the server lists 13 tools; `get_impact`, `get_upstream`, `explain_history` and `search_metadata` all return `ok` on dev (search: proposal 48 at 0.70). The server is not registered in this machine's Claude Code (`claude mcp list`); registering it is the owner's local choice: `claude mcp add aidq -- .venv/Scripts/python -m aidq_mcp --profile DEFAULT` from the repo |
+| The eval meets its targets | **Met.** `evals/results/rag_eval_2026-10-15.md`: PASS (impact / upstream 10/10, recall@5 90%, no-answer 5/5, citations) |
+| The drift agent uses `get_impact` in a proposal's evidence | **Met in the drift eval only.** The eval's removed-column proposal carries the impact; the only real drift proposals (46-48) were written before the graph existed and say "not available". The next real drift proposal writes it |
+
+**Cleanup (owner-approved 2026-10-15):** worktrees `wt_drift` and `wt_rag` removed (clean; their branches merged);
+Lakebase branch `netsuite-sample/drift-eval` deleted (production and the four archived backups untouched).
+
+**Merged today:** #66-#76 (DQ recommender weekly schedule, migration 008, drift and RAG plans, their grants, the
+drift agent, RAG + lineage, the RAG eval and `get_impact` evidence, the drift done-when). Last deploy-dev (after #76):
+success at 21:14 UTC.
+
+**Waiting for the owner:**
+* **#77, phase 8 onboarding plan** (`docs/phase8_onboarding_plan.md`): 7 decisions (section 1), the `netsuite_items`
+  DDL and the grants (data-generator SELECT/INSERT/UPDATE: SELECT added, see decision 5; dq-agent SELECT). **Nothing
+  applied.**
+* Optional: register the `aidq_mcp` server in Claude Code (above).
+* Open item from before: the prod access gap (0k), no action while dev only.
+
+**At end of day:** no active job runs, no GitHub run in progress except #77's PR checks, nothing uncommitted; only
+`main` checked out (no worktrees).
+
+**Scheduled, will keep running (UTC):**
+
+| Time | Job | Identity |
+|---|---|---|
+| 05:00 daily | `[dev ci_dev] netsuite_daily_generator` | data-generator |
+| 05:30 daily | `[dev ci_dev] netsuite_ingestion_daily` | ci-dev |
+| ~06:17 daily | GitHub `monitor-dev.yml` (the watchdog; GitHub may start it late) | ci-dev |
+| 07:15 daily | `[dev ci_dev] knowledge_refresh` | ci-dev |
+| 07:30 daily | `[dev ci_dev] schema_drift` | dq-agent |
+| 07:45 and 08:45 daily | `[dev ci_dev] dq_validator` | ci-dev |
+| Sundays 08:00 | `[dev ci_dev] dq_recommender` (writes proposals) | dq-agent |
+
+PAUSED: prod `netsuite_ingestion_daily`, both `guard_canary_check`. Manual only: `silver_refresh`. No merges
+05:00-07:00 UTC.
 
 ## 0o. Schema drift agent done-when completed (2026-10-15)
 
