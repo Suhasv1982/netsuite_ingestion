@@ -1,0 +1,475 @@
+{
+  "checks": {
+    "impact / upstream exact (100%)": true,
+    "history recall@5 >= 0.9": true,
+    "no-answer questions find nothing above MIN_SCORE": true,
+    "a citation (id, source) on every hit": true,
+    "explain_history(rule:10) shows proposal 20": true,
+    "explain_history(netsuite_transactions) shows incident 11": true
+  },
+  "rows": [
+    {
+      "kind": "impact",
+      "q": "netsuite_transaction_lines.amount",
+      "ok": true,
+      "expected": [
+        "gold:gold_customer_revenue",
+        "gold:gold_customer_revenue.revenue",
+        "rule:4"
+      ],
+      "got": [
+        "gold:gold_customer_revenue",
+        "gold:gold_customer_revenue.revenue",
+        "rule:4"
+      ]
+    },
+    {
+      "kind": "impact",
+      "q": "netsuite_transactions.date",
+      "ok": true,
+      "expected": [
+        "gold:gold_customer_revenue",
+        "gold:gold_customer_revenue.revenue_month"
+      ],
+      "got": [
+        "gold:gold_customer_revenue",
+        "gold:gold_customer_revenue.revenue_month"
+      ]
+    },
+    {
+      "kind": "impact",
+      "q": "netsuite_memberships.membership_status",
+      "ok": true,
+      "expected": [
+        "gold:gold_customer_status",
+        "rule:1"
+      ],
+      "got": [
+        "gold:gold_customer_status",
+        "rule:1"
+      ]
+    },
+    {
+      "kind": "impact",
+      "q": "netsuite_memberships.end_date",
+      "ok": true,
+      "expected": [
+        "gold:gold_customer_status",
+        "gold:gold_customer_status.next_membership_end",
+        "rule:5"
+      ],
+      "got": [
+        "gold:gold_customer_status",
+        "gold:gold_customer_status.next_membership_end",
+        "rule:5"
+      ]
+    },
+    {
+      "kind": "impact",
+      "q": "netsuite_certifications.certification_end_date",
+      "ok": true,
+      "expected": [
+        "gold:gold_customer_status",
+        "gold:gold_customer_status.next_certification_end",
+        "rule:12"
+      ],
+      "got": [
+        "gold:gold_customer_status",
+        "gold:gold_customer_status.next_certification_end",
+        "rule:12"
+      ]
+    },
+    {
+      "kind": "impact",
+      "q": "netsuite_customers.email",
+      "ok": true,
+      "expected": [],
+      "got": []
+    },
+    {
+      "kind": "impact",
+      "q": "netsuite_transactions.type",
+      "ok": true,
+      "expected": [
+        "rule:10"
+      ],
+      "got": [
+        "rule:10"
+      ]
+    },
+    {
+      "kind": "impact",
+      "q": "netsuite_transaction_lines.transaction_internal_id",
+      "ok": true,
+      "expected": [
+        "gold:gold_customer_revenue"
+      ],
+      "got": [
+        "gold:gold_customer_revenue"
+      ]
+    },
+    {
+      "kind": "impact",
+      "q": "netsuite_memberships.customer_internal_id",
+      "ok": true,
+      "expected": [
+        "gold:gold_customer_status",
+        "gold:gold_customer_status.customer_internal_id"
+      ],
+      "got": [
+        "gold:gold_customer_status",
+        "gold:gold_customer_status.customer_internal_id"
+      ]
+    },
+    {
+      "kind": "upstream",
+      "q": "gold_customer_revenue.revenue",
+      "ok": true,
+      "expected": [
+        "source:netsuite_transaction_lines.amount",
+        "source:netsuite_transaction_lines.transaction_internal_id",
+        "source:netsuite_transaction_lines.transaction_line_id",
+        "source:netsuite_transactions.customer_internal_id",
+        "source:netsuite_transactions.date",
+        "source:netsuite_transactions.transaction_internal_id"
+      ],
+      "got": [
+        "source:netsuite_transaction_lines.amount",
+        "source:netsuite_transaction_lines.transaction_internal_id",
+        "source:netsuite_transaction_lines.transaction_line_id",
+        "source:netsuite_transactions.customer_internal_id",
+        "source:netsuite_transactions.date",
+        "source:netsuite_transactions.transaction_internal_id"
+      ]
+    },
+    {
+      "kind": "history",
+      "q": "Why was the rule restricting transaction type to Cash Sale and Invoice added?",
+      "ok": true,
+      "rank": 1,
+      "top": [
+        [
+          "change:17",
+          0.68
+        ],
+        [
+          "rule:10",
+          0.63
+        ],
+        [
+          "proposal:20",
+          0.617
+        ],
+        [
+          "table:netsuite_transactions",
+          0.563
+        ],
+        [
+          "rule:4",
+          0.563
+        ]
+      ]
+    },
+    {
+      "kind": "history",
+      "q": "Which proposal added the check that the membership business key is not null?",
+      "ok": true,
+      "rank": 1,
+      "top": [
+        [
+          "change:18",
+          0.668
+        ],
+        [
+          "proposal:14",
+          0.666
+        ],
+        [
+          "rule:11",
+          0.637
+        ],
+        [
+          "proposal:15",
+          0.634
+        ],
+        [
+          "column:netsuite_memberships.membership_internal_id",
+          0.63
+        ]
+      ]
+    },
+    {
+      "kind": "history",
+      "q": "What happened in the incident about the stale OAuth token and the expired credential?",
+      "ok": true,
+      "rank": 0,
+      "top": [
+        [
+          "incident:6",
+          0.689
+        ],
+        [
+          "doc:docs/STATUS.md#7",
+          0.595
+        ],
+        [
+          "incident:10",
+          0.55
+        ],
+        [
+          "doc:docs/phase4_agent_plan.md#9",
+          0.547
+        ],
+        [
+          "incident:8",
+          0.544
+        ]
+      ]
+    },
+    {
+      "kind": "history",
+      "q": "Why was the rule about membership start dates in the future rejected?",
+      "ok": true,
+      "rank": 0,
+      "top": [
+        [
+          "proposal:15",
+          0.669
+        ],
+        [
+          "rule:5",
+          0.618
+        ],
+        [
+          "incident:8",
+          0.582
+        ],
+        [
+          "rule:1",
+          0.581
+        ],
+        [
+          "proposal:18",
+          0.577
+        ]
+      ]
+    },
+    {
+      "kind": "history",
+      "q": "Proposal to add the custbody_region column to transactions",
+      "ok": true,
+      "rank": 0,
+      "top": [
+        [
+          "proposal:48",
+          0.758
+        ],
+        [
+          "column:netsuite_transaction_lines.item_id",
+          0.6
+        ],
+        [
+          "column:netsuite_transaction_lines.transaction_internal_id",
+          0.6
+        ],
+        [
+          "change:17",
+          0.599
+        ],
+        [
+          "doc:docs/agents_next_design.md#31",
+          0.596
+        ]
+      ]
+    },
+    {
+      "kind": "history",
+      "q": "Rule that certification end date must not be before the start date, and its severity",
+      "ok": true,
+      "rank": 0,
+      "top": [
+        [
+          "rule:12",
+          0.71
+        ],
+        [
+          "proposal:16",
+          0.693
+        ],
+        [
+          "rule:3",
+          0.663
+        ],
+        [
+          "proposal:18",
+          0.662
+        ],
+        [
+          "change:19",
+          0.647
+        ]
+      ]
+    },
+    {
+      "kind": "history",
+      "q": "How does the bronze row hash guard fail closed when the column set changes?",
+      "ok": true,
+      "rank": 0,
+      "top": [
+        [
+          "doc:docs/platform_design_notes.md#3",
+          0.619
+        ],
+        [
+          "doc:docs/agents_next_design.md#16",
+          0.606
+        ],
+        [
+          "doc:docs/STATUS.md#26",
+          0.601
+        ],
+        [
+          "doc:docs/STATUS.md#24",
+          0.6
+        ],
+        [
+          "doc:docs/dev_guard_check_2026-09-26.md#0",
+          0.596
+        ]
+      ]
+    },
+    {
+      "kind": "history",
+      "q": "What does the watchdog do when a scheduled dev run is missed?",
+      "ok": true,
+      "rank": 0,
+      "top": [
+        [
+          "doc:docs/watchdog_plan.md#7",
+          0.728
+        ],
+        [
+          "doc:docs/watchdog_plan.md#6",
+          0.707
+        ],
+        [
+          "doc:docs/watchdog_plan.md#1",
+          0.704
+        ],
+        [
+          "doc:docs/watchdog_plan.md#4",
+          0.7
+        ],
+        [
+          "doc:docs/watchdog_plan.md#3",
+          0.671
+        ]
+      ]
+    },
+    {
+      "kind": "history",
+      "q": "Which table is loaded in full every run instead of incrementally?",
+      "ok": false,
+      "rank": null,
+      "top": [
+        [
+          "doc:README.md#2",
+          0.584
+        ],
+        [
+          "doc:README.md#9",
+          0.573
+        ],
+        [
+          "doc:docs/platform_design_notes.md#2",
+          0.572
+        ],
+        [
+          "doc:docs/platform_design_notes.md#3",
+          0.566
+        ],
+        [
+          "doc:docs/dev_guard_check_2026-09-26.md#0",
+          0.564
+        ]
+      ]
+    },
+    {
+      "kind": "history",
+      "q": "Manual pipeline runs must go through the job, never directly",
+      "ok": true,
+      "rank": 0,
+      "top": [
+        [
+          "doc:docs/STATUS.md#7",
+          0.638
+        ],
+        [
+          "doc:docs/dev_daily_schedule.md#1",
+          0.605
+        ],
+        [
+          "doc:README.md#7",
+          0.595
+        ],
+        [
+          "doc:docs/STATUS.md#37",
+          0.594
+        ],
+        [
+          "doc:docs/phase2_cicd_plan.md#3",
+          0.592
+        ]
+      ]
+    },
+    {
+      "kind": "no_answer",
+      "q": "What is the capital of France?",
+      "ok": true,
+      "top_score": 0.491
+    },
+    {
+      "kind": "no_answer",
+      "q": "Who won the 2018 football world cup?",
+      "ok": true,
+      "top_score": 0.497
+    },
+    {
+      "kind": "no_answer",
+      "q": "How do I bake sourdough bread at home?",
+      "ok": true,
+      "top_score": 0.451
+    },
+    {
+      "kind": "no_answer",
+      "q": "What is the current stock price of Apple?",
+      "ok": true,
+      "top_score": 0.5
+    },
+    {
+      "kind": "no_answer",
+      "q": "Translate 'good morning' into Japanese.",
+      "ok": true,
+      "top_score": 0.485
+    }
+  ],
+  "min_score": 0.55,
+  "relevant_scores": [
+    0.63,
+    0.666,
+    0.689,
+    0.669,
+    0.758,
+    0.71,
+    0.619,
+    0.728,
+    0.638
+  ],
+  "offtopic_scores": [
+    0.491,
+    0.497,
+    0.451,
+    0.5,
+    0.485
+  ]
+}

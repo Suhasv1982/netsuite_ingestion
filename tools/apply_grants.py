@@ -208,8 +208,9 @@ def main(argv: list[str] | None = None) -> int:
             continue
         for schema, wanted in desired_grants(spec, principals, owner_applied).items():
             try:
-                need = missing_privileges(wanted, current_grants(args.profile, "schema", schema),
-                                          securable_owner(args.profile, "schema", schema))
+                # no owner exemption here: owning a schema does not give SELECT on tables another principal
+                # created in it (workspace.knowledge, 2026-10-15: the owner could not read ci-dev's tables)
+                need = missing_privileges(wanted, current_grants(args.profile, "schema", schema))
             except RuntimeError as exc:
                 if not not_inspectable(schema, exc, report_only):
                     failed += 1
