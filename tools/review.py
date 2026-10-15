@@ -180,6 +180,8 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("proposal_id", type=int)
     c.add_argument("--reason", required=True)
     args = p.parse_args(argv)
+    if hasattr(sys.stdout, "reconfigure"):     # agent rationales may hold non-ASCII (Windows consoles default to cp1252)
+        sys.stdout.reconfigure(encoding="utf-8")
 
     sys.path.insert(0, str(ROOT))
     import migrate  # noqa: E402
