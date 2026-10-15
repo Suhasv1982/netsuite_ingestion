@@ -46,9 +46,84 @@ UPDATE_SQL = ("UPDATE aidq_metadata.config_proposals SET status = %s, validation
               "WHERE proposal_id = %s AND status = 'PENDING'")
 
 
+COLUMN_PENDING_SQL = (
+    "SELECT p.proposal_id, p.table_id, d.source_table, d.load_mode, d.business_key, d.watermark_col, p.proposal_type, "
+    "p.proposed_change FROM aidq_metadata.config_proposals p JOIN aidq_metadata.source_table_def d USING (table_id) "
+    "WHERE p.status = 'PENDING' AND p.proposal_type IN ('ADD_COLUMN', 'DEACTIVATE_COLUMN') ORDER BY p.created_at "
+    "FOR UPDATE OF p SKIP LOCKED")
+META_COLUMNS_SQL = ("SELECT column_name, ordinal, coalesce(is_active, true) AS active FROM aidq_metadata.source_columns "
+                    "WHERE table_id = %s")
+COLUMN_UPDATE_SQL = ("UPDATE aidq_metadata.config_proposals SET status = %s, validation_result = %s::jsonb, "
+                     "requires_rebuild = %s WHERE proposal_id = %s AND status = 'PENDING'")
+SOURCE_COLUMNS_SQL = ("SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = 'netsuite' "
+                      "AND table_name = %s")
+
+
+def judge_column(ptype: str, change: dict, table: dict, source_cols: dict[str, str], meta_cols: list[tuple]) -> dict:
+    """The decision for one ADD_COLUMN / DEACTIVATE_COLUMN proposal (design 3.4). Pure. `table`: load_mode,
+    business_key, watermark_col; `source_cols`: column -> source type; `meta_cols`: (column, ordinal, active).
+    requires_rebuild only for incremental tables (owner decision 2026-10-15: a full-load table has no row hash)."""
+    from aidq_drift.detect import metadata_type
+
+    col = (change or {}).get("column_name")
+    active = {c for c, _, a in meta_cols if a}
+    problems = []
+    if not col:
+        problems.append("no column_name")
+    elif ptype == "ADD_COLUMN":
+        if col not in source_cols:
+            problems.append(f"column {col} is not in the source table")
+        if col in active:
+            problems.append(f"column {col} is already active in the metadata")
+        mapped = metadata_type(source_cols.get(col))
+        if col in source_cols and mapped is None:
+            problems.append(f"source type {source_cols[col]!r} has no metadata type mapping")
+        elif mapped and (change.get("data_type") or "").upper() != mapped:
+            problems.append(f"data_type {change.get('data_type')!r} does not match the source type (expected {mapped})")
+        ordinal = change.get("ordinal")
+        if ordinal is not None and any(o == ordinal for c, o, a in meta_cols if a and c != col):
+            problems.append(f"ordinal {ordinal} is already used by an active column")
+    else:
+        if col not in active:
+            problems.append(f"column {col} is not an active column")
+        if col in source_cols:
+            problems.append(f"column {col} still exists in the source")
+        if col in (table.get("business_key"), table.get("watermark_col")):
+            problems.append(f"column {col} is the business key or the watermark column")
+    incremental = (table.get("load_mode") or "").lower() == "incremental"
+    ok = not problems
+    return {"status": "VALIDATED" if ok else "VALIDATION_FAILED", "checks": {"column": ok}, "problems": problems,
+            "requires_rebuild": incremental if ok else None,
+            "summary": ("VALIDATED" if ok else "FAILED: " + "; ".join(problems[:3]))
+            + (" | requires bronze rebuild (incremental table)" if ok and incremental else "")}
+
+
+def validate_columns(conn, source_query, set_role: bool = True, log=print) -> list[dict]:
+    """Every PENDING column proposal. `source_query(sql, params)` reads the source (the caller's identity)."""
+    if set_role:
+        conn.execute("SET LOCAL ROLE aidq_validator")
+    out = []
+    for pid, table_id, table, load_mode, key, wm, ptype, change in conn.execute(COLUMN_PENDING_SQL).fetchall():
+        try:
+            source_cols = {r["column_name"]: r["data_type"] for r in source_query(SOURCE_COLUMNS_SQL, (table,))}
+        except Exception as exc:  # noqa: BLE001 -- cannot check against the source: fail, with the reason
+            source_cols = None
+            result = {"status": "VALIDATION_FAILED", "checks": {"column": False}, "requires_rebuild": None,
+                      "problems": [f"source not readable: {str(exc)[:200]}"], "summary": "FAILED: source not readable"}
+        if source_cols is not None:
+            meta_cols = [tuple(r) for r in conn.execute(META_COLUMNS_SQL, (table_id,)).fetchall()]
+            result = judge_column(ptype, change, {"load_mode": load_mode, "business_key": key, "watermark_col": wm},
+                                  source_cols, meta_cols)
+        conn.execute(COLUMN_UPDATE_SQL, (result["status"], json.dumps(result, default=str), result["requires_rebuild"],
+                                         pid))
+        log(f"proposal {pid} ({ptype} {table}.{(change or {}).get('column_name')}): {result['summary']}")
+        out.append({"proposal_id": pid, **result})
+    return out
+
+
 def validate_all(conn, sql, catalog: str, set_role: bool = True, log=print) -> list[dict]:
-    """Validate every PENDING proposal on `conn` (caller commits or rolls back). `sql(statement)` runs a warehouse
-    query and returns rows as dicts."""
+    """Validate every PENDING ADD_DQ_RULE proposal on `conn` (caller commits or rolls back). `sql(statement)` runs a
+    warehouse query and returns rows as dicts."""
     if set_role:
         conn.execute("SET LOCAL ROLE aidq_validator")
     try:
@@ -100,6 +175,9 @@ def main(argv: list[str] | None = None) -> int:
         conn = migrate.connect("dev", args.profile)
     try:
         results = validate_all(conn, reads.sql, env_config("dev").catalog, set_role=not args.as_caller)
+        source = env_config("dev").source_endpoint
+        results += validate_columns(conn, lambda q, params=(): reads.pg_query(source, q, params),
+                                    set_role=False)   # the role is already set for this transaction
         if args.dry_run:
             conn.rollback()
             print(f"dry run: {len(results)} proposal(s) validated, nothing written")

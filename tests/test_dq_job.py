@@ -97,7 +97,8 @@ def test_bundle_dev_jobs_run_as_dq_agent_and_the_deployer():
     assert "run_as" not in val                       # the deploying identity (ci-dev), which SETs ROLE aidq_validator
     # weekly, Sundays, outside the daily 05:00-07:00 window; the validator after the agent (owner, 2026-10-15)
     assert rec["schedule"] == {"quartz_cron_expression": "0 0 8 ? * SUN", "timezone_id": "UTC", "pause_status": "UNPAUSED"}
-    assert val["schedule"]["quartz_cron_expression"] == "0 45 8 ? * SUN" and val["schedule"]["pause_status"] == "UNPAUSED"
+    # daily 07:45 (after schema_drift 07:30) and 08:45 (after the Sunday dq_recommender)
+    assert val["schedule"]["quartz_cron_expression"] == "0 45 7,8 * * ?" and val["schedule"]["pause_status"] == "UNPAUSED"
     assert rec["email_notifications"] == val["email_notifications"] == {"on_failure": ["${var.notification_email}"]}
     assert rec["parameters"] == [{"name": "write", "default": "true"},
                                  {"name": "trace_experiment", "default": "/Shared/aidq/dq_recommender"}]
@@ -139,8 +140,9 @@ def test_validator_job_mode_uses_the_sdk(monkeypatch):
     monkeypatch.setattr("aidq_dq_agent.write_tools.sdk_connect", lambda endpoint: (lambda: Conn()))
     monkeypatch.setattr("aidq_mcp.sdk_reads.SdkReads.__init__", lambda self, client=None: None)
     monkeypatch.setattr(vp, "validate_all", lambda conn, sql, catalog, set_role=True: seen.update(set_role=set_role) or [])
+    monkeypatch.setattr(vp, "validate_columns", lambda conn, q, set_role=True: seen.update(columns=True) or [])
     assert vp.main(["--auth", "sdk"]) == 0
-    assert seen == {"set_role": True, "commit": True}
+    assert seen == {"set_role": True, "columns": True, "commit": True}
 
 
 def _exec_like_a_job(path: pathlib.Path, monkeypatch):

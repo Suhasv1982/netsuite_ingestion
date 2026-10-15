@@ -185,6 +185,83 @@ class WriteTools:
         self.written.append({"kind": "incident", "incident_id": row[0], "fingerprint": fingerprint})
         return {"status": "ok", "incident_id": row[0]}
 
+    # -- shared foundation (agents_next_design section 1): column proposals and incidents of any category ---------
+
+    def submit_column_proposal(self, args: dict) -> dict:
+        """One ADD_COLUMN / DEACTIVATE_COLUMN proposal (schema drift agent), status PENDING. No nagging: skipped when
+        an equivalent proposal (same type, table and column) is open, or was rejected in the last 30 days."""
+        ptype, col = args.get("proposal_type"), str(args.get("column_name") or "").strip()
+        problems = [] if ptype in COLUMN_PROPOSAL_TYPES else [f"proposal_type must be one of {COLUMN_PROPOSAL_TYPES}"]
+        if not col:
+            problems.append("column_name is empty")
+        if ptype == "ADD_COLUMN" and not str(args.get("data_type") or "").strip():
+            problems.append("ADD_COLUMN needs a data_type")
+        if not isinstance(args.get("rationale"), str) or len(args["rationale"].strip()) < 20:
+            problems.append("rationale is missing or too short")
+        with self.connect() as conn:
+            tables = self._tables(conn)
+            if args.get("table") not in tables:
+                problems.append(f"unknown table {args.get('table')!r}")
+            if problems:
+                conn.rollback()
+                return {"status": "rejected_by_code", "problems": problems}
+            open_ = conn.execute(
+                "SELECT proposal_id, status FROM aidq_metadata.config_proposals WHERE table_id = %s AND proposal_type = "
+                "%s AND proposed_change->>'column_name' = %s AND (status IN ('PENDING', 'VALIDATED', 'APPROVED') OR "
+                "(status = 'REJECTED' AND reviewed_at >= now() - make_interval(days => %s)))",
+                (tables[args["table"]], ptype, col, REJECTED_LOOKBACK_DAYS)).fetchone()
+            if open_:
+                conn.rollback()
+                return {"status": "skipped", "reason": f"an equivalent proposal is {open_[1]} (proposal {open_[0]})"}
+            change = {"column_name": col, **({"data_type": args["data_type"].strip().upper()} if args.get("data_type")
+                                             else {}), **({"ordinal": int(args["ordinal"])} if args.get("ordinal") else {})}
+            if self.dry_run:
+                conn.rollback()
+                self.written.append({"kind": "proposal", "table": args["table"], "proposal_type": ptype, **change,
+                                     "dry_run": True})
+                return {"status": "ok", "dry_run": True, "proposal_id": None}
+            pid = conn.execute(
+                "INSERT INTO aidq_metadata.config_proposals (proposal_type, table_id, proposed_change, rationale, "
+                "evidence, proposed_by, agent_trace_id, confidence) VALUES (%s, %s, %s::jsonb, %s, %s::jsonb, %s, %s, "
+                "%s) RETURNING proposal_id",
+                (ptype, tables[args["table"]], json.dumps(change), args["rationale"].strip(),
+                 json.dumps(args.get("evidence") or {}, default=str), self.proposed_by, self.trace_id,
+                 None if args.get("confidence") is None else float(args["confidence"]))).fetchone()[0]
+            conn.commit()
+        self.written.append({"kind": "proposal", "proposal_id": pid, "table": args["table"], "proposal_type": ptype,
+                             **change})
+        return {"status": "ok", "proposal_id": pid}
+
+    def report_incident(self, args: dict) -> dict:
+        """One incident of an allowed category with a stable fingerprint (one OPEN incident per fingerprint). The
+        table may be unknown to the metadata (a source table not onboarded yet): then table_id stays NULL."""
+        cat, fp, summary = args.get("category"), str(args.get("fingerprint") or "").strip(), str(args.get("summary") or "")
+        if cat not in INCIDENT_CATEGORIES or not fp or not summary.strip():
+            return {"status": "rejected_by_code",
+                    "problems": [f"category must be one of {INCIDENT_CATEGORIES}; fingerprint and summary non-empty"]}
+        with self.connect() as conn:
+            table_id = self._tables(conn).get(args.get("table"))
+            if self.dry_run:
+                conn.rollback()
+                self.written.append({"kind": "incident", "fingerprint": fp, "category": cat, "dry_run": True})
+                return {"status": "ok", "dry_run": True, "incident_id": None}
+            row = conn.execute(
+                "INSERT INTO aidq_metadata.incidents (table_id, category, summary, suggested_fix, agent_trace_id, "
+                "fingerprint, evidence) VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb) "
+                "ON CONFLICT (fingerprint) WHERE status = 'OPEN' AND fingerprint IS NOT NULL DO NOTHING "
+                "RETURNING incident_id",
+                (table_id, cat, summary.strip(), args.get("suggested_fix"), self.trace_id, fp,
+                 json.dumps({**(args.get("evidence") or {}), "reported_by": self.proposed_by}, default=str))).fetchone()
+            conn.commit()
+        if row is None:
+            return {"status": "skipped", "reason": f"an OPEN incident {fp} already exists"}
+        self.written.append({"kind": "incident", "incident_id": row[0], "fingerprint": fp, "category": cat})
+        return {"status": "ok", "incident_id": row[0]}
+
+
+COLUMN_PROPOSAL_TYPES = ("ADD_COLUMN", "DEACTIVATE_COLUMN")
+INCIDENT_CATEGORIES = ("SCHEMA_TYPE_CHANGE", "SCHEMA_DRIFT")    # the drift agent's; DQ findings use report_finding
+
 
 def sdk_connect(endpoint: str):
     """A connect() for the dq-agent job (spark_python_task as run_as dq-agent): no CLI, the run identity's token."""

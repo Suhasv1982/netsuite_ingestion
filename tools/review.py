@@ -34,7 +34,7 @@ LIST_SQL = (
 SHOW_SQL = (
     "SELECT p.proposal_id, d.source_table, d.load_mode, p.proposal_type, p.status, p.proposed_change, p.rationale, "
     "p.evidence, p.confidence, p.proposed_by, p.agent_trace_id, p.validation_result, p.reviewed_by, p.reviewed_at, "
-    "p.review_comment, p.approved_severity, p.created_at FROM aidq_metadata.config_proposals p "
+    "p.review_comment, p.approved_severity, p.requires_rebuild, p.created_at FROM aidq_metadata.config_proposals p "
     "JOIN aidq_metadata.source_table_def d USING (table_id) WHERE p.proposal_id = %s")
 APPROVE_SQL = (
     "UPDATE aidq_metadata.config_proposals SET status = 'APPROVED', reviewed_by = %s, reviewed_at = now(), "
@@ -54,6 +54,14 @@ def requires_rebuild(proposal_type: str, load_mode: str | None) -> bool:
     return proposal_type in ("ADD_COLUMN", "DEACTIVATE_COLUMN") and (load_mode or "").lower() == "incremental"
 
 
+def needs_rebuild(row: dict) -> bool:
+    """The validator's decision (config_proposals.requires_rebuild, migration 008) when it is set; else the rule it
+    applies (column changes on incremental tables)."""
+    if row.get("requires_rebuild") is not None:
+        return bool(row["requires_rebuild"])
+    return requires_rebuild(row["proposal_type"], row.get("load_mode"))
+
+
 def render(row: dict) -> str:
     """Human-readable view of one proposal (pure)."""
     change, ev, val = row["proposed_change"] or {}, row["evidence"] or {}, row["validation_result"] or {}
@@ -62,7 +70,7 @@ def render(row: dict) -> str:
              f"  trace: {row['agent_trace_id'] or '-'}"]
     if row.get("trace_url"):
         lines.append(f"  trace link: {row['trace_url']}")
-    if requires_rebuild(row["proposal_type"], row.get("load_mode")):
+    if needs_rebuild(row):
         lines.append("  ** requires bronze rebuild **")
     lines += ["", "Change:"] + [f"  {k}: {v}" for k, v in change.items()]
     lines += ["", "Rationale:", "  " + (row["rationale"] or "").replace("\n", "\n  ")]
@@ -100,7 +108,7 @@ def approve(conn, pid: int, reviewer: str, severity: str | None, comment: str | 
         raise SystemExit("--severity applies to ADD_DQ_RULE proposals only")
     conn.execute(APPROVE_SQL, (reviewer, comment, severity, pid))
     applied = conn.execute("SELECT aidq_metadata.apply_proposal(%s, %s)", (pid, reviewer)).fetchone()[0]
-    return applied + (("\n" + REBUILD_HINT) if requires_rebuild(row["proposal_type"], row.get("load_mode")) else "")
+    return applied + (("\n" + REBUILD_HINT) if needs_rebuild(row) else "")
 
 
 def check_reason(reason: str | None) -> str:
