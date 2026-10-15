@@ -23,9 +23,11 @@ update). Open: the watchdog plan (section 0h). Required checks on `main`: `gitle
 branches and PRs; merging a PR once all checks are green and it touches no prod resources.
 **Ask first:** anything touching prod; deleting or destroying anything; branch protection; history rewrites.
 
-**Schedules** (2026-10-13). Dev: generator 05:00 and `[dev ci_dev] netsuite_ingestion_daily` 05:30 UTC, UNPAUSED (they
+**Schedules** (2026-10-15). Dev: generator 05:00 and `[dev ci_dev] netsuite_ingestion_daily` 05:30 UTC, UNPAUSED (they
 do not always fire on Free Edition: section 0h); `guard_canary_check` PAUSED. Prod `netsuite_ingestion_daily` PAUSED.
-Monitor (GitHub `monitor-dev.yml`): daily, the external watchdog.
+Monitor (GitHub `monitor-dev.yml`): daily, the external watchdog. DQ recommender (owner, 2026-10-15): `dq_recommender`
+Sundays 08:00 UTC as dq-agent, writing proposals (write=true), then `dq_validator` 08:45; the owner reviews weekly
+with `tools/review.py`. `silver_refresh`: manual only, each run after the owner's OK.
 
 **Lakebase endpoints.** Found disabled on 2026-09-30 (since 2026-09-27) and again at about 20:15 UTC the same day,
 about 3.5 h after last use; most likely the Free Edition compute quota (not verified). Re-enabled: dev metadata and
@@ -52,6 +54,12 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
   17 -> 0 (silver certifications -13: 4 keys keep an earlier valid version). Report: the "Silver-only refresh" section
   of `evals/results/dq_eval_2026-10-14_v2.md`; numbers in `evals/results/silver_refresh_2026-10-15.json`.
 * All five done-when items of design v2 section 12 are met (eval report committed with #56/#65).
+* **Traced write run (2026-10-15 15:36 UTC):** proposal 25 (the quoted `date` rule, re-proposed after #21's
+  rejection reason) links to its MLflow trace (`review.py show 25` prints the link); everything else was skipped by
+  no-nagging (open or recently rejected equivalents, open incidents). Validated: VALIDATED.
+* **Prod access gap (recorded, no action while dev only; owner 2026-10-15):** ci-dev and data-generator have
+  project-level manage on the shared Lakebase projects, which covers prod (section 0h). dq-agent has no prod access.
+  Resolve before prod goes live.
 
 ## 0j. DQ recommender: first write run, review, tracing (2026-10-14)
 

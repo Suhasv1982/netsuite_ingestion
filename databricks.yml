@@ -164,17 +164,26 @@ targets:
                   - databricks-sdk>=0.94.0
         # The DQ rule recommender (plan #39 step 10; docs/dq_recommender_design.md). Dev-only, runs as dq-agent
         # (Postgres role aidq_agent: SELECT, INSERT on config_proposals and incidents; UC SELECT on bronze, silver,
-        # rejects; warehouse CAN_USE). Manual runs only for now (the design's weekly trigger comes after the first
-        # reviewed cycle). Dry run unless started with write=true.
+        # rejects; warehouse CAN_USE). Weekly, Sundays 08:00 UTC (owner, 2026-10-15: outside the daily 05:00-07:00
+        # window), writing proposals for the owner's weekly review; dq_validator follows at 08:45. A manual run
+        # writes too unless started with write=false.
         dq_recommender:
           name: dq_recommender
           description: DQ rule recommender, run as dq-agent (docs/phase5_dq_recommender_plan.md step 10)
           run_as:
             service_principal_name: ${var.dq_agent_sp}
+          schedule:
+            quartz_cron_expression: "0 0 8 ? * SUN"
+            timezone_id: UTC
+            pause_status: UNPAUSED
+          email_notifications:
+            on_failure:
+              - ${var.notification_email}
           max_concurrent_runs: 1
           parameters:
+            # the scheduled run writes (owner, 2026-10-15); start a manual run with write=false for a dry run
             - name: write
-              default: "false"
+              default: "true"
             # one MLflow trace per run (plan #39 step 8); an empty value turns tracing off
             - name: trace_experiment
               default: /Shared/aidq/dq_recommender
@@ -198,10 +207,18 @@ targets:
                   - pyyaml
                   - mlflow-skinny>=3.11.1,<4   # tracing to a Unity Catalog trace location (step 8)
         # The validator for PENDING proposals (tools/validate_proposals.py), run as the deploying identity (ci-dev),
-        # which does SET LOCAL ROLE aidq_validator before any work. Manual, after a dq_recommender write run.
+        # which does SET LOCAL ROLE aidq_validator before any work. Weekly, Sundays 08:45 UTC, after the
+        # dq_recommender run (which takes a few minutes), so the owner reviews VALIDATED proposals; also manual.
         dq_validator:
           name: dq_validator
           description: Validates PENDING DQ proposals as aidq_validator (docs/phase5_dq_recommender_plan.md step 5)
+          schedule:
+            quartz_cron_expression: "0 45 8 ? * SUN"
+            timezone_id: UTC
+            pause_status: UNPAUSED
+          email_notifications:
+            on_failure:
+              - ${var.notification_email}
           max_concurrent_runs: 1
           tasks:
             - task_key: validate
