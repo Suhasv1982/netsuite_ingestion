@@ -1,11 +1,13 @@
 """Evaluate the monitor + RCA agent on recorded cases (evals/agent_cases.yaml) with free workspace models.
 
-    PYTHONPATH=src python evals/run_agent_eval.py --profile DEFAULT [--runs 3] [--model M] [--judge J]
+    PYTHONPATH=src python evals/run_agent_eval.py --profile DEFAULT [--runs 3] [--cases ID ...] [--out DIR]
+    (CI, .github/workflows/agent-eval.yml: no --profile, the DATABRICKS_* variables of ci-dev)
 
 Each run replays a case's tool outputs (no workspace reads, nothing written), then grades:
   deterministic: incident written iff expected; categories allowed; RCA produced; expected tools called (reported)
   judge (a different model than the agent): each fixture must_identify item stated, each must_not_claim item claimed
-Writes evals/results/<date>_<model>.md and .json. Exit 1 if a target in docs/phase4_agent_plan.md section 7 is missed.
+Writes <out>/<UTC date and time>_<model>.md and .json (default out: evals/results; the time keeps a second run on
+the same day from overwriting the first). Exit 1 if a target in docs/phase4_agent_plan.md section 7 is missed.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ import argparse
 import asyncio
 import datetime as dt
 import json
+import os
 import pathlib
 import re
 import sys
@@ -179,6 +182,9 @@ def summarize(results: list[dict], cases: list[dict], runs: int) -> tuple[str, b
 async def amain(args) -> int:
     cases = yaml.safe_load((ROOT / "evals" / "agent_cases.yaml").read_text(encoding="utf-8"))["cases"]
     if args.cases:
+        unknown = sorted(set(args.cases) - {c["id"] for c in cases})
+        if unknown:   # a typo must not run zero cases and report PASS
+            raise SystemExit(f"unknown case id(s): {unknown}; known: {[c['id'] for c in cases]}")
         cases = [c for c in cases if c["id"] in args.cases]
     chat = DatabricksChat(args.profile)
     results = []
@@ -189,12 +195,15 @@ async def amain(args) -> int:
                   f"judge={[(j['id'], j['pass']) for j in res['judge']]}", file=sys.stderr)
             results.append(res)
     body, ok = summarize(results, cases, args.runs)
-    stamp = dt.date.today().isoformat()
+    now = dt.datetime.now(dt.timezone.utc)
+    stamp = now.date().isoformat()
     head = (f"# Agent eval {stamp}\n\nAgent model `{args.model}`, judge `{args.judge}` (both served free on the "
             f"workspace), {args.runs} runs per case, recorded tool outputs. Targets (plan section 7): healthy day "
             f"no incident every run; incidents every run on deterministic checks and on each must-not-claim item, "
             f"at least 2/3 on each must-identify item. **Overall: {'PASS' if ok else 'FAIL'}**\n\n")
-    out = ROOT / "evals" / "results" / f"{stamp}_{args.model}"
+    out_dir = pathlib.Path(args.out) if args.out else ROOT / "evals" / "results"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / f"{now.strftime('%Y-%m-%dT%H%MZ')}_{args.model}"
     out.with_suffix(".md").write_text(head + body, encoding="utf-8")
     out.with_suffix(".json").write_text(json.dumps(results, indent=1, default=str), encoding="utf-8")
     print(head + body)
@@ -203,13 +212,17 @@ async def amain(args) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--profile", required=True)
+    ap.add_argument("--profile", default=os.environ.get("AIDQ_PROFILE"),
+                    help="Databricks CLI profile; omit in CI (DATABRICKS_* variables)")
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--model", default=load_routes()["tasks"]["root_cause"]["primary"],
                     help="the agent model, pinned for the whole eval (default: the routed root_cause primary)")
     ap.add_argument("--judge", default=JUDGE_MODEL)
     ap.add_argument("--cases", nargs="*")
+    ap.add_argument("--out", help="results directory (default evals/results)")
     args = ap.parse_args()
+    if not args.profile and not os.environ.get("DATABRICKS_HOST"):
+        ap.error("--profile, AIDQ_PROFILE or DATABRICKS_* variables are required (no profile is chosen automatically)")
     sys.stdout.reconfigure(encoding="utf-8")
     return asyncio.run(amain(args))
 

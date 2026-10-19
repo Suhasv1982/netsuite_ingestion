@@ -3,7 +3,8 @@ name: DQ recommender eval
 # The DQ recommender eval (evals/run_dq_eval.py; plan #39 step 9) on GitHub, as ci-dev, so a result does not depend
 # on a local machine (owner request 2026-10-14). Live DRY runs only: the agent writes nothing, the validator's checks
 # run in-process, nothing is inserted or updated. The report goes to the job summary; the report and its JSON are also
-# printed between markers in the log, to be committed to evals/results/ by a person.
+# printed between markers in the log, to be committed to evals/results/ by a person, and saved as an artifact
+# (owner request 2026-10-19).
 # Triggers: manual (workflow_dispatch, from main), or a push to a dq-eval/** branch, which runs that commit's own code
 # and this file as it is on that commit (to evaluate a pull request's code before it merges).
 # Needs: ci-dev USE SCHEMA + SELECT on workspace.generator (owner-applied, grants/dev.yml).
@@ -63,3 +64,12 @@ jobs:
           echo "===BEGIN dq_eval md==="; cat eval_out/*.md; echo "===END dq_eval md==="
           echo "===BEGIN dq_eval json==="; cat eval_out/*.json; echo; echo "===END dq_eval json==="
           exit $rc
+
+      - name: Save the results
+        if: always()   # a failed or crashed eval keeps whatever it wrote
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dq-eval-${{ github.run_id }}
+          path: eval_out/
+          if-no-files-found: warn
+          retention-days: 90
