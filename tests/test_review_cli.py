@@ -147,3 +147,45 @@ def test_show_prints_the_trace_link_when_the_run_was_traced():
     assert "trace link: https://h/ml/experiments/12/traces/abc" in text
     assert "trace link" not in review.render(ROW)
     assert review.trace_url(None, ROW) is None                        # untraced: no experiment id in the evidence
+
+
+# -- ONBOARD_TABLE (onboarding plan #77, step 1): table_id NULL until applied ----------------------------------------
+
+ONBOARD = {**ROW, "proposal_id": 60, "proposal_type": "ONBOARD_TABLE", "source_table": "netsuite_items",
+           "load_mode": "Incremental", "requires_rebuild": None,
+           "proposed_change": {"table": {"source_table": "netsuite_items", "load_mode": "Incremental",
+                                         "business_key": "item_id", "watermark_col": "updated_date",
+                                         "scd_type": "Merge", "business_area_id": 3, "dest_schema": "netsuite"},
+                               "columns": [{"column_name": "item_name", "data_type": "TEXT", "ordinal": 2},
+                                           {"column_name": "item_id", "data_type": "INTEGER", "ordinal": 1}]},
+           "validation_result": None}
+
+
+def test_onboard_show_prints_the_table_definition_and_ordered_columns():
+    text = review.render(ONBOARD)
+    assert "Proposal 60  ONBOARD_TABLE  on netsuite_items  [VALIDATED]" in text
+    for part in ("Proposed table:", "  business_key: item_id", "  watermark_col: updated_date", "  dest_catalog: -",
+                 "  columns (2):"):
+        assert part in text
+    assert text.index("item_id  INTEGER") < text.index("item_name  TEXT")    # by ordinal, not list order
+    assert "Change:" not in text
+
+
+def test_onboard_never_needs_a_rebuild():
+    assert not review.needs_rebuild(ONBOARD)
+    assert not review.needs_rebuild({**ONBOARD, "requires_rebuild": True})   # a new table has no hashed column set
+
+
+def test_list_and_show_keep_proposals_without_a_table_id():
+    import sqlglot
+
+    for sql in (review.LIST_SQL, review.SHOW_SQL):
+        tree = sqlglot.parse_one(sql.replace("%s", "1"), read="postgres")
+        [join] = list(tree.find_all(sqlglot.exp.Join))
+        assert join.side == "LEFT", sql
+        assert "p.proposed_change->'table'->>'source_table'" in sql
+    assert "'new table, '" in review.LIST_SQL and "load_mode" in review.SHOW_SQL
+
+
+def test_other_proposal_types_render_as_before():
+    assert "Change:" in review.render(ROW) and "Proposed table:" not in review.render(ROW)

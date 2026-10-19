@@ -141,8 +141,9 @@ def test_validator_job_mode_uses_the_sdk(monkeypatch):
     monkeypatch.setattr("aidq_mcp.sdk_reads.SdkReads.__init__", lambda self, client=None: None)
     monkeypatch.setattr(vp, "validate_all", lambda conn, sql, catalog, set_role=True: seen.update(set_role=set_role) or [])
     monkeypatch.setattr(vp, "validate_columns", lambda conn, q, set_role=True: seen.update(columns=True) or [])
+    monkeypatch.setattr(vp, "pending_onboard", lambda conn: seen.update(onboard=True) or [])
     assert vp.main(["--auth", "sdk"]) == 0
-    assert seen == {"set_role": True, "columns": True, "commit": True}
+    assert seen == {"set_role": True, "columns": True, "onboard": True, "commit": True}
 
 
 def _exec_like_a_job(path: pathlib.Path, monkeypatch):

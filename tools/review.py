@@ -26,16 +26,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 
+# LEFT JOIN: an ONBOARD_TABLE proposal has table_id NULL (the table is not defined yet, migration 008); its table name
+# and load mode come from the proposed definition. With an inner join it was silently missing from list and show.
+PROPOSED_TABLE = "COALESCE(d.source_table, p.proposed_change->'table'->>'source_table')"
+PROPOSED_LOAD_MODE = "COALESCE(d.load_mode, p.proposed_change->'table'->>'load_mode')"
 LIST_SQL = (
-    "SELECT p.proposal_id, d.source_table, p.proposal_type, p.status, p.proposed_change->>'severity', "
-    "p.proposed_change->>'rule_name', p.validation_result->>'summary', p.created_at "
-    "FROM aidq_metadata.config_proposals p JOIN aidq_metadata.source_table_def d USING (table_id) "
+    f"SELECT p.proposal_id, {PROPOSED_TABLE} AS source_table, p.proposal_type, p.status, "
+    "p.proposed_change->>'severity', COALESCE(p.proposed_change->>'rule_name', "
+    "CASE WHEN p.proposal_type = 'ONBOARD_TABLE' THEN 'new table, ' || "
+    f"COALESCE({PROPOSED_LOAD_MODE}, '?') END), p.validation_result->>'summary', p.created_at "
+    "FROM aidq_metadata.config_proposals p LEFT JOIN aidq_metadata.source_table_def d USING (table_id) "
     "WHERE p.status IN ('PENDING', 'VALIDATED', 'VALIDATION_FAILED') ORDER BY p.created_at")
 SHOW_SQL = (
-    "SELECT p.proposal_id, d.source_table, d.load_mode, p.proposal_type, p.status, p.proposed_change, p.rationale, "
+    f"SELECT p.proposal_id, {PROPOSED_TABLE} AS source_table, {PROPOSED_LOAD_MODE} AS load_mode, p.proposal_type, "
+    "p.status, p.proposed_change, p.rationale, "
     "p.evidence, p.confidence, p.proposed_by, p.agent_trace_id, p.validation_result, p.reviewed_by, p.reviewed_at, "
     "p.review_comment, p.approved_severity, p.requires_rebuild, p.created_at FROM aidq_metadata.config_proposals p "
-    "JOIN aidq_metadata.source_table_def d USING (table_id) WHERE p.proposal_id = %s")
+    "LEFT JOIN aidq_metadata.source_table_def d USING (table_id) WHERE p.proposal_id = %s")
 APPROVE_SQL = (
     "UPDATE aidq_metadata.config_proposals SET status = 'APPROVED', reviewed_by = %s, reviewed_at = now(), "
     "review_comment = %s, approved_severity = %s WHERE proposal_id = %s AND status = 'VALIDATED'")
@@ -56,7 +63,10 @@ def requires_rebuild(proposal_type: str, load_mode: str | None) -> bool:
 
 def needs_rebuild(row: dict) -> bool:
     """The validator's decision (config_proposals.requires_rebuild, migration 008) when it is set; else the rule it
-    applies (column changes on incremental tables)."""
+    applies (column changes on incremental tables). Never for ONBOARD_TABLE: a new table has no hashed column set
+    yet, so its first run builds bronze from scratch."""
+    if row["proposal_type"] == "ONBOARD_TABLE":
+        return False
     if row.get("requires_rebuild") is not None:
         return bool(row["requires_rebuild"])
     return requires_rebuild(row["proposal_type"], row.get("load_mode"))
@@ -72,7 +82,10 @@ def render(row: dict) -> str:
         lines.append(f"  trace link: {row['trace_url']}")
     if needs_rebuild(row):
         lines.append("  ** requires bronze rebuild **")
-    lines += ["", "Change:"] + [f"  {k}: {v}" for k, v in change.items()]
+    if row["proposal_type"] == "ONBOARD_TABLE":
+        lines += ["", "Proposed table:"] + render_onboard(change)
+    else:
+        lines += ["", "Change:"] + [f"  {k}: {v}" for k, v in change.items()]
     lines += ["", "Rationale:", "  " + (row["rationale"] or "").replace("\n", "\n  ")]
     if ev:
         lines += ["", "Evidence:", "  " + json.dumps(ev, default=str)[:800]]
@@ -86,6 +99,22 @@ def render(row: dict) -> str:
         lines += ["", f"Reviewed by {row['reviewed_by']} at {row['reviewed_at']}: {row['review_comment'] or ''}"
                   + (f" (severity set to {row['approved_severity']})" if row.get("approved_severity") else "")]
     return "\n".join(lines)
+
+
+TABLE_FIELDS = ("source_table", "load_mode", "business_key", "watermark_col", "scd_type", "business_area_id",
+                "dest_catalog", "dest_schema", "discard_threshold")
+
+
+def render_onboard(change: dict) -> list[str]:
+    """The proposed source_table_def row (known fields first, then any others) and the column list in ordinal order."""
+    table, cols = change.get("table") or {}, change.get("columns") or []
+    lines = [f"  {k}: {table.get(k) if table.get(k) not in (None, '') else '-'}" for k in TABLE_FIELDS]
+    lines += [f"  {k}: {v}" for k, v in table.items() if k not in TABLE_FIELDS]
+    lines.append(f"  columns ({len(cols)}):")
+    for c in sorted(cols, key=lambda c: (c.get("ordinal") is None, c.get("ordinal") or 0)):
+        lines.append(f"    {c.get('ordinal', '?'):>3}  {c.get('column_name')}  {c.get('data_type')}")
+    lines += [f"  {k}: {v}" for k, v in change.items() if k not in ("table", "columns")]
+    return lines
 
 
 def _row(cur_row, cols) -> dict:
