@@ -10,11 +10,16 @@ ROLES = load_roles()
 TABLES = ROLES["data_generator"]["tables"]
 
 
+# tables the generator updates in place (upsert); every other source table is append-only
+UPDATED_IN_PLACE = {"netsuite.netsuite_customers", "netsuite.netsuite_items"}   # items: onboarding plan #77
+
+
 def test_spec_is_least_privilege():
-    assert TABLES["netsuite.netsuite_customers"] == ["SELECT", "INSERT", "UPDATE"]
+    for t in UPDATED_IN_PLACE:
+        assert TABLES[t] == ["SELECT", "INSERT", "UPDATE"], t
     for t, privs in TABLES.items():
         assert not {"DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"} & set(privs), t
-        if t != "netsuite.netsuite_customers":
+        if t not in UPDATED_IN_PLACE:
             assert privs == ["SELECT", "INSERT"], t
 
 
