@@ -82,7 +82,11 @@ You can only read, through the tools you are given. You cannot change, rerun or 
 Separate what a tool result shows from what you infer. A cause counts as verified only when tool results show it; \
 otherwise give it as the most likely explanation, set confidence accordingly, and list what would confirm it in \
 open_questions. Ruling things out is useful: put each explanation the evidence excludes in not_the_cause with the \
-reason. Do not repeat the context notes back as findings."""
+reason. Do not repeat the context notes back as findings.
+
+Context lines that start with "fact" are deterministic and verified (read from the tools before you were called). Never contradict a fact, and never list as ruled out a cause that a fact establishes. When a fact names the meaning and category of an error (for example a guard that blocked the run by design), build the analysis on it: do not call such a failure a code bug and do not recommend a code rollback. When a fact says the runs after a failure \
+succeeded ("the failure is not ongoing"), the problem has already been fixed: say so in the summary, and make \
+suggested_fix what (if anything) prevents a recurrence, not a repeat of a fix that already happened."""
 
 DESIGN_NOTES = pathlib.Path(__file__).resolve().parents[2] / "docs" / "platform_design_notes.md"
 

@@ -1,9 +1,9 @@
 """Token age as a deterministic monitor fact (incident 6, 2026-10-14): aidq_mcp.logic.credential_checks and
-aidq_agent.triage.credential_facts."""
+aidq_agent.facts.credential_facts (also importable from triage)."""
 
 import datetime as dt
 
-from aidq_agent import triage
+from aidq_agent import facts as facts_mod, triage
 from aidq_mcp import logic
 
 UTC = dt.timezone.utc
@@ -50,7 +50,7 @@ def test_facts_name_the_starter_and_the_age():
                       "database credential was last refreshed 2026-10-13T20:44:10+00:00, 4 h 27 min before (EXPIRED: "
                       "credentials last about 60 min)")
     assert "through the job (refresh_credentials ran first)" in scheduled and "still valid" in scheduled
-    assert manual in triage.context_notes(results)
+    assert manual in facts_mod.facts_from(results)
 
 
 def test_unavailable_checks_add_no_fact():

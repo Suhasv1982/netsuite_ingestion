@@ -11,7 +11,7 @@ import pytest
 pytest.importorskip("langgraph")
 anthropic = pytest.importorskip("anthropic")
 
-from aidq_agent import triage  # noqa: E402
+from aidq_agent import facts as facts_mod, triage  # noqa: E402
 from aidq_agent.graph import run  # noqa: E402
 from aidq_agent.investigate import MAX_TOOL_CALLS, AnthropicInvestigator, Investigation  # noqa: E402
 from aidq_agent.store import DryRunStore  # noqa: E402
@@ -82,14 +82,13 @@ def test_missed_runs_add_deterministic_schedule_facts():
          "schedule": {"cron": "0 0 5 * * ?", "timezone": "UTC", "pause_status": "UNPAUSED"}},
         {**job("ingestion", missed=["2026-10-06T05:30:00+00:00"], runs=[run_(2)]),
          "schedule": {"cron": "0 30 5 * * ?", "timezone": "UTC", "pause_status": "UNPAUSED"}}]}
-    notes = triage.context_notes(with_(get_recent_job_runs=jobs, get_recent_deploys=deploys))
-    facts = [n for n in notes if n.startswith("fact")]
+    facts = facts_mod.schedule_facts(with_(get_recent_job_runs=jobs, get_recent_deploys=deploys))
     assert "generator UNPAUSED (cron 0 0 5 * * ? UTC); ingestion UNPAUSED (cron 0 30 5 * * ? UTC)" in facts[0]
     assert "last config change to generator: 2026-10-01 20:56:45 reset by ci-dev" in facts[1]
     assert "last config change to ingestion: none in the window" in facts[2]
     assert triage.schedule_facts(HEALTHY) == []          # nothing missed: no schedule facts
     no_audit = with_(get_recent_job_runs=jobs, get_recent_deploys={"status": "ok", "config_changes": {"unavailable": "x"}})
-    assert any("unavailable to this identity" in n for n in triage.context_notes(no_audit))
+    assert any("unavailable to this identity" in n for n in facts_mod.facts_from(no_audit))
 
 
 def test_unexplained_gap_failed_run_unavailable_tool_and_threshold_are_signals():
@@ -150,7 +149,7 @@ class FakeToolBox:
 
     async def call(self, name, arguments):
         self.calls.append((name, arguments))
-        return self.results[name]
+        return self.results.get(name) or {"status": "unavailable", "reason": f"{name} not faked"}
 
 
 def investigate(client, results=MISSED):

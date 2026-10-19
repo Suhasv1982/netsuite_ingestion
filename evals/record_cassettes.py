@@ -40,6 +40,7 @@ VARIANTS = (
     + [("get_pipeline_errors", {"hours": h}) for h in (6, 12, 24, 48, 72, 168)]
     + [("compare_bronze_to_source", {**({"table": t} if t else {})}) for t in [None] + TABLES]
     + [("get_recent_deploys", {"days": d}) for d in (1, 2, 3, 5, 7, 14, 30)]
+    + [("get_platform_state", {"hours": h}) for h in (24, 48, 72, 168)]
 )
 
 
@@ -133,6 +134,10 @@ CASES = {
     # incident 6: a manual pipeline update at 01:11 UTC (not through the job) failed on an expired credential; the
     # monitor saw it in its 12:01 run. Before the 16:38 deploy-dev run (the window ends at the case time).
     "2026-10-14_credential_expired": dt.datetime(2026, 10, 14, 12, 0, tzinfo=UTC),
+    # incident 30: the row-hash guard blocked the 10-15 20:01 dev run and its retries after proposal 48 (ADD_COLUMN,
+    # applied 19:27); the monitor's 11:32 run on 10-16 called it a code bug. get_platform_state's changes end at `now`;
+    # its endpoint state is the state at recording time.
+    "2026-10-16_guard_blocked": dt.datetime(2026, 10, 16, 11, 30, tzinfo=UTC),
 }
 
 

@@ -1,0 +1,60 @@
+id: 2026-10-15_guard_blocked_after_add_column
+title: The row-hash guard blocked a dev run after an approved column change; the monitor called it a code bug
+detected: 2026-10-16
+occurred: [2026-10-15]
+environment: dev
+category: schema_drift
+severity: low   # designed fail-closed behaviour; the approved bronze rebuild 16 minutes later resolved it
+incident_id: 30  # written by the monitor as ORCHESTRATION ("code bug in bronze.py line 8", roll back); corrected by the owner
+
+symptoms:
+  - dev job run at 20:01 UTC on 2026-10-15 ended SUCCESS_WITH_FAILURES (run_pipeline failed); run_audit FAILED rows
+  - six pipeline updates FAILED 20:02-20:16 UTC (the job's own and five RETRY_ON_FAILURE retries), each with a
+    traceback in bronze.py, cell 1, line 8
+  - the next runs (20:21 rebuild, 21:07, 21:18, and the scheduled 05:30 on 10-16) succeeded; bronze = source
+
+evidence:
+  - step: the full exception
+    query: GET /api/2.0/pipelines/<pipeline id>/events?filter=level='ERROR'   # error.exceptions[].message, all of it
+    finding: >-
+      about 14k characters; near the end: "BLOCKED: the hashed column set of netsuite_transactions changed in
+      source_columns (added custbody_region)" (the monitor's tool returned only the first 500 characters)
+  - step: what changed just before
+    query: SELECT * FROM aidq_metadata.config_change_log WHERE changed_at >= '2026-10-15'
+    finding: >-
+      19:27:55 UTC INSERT source_columns netsuite_transactions.custbody_region, proposal 48 (ADD_COLUMN on an
+      incremental table, requires_rebuild true), approved by the owner
+  - step: how it ended
+    query: databricks jobs list-runs --job-id <dev ingestion job>
+    finding: deploy-dev with bronze_rebuild=true 20:20-20:36 UTC, then every run SUCCESS; daily_check 2026-10-16 PASSED
+
+root_cause: >
+  Owner ruling 2026-10-16: SCHEMA_DRIFT, by design. Approving proposal 48 added custbody_region to the hashed column
+  set of netsuite_transactions. The bronze row-hash guard then refused every normal run at graph build ("BLOCKED:
+  the hashed column set ... changed"), exactly as designed (design 3.8), until the owner-approved bronze rebuild ran.
+  No code was wrong; nothing needed rolling back.
+
+not_the_cause:
+  - "a code bug or a recent code change in bronze.py (the traceback's line 8 is where the pipeline runs the notebook)"
+  - "an expired credential (the stored credential was 0-15 minutes old)"
+  - "a scheduler or orchestration problem (the job ran and retried; the guard stopped it)"
+
+fix:
+  decision: none needed; the approved bronze rebuild resolved it (owner 2026-10-16)
+  changes:
+    - "the monitor searches the FULL error text for known markers (row_hash_guard, credential_rejected, ...) and
+      reads applied config changes (get_platform_state); a deterministic facts step gives both to the model"
+  follow_up:
+    - incident 30 re-categorized SCHEMA_DRIFT, linked to proposal 48 and resolved, with the monitor's original
+      diagnosis kept in evidence.resolution
+
+grading:
+  must_identify:
+    - the row-hash guard blocked the run (BLOCKED, the hashed column set of netsuite_transactions changed)
+    - it follows the approved column change (custbody_region, proposal 48), which requires a bronze rebuild
+    - it is the designed fail-closed behaviour and the later runs succeeded (no ongoing problem)
+  must_not_claim:
+    - a code bug or a recent code change caused it, or a code rollback or a fix to the bronze code is recommended
+    - schema drift or a column change was ruled out
+    - an expired credential caused it
+  tools_expected: [get_pipeline_errors, get_platform_state]
