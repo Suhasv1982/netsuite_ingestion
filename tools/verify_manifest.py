@@ -18,6 +18,8 @@ Per defect type, for each listed business key:
   late_arriving           a row of that key with the listed created_date and updated_date exists
   customer_*              the customer's current row still has the defect (upserts can remove it)
   null_business_key       keys were nulled, so rows cannot be told apart: verified as a count of NULL-key rows
+  item_*                  the item's current row still has the defect (items are updated in place)
+  line_inactive_item      a row of that key references an item that is inactive now
 The output keeps each entry with only its verified keys and a `verification` block (total, verified, method).
 """
 
@@ -103,6 +105,17 @@ def check_entry(conn, entry: dict) -> tuple[list, str]:
         total = len(entry.get("business_keys", []))
         return (list(entry["business_keys"]) if n >= total else []), \
             f"count: {n} NULL-key rows in the table, {total} injected (rows cannot be matched to keys)"
+    if defect == "item_null_category":
+        return keys_where("category IS NULL"), "current row: category IS NULL"
+    if defect == "item_negative_price":
+        return keys_where("base_price < 0"), "current row: base_price < 0"
+    if defect == "item_invalid_type":
+        return (keys_where("item_type IS NULL OR item_type <> ALL(%s)", (list(ng.VALID_ITEM_TYPES),)),
+                "current row: item_type not a valid type")
+    if defect == "line_inactive_item":
+        return (keys_where("EXISTS (SELECT 1 FROM netsuite.netsuite_items i WHERE i.item_id = "
+                           f"{t}.item_id AND i.is_inactive)"),
+                "the line's item is inactive now (it may have been reactivated since)")
     raise ValueError(f"unknown defect type {defect!r}")
 
 
