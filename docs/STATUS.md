@@ -1,4 +1,4 @@
-# STATUS (updated 2026-10-15)
+# STATUS (updated 2026-10-19)
 
 Read this first, then run `git status` and check open PRs. Updated after every Phase 2 step.
 
@@ -43,6 +43,61 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
 
 **Source database (`netsuite-sample`):** production plus backups `pre-synthetic-backup-202609242053`,
 `...202609252235`, `...202609260101`, `...202609260109` (5 of 10 branches).
+
+## 0r. 2026-10-17..19: platform restriction (no scheduled runs since 10-18); open items
+
+* **10-17:** generator, dev job, knowledge_refresh, schema_drift, dq_validator x2 all scheduled and SUCCESS.
+* **10-18 and 10-19: no scheduled run fired** (no generator, dev job, knowledge_refresh, schema_drift,
+  dq_validator; the Sunday 10-18 `dq_recommender` did not run either). The watchdog's run-now was refused:
+  `Triggering new runs for organization <id> is currently disabled temporarily`. Also refused since 10-18: the SQL
+  warehouse (`The request could not be processed by the warehouse`) and the foundation model endpoints
+  (`Cannot create or query foundation model endpoints, please try again later`). The monitor re-enabled both
+  Lakebase endpoints each day. Free Edition platform restriction, cause not confirmed; nothing was changed on our
+  side. Nothing done about it (owner decision pending).
+* **New OPEN incidents:** 31 (10-17, OTHER): the same misdiagnosis as incident 30 (the 10-15 20:01 run is still in
+  the 3-day window; new fingerprint because 30 was resolved); #79 fixes the diagnosis. 32 and 34 (ORCHESTRATION,
+  "[self-heal failed]": missed runs 10-18, 10-19, run-now refused). 33 and 35 (OTHER: warehouse refused; 35 has no
+  RCA, the model call was refused).
+* **PR #79** (monitor deterministic facts, incident 30): built, pytest green, the new eval case met its targets on
+  10-16. The full regression eval is incomplete (one failed run in `missed_runs_metadata_unavailable`, not yet
+  examined; the last case lost the network); a re-run on 10-19 was refused by the model endpoints. Re-run before
+  merging.
+* **Waiting for the owner:** run the `netsuite_items` DDL (#77 section 2), then confirm, then the grants are applied;
+  decide on incidents 31-35 and the platform restriction; review #79.
+
+## 0q. 2026-10-16: daily cycle, incident 30, proposals reviewed, onboarding default privileges
+
+**Daily cycle 10-16 (all scheduled, all SUCCESS):** generator 05:00, dev `netsuite_ingestion_daily` 05:30-05:42,
+`knowledge_refresh` 07:15, `schema_drift` 07:30 (no new proposals), `dq_validator` 07:45 and 08:45.
+`daily_check --date 2026-10-16`: **PASSED** (bronze = source per table and date, ledger OK; WARN only for no prod
+run). No Lakebase endpoint had to be re-enabled.
+
+**Incident 30 (monitor 11:32 UTC): misdiagnosis, corrected and RESOLVED (owner 2026-10-16).** The monitor wrote
+ORCHESTRATION, "a code bug in bronze.py line 8", and recommended a code rollback. Real cause: the row-hash guard
+blocked the 10-15 20:01 dev run and its 5 retries (`BLOCKED: the hashed column set of netsuite_transactions changed
+in source_columns (added custbody_region)`) after proposal 48 was applied at 19:27, by design (0o); the rebuild at
+20:20 fixed it. The error text is ~14k characters and the BLOCKED line is near its end; the tool returned the first
+500 (same pattern as incident 6). Re-categorized SCHEMA_DRIFT, linked to proposal 48, the monitor's original
+diagnosis kept in `evidence.resolution`. Fix: PR #79 (0r).
+
+**DQ proposals reviewed (owner 2026-10-16):** rejected 17, 19, 22 (HARD "ID not null" on certifications,
+transactions, lines) with the reason "NULL IDs are injected generator defects, not real source behaviour; do not
+enforce". Approved and applied as SOFT: 12 (Company Name Not Null), 13 (Valid Email Format), 18 (Certification Start
+Not In Future), 25 (Transaction Date Not In Future): rules 18-21, enforced from the next dev run. No proposal open.
+Rule 11 (memberships ID not null, HARD) unchanged. Incidents 7-15 (DQ_NOT_EXPRESSIBLE, 10-14) are still OPEN.
+
+**aidq MCP server registered in Claude Code** on the owner's machine (user scope, all projects; not committed):
+`claude mcp add aidq --scope user -e PYTHONPATH=<repo>/src -e PYTHONIOENCODING=utf-8 -- <repo>/.venv/Scripts/python.exe
+-m aidq_mcp --profile DEFAULT`. Connected. (The package is not installed in the venv, so `PYTHONPATH` is needed;
+the bare command in 0p fails with `No module named 'aidq_mcp'`.) Remove: `claude mcp remove aidq -s user`.
+
+**Onboarding (#77): plan decisions approved (owner 2026-10-16); default privileges checked (read-only).** On
+`netsuite-sample`/production the owner's role has default privileges in schema `netsuite`: every table the owner
+creates there gets **SELECT for ci-dev and ci-prod** automatically (`pg_default_acl`, objtype r), nothing else.
+So `netsuite.netsuite_items` will be readable by **ci-prod** as soon as it exists. **Accepted by the owner
+(2026-10-16)**: read-only, and prod ignores the table until it is onboarded in prod metadata. It also means ci-dev
+(the dev pipeline identity) needs no extra grant. dq-agent and data-generator get theirs explicitly (plan section 3)
+after the owner runs the DDL.
 
 ## 0p. End of day 2026-10-15: RAG done-when, what is merged, waiting, scheduled
 
