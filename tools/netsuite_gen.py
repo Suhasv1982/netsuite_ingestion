@@ -21,6 +21,12 @@ distinct date, silver sequences by it). New rows get `created_date` =
 gets a later `updated_date`; late rows are new rows whose `updated_date` is
 older than the table's current maximum `updated_date`.
 
+netsuite_items (onboarding plan #77; created by the owner, 2026-10-19) is optional: when the table exists, the
+generator seeds one row per item_id the lines use (only missing ids: idempotent), updates a few items in place each
+increment (price change, inactivation or reactivation; upsert on item_id, updated_date = the batch date), generates
+new lines from active items at their current price, and backs the table up with the others. When it does not exist,
+items are skipped and the output is exactly as before.
+
 Defects are injected from a YAML config, every rate defaults to 0 (off). The
 run writes a JSON manifest listing exactly which rows carry which defect.
 
@@ -48,6 +54,7 @@ T_MEMBERSHIPS = "netsuite_memberships"
 T_CERTIFICATIONS = "netsuite_certifications"
 T_TRANSACTIONS = "netsuite_transactions"
 T_LINES = "netsuite_transaction_lines"
+T_ITEMS = "netsuite_items"   # optional, not in TABLES: handled only when it exists in the source (see the docstring)
 TABLES = [T_CUSTOMERS, T_MEMBERSHIPS, T_CERTIFICATIONS, T_TRANSACTIONS, T_LINES]
 INCREMENTAL_TABLES = [T_MEMBERSHIPS, T_CERTIFICATIONS, T_TRANSACTIONS, T_LINES]
 
@@ -69,6 +76,9 @@ COLUMNS = {
         "transaction_line_id", "transaction_internal_id", "line_number", "item_id", "item_name",
         "quantity", "rate", "amount", "created_date", "updated_date",
     ],
+    T_ITEMS: [
+        "item_id", "item_name", "item_type", "category", "base_price", "is_inactive", "created_date", "updated_date",
+    ],
 }
 BUSINESS_KEY = {
     T_CUSTOMERS: "customer_internal_id",
@@ -76,6 +86,7 @@ BUSINESS_KEY = {
     T_CERTIFICATIONS: "certification_internal_id",
     T_TRANSACTIONS: "transaction_internal_id",
     T_LINES: "transaction_line_id",
+    T_ITEMS: "item_id",
 }
 # Bronze reads only the columns listed in aidq_metadata.source_columns, which
 # omits customers.created_date/updated_date -- pre-existing drift we do NOT fix.
@@ -119,6 +130,23 @@ DEFAULT_ITEMS = [
     )
 ]
 
+# netsuite_items: item_type and category per item_id (onboarding plan #77, section 2). An id not listed here (none
+# today) gets UNKNOWN_ITEM_CLASS.
+VALID_ITEM_TYPES = ("Inventory", "Non-inventory", "Service", "Kit")
+INVALID_ITEM_TYPES = ["Bundle", "service", ""]
+ITEM_CATALOG = {
+    101: ("Service", "Membership"), 102: ("Service", "Certification"), 103: ("Non-inventory", "Education"),
+    3001: ("Service", "Membership"), 3002: ("Service", "Certification"), 3003: ("Inventory", "Publications"),
+    3004: ("Non-inventory", "Education"), 3005: ("Non-inventory", "Events"), 3006: ("Service", "Education"),
+    3007: ("Kit", "Certification"), 3008: ("Service", "Membership"), 3009: ("Service", "Fees"),
+    3010: ("Service", "Membership"), 3011: ("Service", "Certification"), 3012: ("Non-inventory", "Certification"),
+    3013: ("Service", "Career"), 3014: ("Non-inventory", "Publications"), 3015: ("Service", "Career"),
+    3016: ("Kit", "Membership"), 3017: ("Kit", "Events"), 3018: ("Inventory", "Education"),
+    3019: ("Inventory", "Publications"), 3020: ("Service", "Certification"),
+}
+UNKNOWN_ITEM_CLASS = ("Non-inventory", "Other")
+ITEM_INACTIVATE_SHARE = 0.25   # of the items picked for an update: flip active <-> inactive; the rest change price
+
 DEFECT_NAMES = [
     "null_business_key",
     "duplicate_business_key",
@@ -131,6 +159,11 @@ DEFECT_NAMES = [
     "customer_malformed_email",
     "customer_updated_before_created",
     "late_arriving",
+    # netsuite_items (onboarding plan #77); only when the table exists
+    "item_null_category",
+    "item_negative_price",
+    "item_invalid_type",
+    "line_inactive_item",
 ]
 
 
@@ -545,9 +578,52 @@ class DefectInjector:
                 note="same key appears twice within the same updated_date snapshot; the appended duplicate has created_date - 1 day",
             )
 
+    def item_defects(self, items: list[dict]) -> None:
+        """On the item rows written in this run (seeded or updated). They persist in place until the item is next
+        updated; an update changes only the price or the active flag, so category and type defects stay."""
+        def set_category(r):
+            r["category"] = None
+
+        def set_price(r):
+            r["base_price"] = -r["base_price"]
+
+        def set_type(r):
+            r["item_type"] = self.rng.choice(INVALID_ITEM_TYPES)
+
+        for name, column, eligible, apply in (
+            ("item_null_category", "category", lambda r: r["category"] is not None, set_category),
+            ("item_negative_price", "base_price", lambda r: r["base_price"] is not None and r["base_price"] > 0,
+             set_price),
+            ("item_invalid_type", "item_type", lambda r: r["item_type"] in VALID_ITEM_TYPES, set_type),
+        ):
+            picked = self._pick(items, self._rate(name), eligible)
+            for r in picked:
+                apply(r)
+            if picked:
+                self.manifest.record(name, T_ITEMS, [r["item_id"] for r in picked], column=column)
+
+    def line_inactive_item(self, lines: list[dict], inactive: list[tuple]) -> None:
+        """New lines that reference an inactive item (at its last valid price, so amount = quantity * rate holds)."""
+        if not inactive:
+            return
+        picked = self._pick(lines, self._rate("line_inactive_item"), eligible=lambda r: id(r) in self.ctx.new_rows)
+        for r in picked:
+            r["item_id"], r["item_name"], r["rate"] = self.rng.choice(inactive)
+            r["amount"] = r["quantity"] * r["rate"]
+        if picked:
+            self.manifest.record("line_inactive_item", T_LINES, [r["transaction_line_id"] for r in picked],
+                                 column="item_id", note="the line's item is inactive in netsuite_items")
+
     # -- driver -----------------------------------------------------------
 
-    def apply(self, data: dict[str, list[dict]]) -> None:
+    def apply(self, data: dict[str, list[dict]], items: list[dict] | None = None,
+              inactive_items: list[tuple] | None = None) -> None:
+        """`items`: the netsuite_items rows written in this run (None when the table does not exist: nothing about
+        items is drawn, so the output is as before); `inactive_items`: (item_id, item_name, price) of the inactive
+        items, for line_inactive_item."""
+        if items is not None:
+            self.line_inactive_item(data[T_LINES], inactive_items or [])   # first: the amount defects then see it
+            self.item_defects(items)
         self.customer_defects(data[T_CUSTOMERS])
         for table in INCREMENTAL_TABLES:
             self.late_arriving(table, data[table])
@@ -565,10 +641,71 @@ class DefectInjector:
 # --------------------------------------------------------------------------
 
 
+def item_price(row: dict) -> int | None:
+    """An item's valid price for new lines (the lines' rate is an integer): its base_price without a sign defect."""
+    p = row.get("base_price")
+    return None if p is None else int(abs(p))
+
+
+def line_catalog(items: list[dict]) -> list[tuple]:
+    """(item_id, item_name, price) of the active items with a name and a price: what new lines are generated from."""
+    return [(r["item_id"], r["item_name"], item_price(r)) for r in sorted(items, key=lambda r: r["item_id"])
+            if not r.get("is_inactive") and item_price(r) and r.get("item_name")]
+
+
+def seed_items(items: list[dict], lines: list[dict]) -> list[dict]:
+    """One netsuite_items row per item_id used by `lines` that `items` does not have yet (idempotent): name and price
+    from the lines (the most frequent; ties: the larger), type and category from ITEM_CATALOG, active,
+    created_date = updated_date = the item's first line date."""
+    have = {r["item_id"] for r in items}
+    seen: dict = {}
+    for ln in lines:
+        iid = ln.get("item_id")
+        if iid is None or iid in have:
+            continue
+        s = seen.setdefault(iid, {"names": {}, "rates": {}, "first": None})
+        if ln.get("item_name"):
+            s["names"][ln["item_name"]] = s["names"].get(ln["item_name"], 0) + 1
+        if ln.get("rate") is not None:
+            s["rates"][ln["rate"]] = s["rates"].get(ln["rate"], 0) + 1
+        day = _as_date(ln.get("created_date"))
+        if day is not None and (s["first"] is None or day < s["first"]):
+            s["first"] = day
+    out = []
+    for iid in sorted(seen):
+        s = seen[iid]
+        name = max(s["names"], key=lambda n: (s["names"][n], n)) if s["names"] else None
+        rate = max(s["rates"], key=lambda r: (s["rates"][r], r)) if s["rates"] else None
+        item_type, category = ITEM_CATALOG.get(iid, UNKNOWN_ITEM_CLASS)
+        out.append({"item_id": iid, "item_name": name, "item_type": item_type, "category": category,
+                    "base_price": rate, "is_inactive": False, "created_date": s["first"], "updated_date": s["first"]})
+    return out
+
+
+def update_items(rng: random.Random, items: list[dict], batch_date: dt.date, share: float) -> list[dict]:
+    """In-place updates of existing items (the new row values, for the upsert): a share of them, at least one when
+    there are items. ITEM_INACTIVATE_SHARE of those flip active <-> inactive, the others change price (integral,
+    positive, from the valid price). created_date stays; updated_date = batch_date."""
+    if not items:
+        return []
+    current = sorted(items, key=lambda r: r["item_id"])
+    n = max(1, int(len(current) * share))
+    out = []
+    for row in rng.sample(current, min(n, len(current))):
+        new = dict(row)
+        if rng.random() < ITEM_INACTIVATE_SHARE:
+            new["is_inactive"] = not row.get("is_inactive")
+        else:
+            new["base_price"] = max(1, round((item_price(row) or 1) * rng.uniform(0.9, 1.15)))
+        new["updated_date"] = batch_date
+        out.append(new)
+    return out
+
+
 @dataclass
 class GenResult:
     data: dict            # table -> rows to insert
-    upserts: dict         # table -> rows to upsert (customers only)
+    upserts: dict         # table -> rows to upsert (customers; netsuite_items when it exists)
     manifest: dict
 
 
@@ -601,7 +738,8 @@ def _finish_manifest(mode, seed, batch_date, cfg, scale, data, upserts, injector
     return manifest
 
 
-def generate_init(gen: Generator, scale: ScaleConfig, batch_date: dt.date, cfg: DefectConfig, populate_region: bool = False) -> GenResult:
+def generate_init(gen: Generator, scale: ScaleConfig, batch_date: dt.date, cfg: DefectConfig, populate_region: bool = False,
+                  items_present: bool = False) -> GenResult:
     ctx = Context(mode="init", batch_date=batch_date)
     data = _empty()
     data[T_CUSTOMERS] = gen.customers(scale.customers, ID_START[T_CUSTOMERS], batch_date)
@@ -615,9 +753,13 @@ def generate_init(gen: Generator, scale: ScaleConfig, batch_date: dt.date, cfg: 
         for row in data[T_TRANSACTIONS]:
             row[DRIFT_COLUMN] = gen.region()
 
+    items = seed_items([], data[T_LINES]) if items_present else None
     manifest = Manifest()
-    DefectInjector(cfg, gen.rng, ctx, manifest).apply(data)
-    return GenResult(data, {}, _finish_manifest("init", gen.seed, batch_date, cfg, scale, data, {}, manifest, None, {}))
+    DefectInjector(cfg, gen.rng, ctx, manifest).apply(data, items=items)
+    upserts = {T_ITEMS: items} if items is not None else {}
+    extra = {"items": {"present": items_present, "seeded": len(items or []), "updated": 0}}
+    return GenResult(data, upserts, _finish_manifest("init", gen.seed, batch_date, cfg, scale, data, upserts, manifest,
+                                                     None, extra))
 
 
 def next_batch_date(existing: dict) -> dt.date:
@@ -640,6 +782,7 @@ def generate_increment(
     region_present: bool = False,
     update_spread_days: int = 2,
     allow_before_watermark: bool = False,
+    items_present: bool = False,
 ) -> GenResult:
     """`existing` maps table -> all current rows (every version) as dicts. New versions of existing rows get an
     updated_date of batch_date + 0..update_spread_days (0 for the daily schedule, so no row is dated after its
@@ -678,6 +821,22 @@ def generate_increment(
     # new rows for the incremental tables
     def start(table, rows):
         return _max_int(rows, BUSINESS_KEY[table], ID_START[table] - 1) + 1
+
+    # netsuite_items: seed missing ids, update a few in place; new lines use the active items at their current price
+    items_rows = inactive = None
+    seeds, updates = [], []
+    if items_present:
+        current = existing.get(T_ITEMS, [])
+        seeds = seed_items(current, existing.get(T_LINES, []))
+        updates = update_items(rng, current, batch_date, scale.increment_update_pct)
+        after = {r["item_id"]: r for r in current + seeds}
+        after.update({r["item_id"]: r for r in updates})
+        catalog = line_catalog(list(after.values()))
+        if catalog:
+            gen.items = catalog
+        inactive = [(r["item_id"], r["item_name"], item_price(r)) for r in after.values()
+                    if r.get("is_inactive") and item_price(r) and r.get("item_name")]
+        items_rows = seeds + updates
 
     m_ex, c_ex, t_ex = existing.get(T_MEMBERSHIPS, []), existing.get(T_CERTIFICATIONS, []), existing.get(T_TRANSACTIONS, [])
     new_m = gen.memberships(new_n(scale.memberships), start(T_MEMBERSHIPS, m_ex), all_customer_ids, batch_date)
@@ -732,7 +891,10 @@ def generate_increment(
 
     ctx.new_rows = {id(r) for r in new_m + new_c + new_t + new_l}
     manifest = Manifest()
-    DefectInjector(cfg, rng, ctx, manifest).apply({**data, T_CUSTOMERS: new_customers + updated_cust})
+    DefectInjector(cfg, rng, ctx, manifest).apply({**data, T_CUSTOMERS: new_customers + updated_cust},
+                                                  items=items_rows, inactive_items=inactive)
+    if items_rows is not None:
+        upserts[T_ITEMS] = items_rows
     # customer defects were applied to the combined list (same dict objects), keep the split
     drift = (
         {"table": DRIFT_TABLE, "column": DRIFT_COLUMN, "type": "text",
@@ -745,7 +907,8 @@ def generate_increment(
         "increment": {
             "current_watermarks": {t: str(w) for t, w in ctx.watermarks.items()},
             "updated_versions": {T_MEMBERSHIPS: len(upd_m), T_CERTIFICATIONS: len(upd_c), T_TRANSACTIONS: len(upd_t), T_LINES: len(upd_l)},
-        }
+        },
+        "items": {"present": items_present, "seeded": len(seeds), "updated": len(updates)},
     }
     return GenResult(
         data, upserts,
@@ -848,20 +1011,23 @@ def main(argv: list[str] | None = None) -> int:
         if args.init:
             extra_items = []
             backup_info = {"performed": False, "reason": "dry-run"}
+            items_present = False
             if not args.dry_run:
                 conn = pg_writer.connect(args.profile, args.auth)
                 extra_items = pg_writer.read_items(conn)
-                backup_info = pg_writer.create_backup(conn, args.profile, **backup_kwargs)
+                items_present = T_ITEMS in pg_writer.read_live_columns(conn)
+                backup_info = pg_writer.create_backup(conn, args.profile, include_items=items_present, **backup_kwargs)
                 pg_writer.require_backup(backup_info)
             gen = Generator(args.seed, extra_items)
-            result = generate_init(gen, scale, args.batch_date or BASE_SNAPSHOT_DATE, cfg)
+            result = generate_init(gen, scale, args.batch_date or BASE_SNAPSHOT_DATE, cfg, items_present=items_present)
             result.manifest["backup"] = backup_info
             if not args.dry_run:
-                pg_writer.load_init(conn, result.data)
+                pg_writer.load_init(conn, result.data, items=result.upserts.get(T_ITEMS))
         else:
             conn = pg_writer.connect(args.profile, args.auth)  # reads only, unless not --dry-run
             live_cols = pg_writer.read_live_columns(conn)
             region_present = DRIFT_COLUMN in live_cols.get(DRIFT_TABLE, [])
+            items_present = T_ITEMS in live_cols   # the table exists (onboarding plan #77)
             existing = pg_writer.read_existing(conn, live_cols)
             batch_date = args.batch_date or next_batch_date(existing)
             watermark = current_watermark(existing)
@@ -879,11 +1045,12 @@ def main(argv: list[str] | None = None) -> int:
                 apply_drift=args.apply_schema_drift, region_present=region_present,
                 update_spread_days=args.update_spread_days,
                 allow_before_watermark=args.allow_before_watermark,
+                items_present=items_present,
             )
             backup_info = {"performed": False, "reason": "dry-run"}
             if not args.dry_run:
                 # fresh backup before every data change, same gate as --init
-                backup_info = pg_writer.create_backup(conn, args.profile, **backup_kwargs)
+                backup_info = pg_writer.create_backup(conn, args.profile, include_items=items_present, **backup_kwargs)
                 pg_writer.require_backup(backup_info)
                 pg_writer.load_increment(conn, result, apply_drift=args.apply_schema_drift, region_present=region_present)
                 if args.backup_keep:

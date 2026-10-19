@@ -25,6 +25,7 @@ from netsuite_gen import (
     T_LINES,
     T_MEMBERSHIPS,
     T_CERTIFICATIONS,
+    T_ITEMS,
     TABLES,
     VALID_CERT_TYPE,
     VALID_MEMBERSHIP_STATUS,
@@ -124,7 +125,8 @@ def read_live_columns(conn) -> dict[str, list[str]]:
 def read_existing(conn, live_columns: dict[str, list[str]]) -> dict[str, list[dict]]:
     existing: dict[str, list[dict]] = {}
     with conn.cursor() as cur:
-        for table in TABLES:
+        # netsuite_items only when it exists (onboarding plan #77)
+        for table in TABLES + ([T_ITEMS] if T_ITEMS in live_columns else []):
             cols = [c for c in columns_for(table, True) if c in live_columns.get(table, [])]
             cur.execute(f"SELECT {', '.join(_ident(c) for c in cols)} FROM {_table(table)}")
             existing[table] = list(cur.fetchall())
@@ -177,8 +179,10 @@ def _pre_existing_anomalies(cur) -> dict:
     }
 
 
-def create_backup(conn, profile: str = "DEFAULT", with_branch: bool = True, schema_prefix: str = "netsuite_backup_") -> dict:
-    """Back up the five tables before --init / --increment touches anything.
+def create_backup(conn, profile: str = "DEFAULT", with_branch: bool = True, schema_prefix: str = "netsuite_backup_",
+                  include_items: bool = False) -> dict:
+    """Back up the five tables (and netsuite_items with include_items, when it exists) before --init / --increment
+    touches anything.
 
     1. Lakebase branch (copy-on-write snapshot of the whole project), best effort; skipped with with_branch=False
        (the daily schedule: a branch per day would exhaust the project's 10 branches).
@@ -209,7 +213,7 @@ def create_backup(conn, profile: str = "DEFAULT", with_branch: bool = True, sche
         info["pre_existing"] = _pre_existing_anomalies(cur)
         cur.execute(f"CREATE SCHEMA {_ident(schema)}")
         counts = {}
-        for table in TABLES:
+        for table in TABLES + ([T_ITEMS] if include_items else []):
             cur.execute(f"CREATE TABLE {_table(table, schema)} AS TABLE {_table(table)}")
             cur.execute(f"SELECT count(*) AS n FROM {_table(table)}")
             source_n = cur.fetchone()["n"]
@@ -262,28 +266,44 @@ def _copy(cur, table: str, cols: list[str], rows: list[dict]) -> None:
                 cp.write_row([row.get(c) for c in cols])
 
 
-def load_init(conn, data: dict[str, list[dict]]) -> None:
-    """Truncate the five tables and load the base snapshot (single transaction)."""
+def load_init(conn, data: dict[str, list[dict]], items: list[dict] | None = None) -> None:
+    """Truncate the five tables (and netsuite_items when `items` is given) and load the base snapshot (single
+    transaction)."""
+    tables = TABLES + ([T_ITEMS] if items is not None else [])
     try:
         with conn.cursor() as cur:
-            cur.execute("TRUNCATE " + ", ".join(_table(t) for t in TABLES))
+            cur.execute("TRUNCATE " + ", ".join(_table(t) for t in tables))
             for table in TABLES:
                 _copy(cur, table, COLUMNS[table], data[table])
+            if items is not None:
+                _copy(cur, T_ITEMS, COLUMNS[T_ITEMS], items)
         conn.commit()
     except Exception:
         conn.rollback()
         raise
 
 
+def upsert_sql(table: str) -> str:
+    """INSERT ... ON CONFLICT (business key = first column) DO UPDATE every other column: tables updated in place
+    (customers; netsuite_items, which has a primary key on item_id)."""
+    cols = COLUMNS[table]
+    assignments = ", ".join(f"{_ident(c)} = EXCLUDED.{_ident(c)}" for c in cols[1:])
+    return (
+        f"INSERT INTO {_table(table)} ({', '.join(_ident(c) for c in cols)}) "
+        f"VALUES ({', '.join(['%s'] * len(cols))}) "
+        f"ON CONFLICT ({_ident(cols[0])}) DO UPDATE SET {assignments}"
+    )
+
+
+def _upsert(cur, table: str, rows: list[dict]) -> None:
+    cols = COLUMNS[table]
+    for i in range(0, len(rows), 1000):
+        cur.executemany(upsert_sql(table), [[r.get(c) for c in cols] for r in rows[i : i + 1000]])
+
+
 def load_increment(conn, result, apply_drift: bool = False, region_present: bool = False) -> None:
     populate_region = apply_drift or region_present
     cust_cols = COLUMNS[T_CUSTOMERS]
-    assignments = ", ".join(f"{_ident(c)} = EXCLUDED.{_ident(c)}" for c in cust_cols[1:])
-    upsert_sql = (
-        f"INSERT INTO {_table(T_CUSTOMERS)} ({', '.join(_ident(c) for c in cust_cols)}) "
-        f"VALUES ({', '.join(['%s'] * len(cust_cols))}) "
-        f"ON CONFLICT ({_ident(cust_cols[0])}) DO UPDATE SET {assignments}"
-    )
     try:
         with conn.cursor() as cur:
             if apply_drift:
@@ -291,9 +311,8 @@ def load_increment(conn, result, apply_drift: bool = False, region_present: bool
                     f"ALTER TABLE {_table(DRIFT_TABLE)} ADD COLUMN IF NOT EXISTS {_ident(DRIFT_COLUMN)} text"
                 )
             _copy(cur, T_CUSTOMERS, cust_cols, result.data[T_CUSTOMERS])
-            upserts = result.upserts.get(T_CUSTOMERS, [])
-            for i in range(0, len(upserts), 1000):
-                cur.executemany(upsert_sql, [[r.get(c) for c in cust_cols] for r in upserts[i : i + 1000]])
+            _upsert(cur, T_CUSTOMERS, result.upserts.get(T_CUSTOMERS, []))
+            _upsert(cur, T_ITEMS, result.upserts.get(T_ITEMS, []))   # seeds and in-place updates (onboarding #77)
             for table in INCREMENTAL_TABLES:
                 _copy(cur, table, columns_for(table, populate_region), result.data[table])
         conn.commit()
