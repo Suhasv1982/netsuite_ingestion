@@ -8,6 +8,9 @@ For each PENDING proposal (oldest first, locked FOR UPDATE SKIP LOCKED): static 
 the SQL warehouse, NULL check, impact; then ONE UPDATE sets status (VALIDATED / VALIDATION_FAILED) together with
 validation_result, the only transition migration 006 allows for validation_result. Never approves anything.
 
+Also ADD_COLUMN / DEACTIVATE_COLUMN (schema drift). PENDING ONBOARD_TABLE proposals are listed and left PENDING
+until the onboarding validator branch exists (onboarding plan #77, step 6).
+
 --as-caller skips SET ROLE aidq_validator (the owner is not a member; use it only for local tests). --dry-run
 validates and prints, and rolls back. Rules are in src/aidq_dq_agent/validator.py.
 """
@@ -55,6 +58,12 @@ META_COLUMNS_SQL = ("SELECT column_name, ordinal, coalesce(is_active, true) AS a
                     "WHERE table_id = %s")
 COLUMN_UPDATE_SQL = ("UPDATE aidq_metadata.config_proposals SET status = %s, validation_result = %s::jsonb, "
                      "requires_rebuild = %s WHERE proposal_id = %s AND status = 'PENDING'")
+# ONBOARD_TABLE (table_id NULL until applied, migration 008): listed so it is visible, validated by the onboarding
+# validator branch (onboarding plan #77, step 6). Until then it stays PENDING: nothing is written for it here.
+ONBOARD_PENDING_SQL = (
+    "SELECT p.proposal_id, COALESCE(d.source_table, p.proposed_change->'table'->>'source_table') AS source_table "
+    "FROM aidq_metadata.config_proposals p LEFT JOIN aidq_metadata.source_table_def d USING (table_id) "
+    "WHERE p.status = 'PENDING' AND p.proposal_type = 'ONBOARD_TABLE' ORDER BY p.created_at")
 SOURCE_COLUMNS_SQL = ("SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = 'netsuite' "
                       "AND table_name = %s")
 
@@ -121,6 +130,16 @@ def validate_columns(conn, source_query, set_role: bool = True, log=print) -> li
     return out
 
 
+def pending_onboard(conn, log=print) -> list[dict]:
+    """PENDING ONBOARD_TABLE proposals: reported, left PENDING (no validator branch yet: onboarding step 6)."""
+    out = []
+    for pid, table in conn.execute(ONBOARD_PENDING_SQL).fetchall():
+        log(f"proposal {pid} (ONBOARD_TABLE {table}): left PENDING, the ONBOARD_TABLE validation is not built yet "
+            "(onboarding plan step 6)")
+        out.append({"proposal_id": pid, "source_table": table, "status": "PENDING"})
+    return out
+
+
 def validate_all(conn, sql, catalog: str, set_role: bool = True, log=print) -> list[dict]:
     """Validate every PENDING ADD_DQ_RULE proposal on `conn` (caller commits or rolls back). `sql(statement)` runs a
     warehouse query and returns rows as dicts."""
@@ -178,12 +197,14 @@ def main(argv: list[str] | None = None) -> int:
         source = env_config("dev").source_endpoint
         results += validate_columns(conn, lambda q, params=(): reads.pg_query(source, q, params),
                                     set_role=False)   # the role is already set for this transaction
+        waiting = pending_onboard(conn)                     # listed only, never written
         if args.dry_run:
             conn.rollback()
             print(f"dry run: {len(results)} proposal(s) validated, nothing written")
         else:
             conn.commit()
-            print(f"{len(results)} proposal(s) validated")
+            print(f"{len(results)} proposal(s) validated"
+                  + (f", {len(waiting)} ONBOARD_TABLE left PENDING" if waiting else ""))
     finally:
         conn.close()
     return 0
