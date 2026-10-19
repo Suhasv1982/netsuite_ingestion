@@ -62,8 +62,25 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
   10-16. The full regression eval is incomplete (one failed run in `missed_runs_metadata_unavailable`, not yet
   examined; the last case lost the network); a re-run on 10-19 was refused by the model endpoints. Re-run before
   merging.
+* **Owner decisions 2026-10-19:**
+  * The restriction is the **Free Edition fair-use quota** (same message on the Databricks community). **Trigger
+    nothing until it resets.** Watchdog kill switch set: repository variable **`WATCHDOG_TRIGGER=off`** (the monitor
+    still runs and reports; back to `on` only with the owner). **Hold every merge** too: a merge starts deploy-dev,
+    which runs an ingestion job.
+  * Incidents: **32 is the single OPEN COMPUTE_QUOTA incident** (33, 34, 35 merged into it and RESOLVED, each with
+    `evidence.resolution.merged_into = 32`; 32 lists them in `evidence.merge`). **31 RESOLVED as a duplicate of 30**
+    (SCHEMA_DRIFT, proposal 48).
+  * **Usage reduction: plan PR #82** (one chained daily job of run_job_tasks, validator once a day, a quota refusal =
+    one COMPUTE_QUOTA incident per day with no model call and no retries).
+  * **#79:** when the model endpoints work again, re-run only `missed_runs_metadata_unavailable` and
+    `guard_blocked_after_add_column_10_15` first and explain the run-3 failure before merging.
+  * **Eval results as GitHub Actions artifacts: PR #81** (new manual workflow `agent-eval.yml`; `dq-eval.yml` uploads
+    too; timestamped result files).
+  * **Eval policy:** the affected cases while developing; the full suite only before a merge.
+  * **Prod activities on hold.**
+  * Worktree `../wt_status` removed.
 * **Waiting for the owner:** run the `netsuite_items` DDL (#77 section 2), then confirm, then the grants are applied;
-  decide on incidents 31-35 and the platform restriction; review #79.
+  the decisions in #82; reviews of #79, #81.
 
 ## 0q. 2026-10-16: daily cycle, incident 30, proposals reviewed, onboarding default privileges
 
