@@ -83,6 +83,10 @@ class Reads:
 
     # -- Lakebase Postgres --------------------------------------------------------
 
+    def endpoint_status(self, endpoint: str) -> dict:
+        """The endpoint's status block (disabled, current_state, last_active_time); a GET, never a change."""
+        return self.cli("postgres", "get-endpoint", endpoint).get("status", {})
+
     def pg_query(self, endpoint: str, statement: str, params: tuple = ()) -> list[dict]:
         import psycopg
 

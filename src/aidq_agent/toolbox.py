@@ -1,4 +1,4 @@
-"""Access to the five aidq_mcp tools. The agent sees tools only through a ToolBox: the MCP server over stdio in
+"""Access to the monitor's aidq_mcp tools. The agent sees tools only through a ToolBox: the MCP server over stdio in
 production, recorded results in evals, fakes in tests."""
 
 from __future__ import annotations
@@ -118,6 +118,8 @@ class ReplayToolBox:
         hit = self.calls.get(self.key(name, arguments))
         if hit is not None:
             return hit
+        if not any(k.startswith(name + "{") for k in self.calls):   # a tool added after this cassette was recorded
+            return {"status": "unavailable", "reason": f"{name} was not recorded in this cassette"}
         variants = sorted(k[len(name):] for k in self.calls if k.startswith(name + "{"))
         return {"status": "error", "error": f"replay: arguments {json.dumps(arguments, sort_keys=True)} were not "
                                             f"recorded for {name}; recorded: {variants[:12]}"}

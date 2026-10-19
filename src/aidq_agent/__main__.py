@@ -96,7 +96,8 @@ async def amain(args) -> int:
     investigator, router = make_investigator(args, trace_id)
     try:
         async with McpToolBox(args.profile, only=MONITOR_TOOLS) as toolbox:
-            state = await run(toolbox, investigator, store, trace_id=trace_id, watchdog_result=watchdog_result)
+            state = await run(toolbox, investigator, store, trace_id=trace_id, watchdog_result=watchdog_result,
+                              startup_log=woke)
     except Exception as exc:  # noqa: BLE001 -- a crash still produces a report
         calls = flush_calls(router, store)
         publish("# aidq monitor, dev\n\n**MONITOR CRASHED** before its report: "

@@ -159,6 +159,61 @@ def credential_checks(updates: list[dict], refreshes: list[dt.datetime], since: 
     return out
 
 
+# -- known error markers ----------------------------------------------------------
+
+# (marker, pattern, incident category, what it means). Searched in the WHOLE error text: a pipeline failure's text is
+# a long traceback whose decisive line is near the end (incident 6: the OAuth rejection; incident 30: the row-hash
+# guard's BLOCKED line about 14k characters in), and the tools truncate what they return to ~500 characters.
+ERROR_MARKERS: tuple[tuple[str, re.Pattern, str, str], ...] = (
+    ("row_hash_guard",
+     re.compile(r"BLOCKED: (?:the hashed column set of|no row-hash column set is recorded for)[^\n]*"),
+     "SCHEMA_DRIFT",
+     "the bronze row-hash guard refused a normal run: the active source_columns of an incremental table differ from "
+     "the column set bronze was built with. It fails closed by design until bronze is rebuilt (bronze_rebuild=true); "
+     "expected after an approved column change. Not a code bug: the fix is the rebuild, not a code change or rollback"),
+    ("full_refresh_guard",
+     re.compile(r"BLOCKED: [^\n]*with bronze_rebuild=false[^\n]*"),
+     "ORCHESTRATION",
+     "the bronze guard refused a full refresh of bronze in a normal run (bronze_rebuild=false) before any data "
+     "changed; by design. Not a code bug"),
+    ("refresh_mode_unreadable",
+     re.compile(r"BLOCKED: [^\n]*\nWHY: its refresh mode could not be read[^\n]*"),
+     "OTHER",
+     "the bronze guard could not read the update's refresh mode from the event log and stopped before any data "
+     "changed; can be transient (the event log is written asynchronously). Not a code bug"),
+    ("credential_rejected",
+     re.compile(r"[^\n]*OAuth: User is not authorized[^\n]*"),
+     "CREDENTIAL_EXPIRED",
+     "the source database rejected the stored OAuth credential (expired or invalid)"),
+    ("compute_quota",
+     re.compile(r"[^\n]*RESOURCE_EXHAUSTED[^\n]*"),
+     "COMPUTE_QUOTA",
+     "the workspace refused compute (Free Edition quota)"),
+)
+
+
+def error_markers(*texts: str | None) -> list[dict]:
+    """The known markers found anywhere in `texts` (full, untruncated error text), each once, in ERROR_MARKERS order:
+    {marker, category, meaning, line}. `line` is the matched text, whitespace-collapsed and at most 300 characters."""
+    whole = "\n".join(t for t in texts if t)
+    out = []
+    for name, pattern, category, meaning in ERROR_MARKERS:
+        m = pattern.search(whole)
+        if m:
+            out.append({"marker": name, "category": category, "meaning": meaning,
+                        "line": truncate(" ".join(m.group(0).split()), 300)})
+    return out
+
+
+def change_requires_rebuild(change: dict) -> bool:
+    """A config change that alters the hashed column set of an incremental table (a source_columns row added,
+    removed or changed): normal runs are then blocked by the row-hash guard until bronze is rebuilt. The validator's
+    own decision (config_proposals.requires_rebuild) wins when it is set."""
+    if change.get("requires_rebuild") is not None:
+        return bool(change["requires_rebuild"])
+    return change.get("table_name") == "source_columns" and (change.get("load_mode") or "").lower() == "incremental"
+
+
 def truncate(text: str | None, limit: int = 500) -> str | None:
     if text is None or len(text) <= limit:
         return text

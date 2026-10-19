@@ -1,6 +1,8 @@
-"""LangGraph wiring: collect -> triage -> dedupe -> investigate -> write -> report (healthy days stop after triage).
+"""LangGraph wiring: collect -> triage -> facts -> dedupe -> investigate -> write -> report (healthy days stop after
+facts).
 
-Only `investigate` calls the model; writing is a fixed node, never a model tool. Dedupe runs before the model so
+`facts` (facts.py) is deterministic: what the tool results establish, given to the model as verified lines. Only
+`investigate` calls the model; writing is a fixed node, never a model tool. Dedupe runs before the model so
 a problem that already has an OPEN incident costs nothing to see again.
 
 The report is never lost (owner decision 2026-10-13, after three runs on 10-11..10-13 crashed in dedupe on a
@@ -16,7 +18,7 @@ from typing import Any, Callable, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from . import triage, watchdog as wd
+from . import facts as facts_mod, triage, watchdog as wd
 from .investigate import Investigation
 from .store import IncidentStore
 from .toolbox import ToolBox
@@ -30,6 +32,7 @@ COLLECT_CALLS = {
     "get_pipeline_errors": {"env": "dev", "hours": 24},
     "compare_bronze_to_source": {"env": "dev"},
     "get_recent_deploys": {"env": "dev", "days": 7},
+    "get_platform_state": {"env": "dev", "hours": 48},
 }
 
 
@@ -47,6 +50,7 @@ class State(TypedDict, total=False):
     exit_code: int
     store_error: str
     watchdog: Any
+    startup_log: list[str]
 
 
 def _latest_ingestion_run(results: dict) -> str | None:
@@ -68,6 +72,9 @@ def build_graph(toolbox: ToolBox, investigator, store: IncidentStore,
         sigs = triage.signals_from(state["results"]) + triage.watchdog_signals(state.get("watchdog"))
         notes = triage.context_notes(state["results"]) + wd.facts(state.get("watchdog"))
         return {"signals": sigs, "groups": triage.group(sigs)[:MAX_GROUPS], "notes": notes}
+
+    async def facts(state: State) -> State:
+        return {"notes": state["notes"] + facts_mod.facts_from(state["results"], state.get("startup_log") or [])}
 
     async def dedupe(state: State) -> State:
         fps = [g.fingerprint for g in state["groups"]]
@@ -162,12 +169,13 @@ def build_graph(toolbox: ToolBox, investigator, store: IncidentStore,
         return {"report": "\n".join(lines), "exit_code": code}
 
     g = StateGraph(State)
-    for name, fn in (("collect", collect), ("triage", triage_node), ("dedupe", dedupe), ("investigate", investigate),
-                     ("write", write), ("report", report)):
+    for name, fn in (("collect", collect), ("triage", triage_node), ("facts", facts), ("dedupe", dedupe),
+                     ("investigate", investigate), ("write", write), ("report", report)):
         g.add_node(name, fn)
     g.add_edge(START, "collect")
     g.add_edge("collect", "triage")
-    g.add_conditional_edges("triage", lambda s: "dedupe" if s["groups"] else "report", ["dedupe", "report"])
+    g.add_edge("triage", "facts")
+    g.add_conditional_edges("facts", lambda s: "dedupe" if s["groups"] else "report", ["dedupe", "report"])
     g.add_conditional_edges("dedupe", lambda s: "investigate" if s["groups"] else "report", ["investigate", "report"])
     # (a store failure in dedupe keeps every group, so they are all investigated and reported)
     g.add_edge("investigate", "write")
@@ -177,10 +185,13 @@ def build_graph(toolbox: ToolBox, investigator, store: IncidentStore,
 
 
 async def run(toolbox: ToolBox, investigator, store: IncidentStore, now=None, trace_id: str | None = None,
-              watchdog_result: "wd.WatchdogResult | None" = None) -> dict[str, Any]:
-    """`watchdog_result`: what the watchdog did before this run (docs/watchdog_plan.md), or None."""
+              watchdog_result: "wd.WatchdogResult | None" = None, startup_log: list[str] | None = None) -> dict[str, Any]:
+    """`watchdog_result`: what the watchdog did before this run (docs/watchdog_plan.md), or None. `startup_log`: the
+    monitor's start-up lines (e.g. ENABLED Lakebase endpoint ...), turned into facts."""
     graph = build_graph(toolbox, investigator, store, **({"now": now} if now else {}))
     init: dict[str, Any] = {"trace_id": trace_id} if trace_id else {}
     if watchdog_result is not None:
         init["watchdog"] = watchdog_result
+    if startup_log:
+        init["startup_log"] = list(startup_log)
     return await graph.ainvoke(init)

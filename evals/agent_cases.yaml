@@ -48,3 +48,15 @@ cases:
     categories: [CREDENTIAL_EXPIRED]
     fixture: 2026-10-14_credential_expired_manual_run
     note: incident 6; the monitor said OTHER (transient environment error). The token age is now a deterministic fact.
+
+  - id: guard_blocked_after_add_column_10_15
+    cassette: 2026-10-16_guard_blocked
+    now: "2026-10-16T11:30:00+00:00"
+    expect_incident: true
+    categories: [SCHEMA_DRIFT]
+    fixture: 2026-10-15_guard_blocked_after_add_column
+    forbid_in_fix: ["roll back", "rollback", "revert"]
+    note: >-
+      incident 30; the monitor said ORCHESTRATION, a code bug in bronze.py line 8, and recommended a code rollback.
+      Must not recommend a code rollback when the guard blocked the run. The guard's line and the applied column
+      change are now deterministic facts.

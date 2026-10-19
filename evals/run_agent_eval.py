@@ -3,7 +3,8 @@
     PYTHONPATH=src python evals/run_agent_eval.py --profile DEFAULT [--runs 3] [--model M] [--judge J]
 
 Each run replays a case's tool outputs (no workspace reads, nothing written), then grades:
-  deterministic: incident written iff expected; categories allowed; RCA produced; expected tools called (reported)
+  deterministic: incident written iff expected; categories allowed; RCA produced; expected tools called (reported);
+                 no forbidden words in the suggested fix (case key forbid_in_fix)
   judge (a different model than the agent): each fixture must_identify item stated, each must_not_claim item claimed
 Writes evals/results/<date>_<model>.md and .json. Exit 1 if a target in docs/phase4_agent_plan.md section 7 is missed.
 """
@@ -138,6 +139,9 @@ async def run_case(case: dict, r: int, chat: DatabricksChat, model: str, judge_m
               "tool_calls": [c["tool"] for i in incidents for c in i["evidence"]["tool_calls"]],
               "errors": [i["evidence"]["error"] for i in incidents if i["evidence"]["error"]],
               "usage": [i["evidence"]["usage"] for i in incidents]}
+    if case.get("forbid_in_fix"):   # deterministic: none of these words in any suggested fix (incident 30: "roll back")
+        fixes = " ".join((i.get("suggested_fix") or "") for i in incidents).lower()
+        checks["no_forbidden_fix"] = not any(w.lower() in fixes for w in case["forbid_in_fix"])
     if case["expect_incident"] and incidents:
         checks["category_allowed"] = all(i["category"] in case["categories"] for i in incidents)
         checks["rca_produced"] = all(i["evidence"]["rca"] for i in incidents)

@@ -1,5 +1,5 @@
-"""The read-only tools and the MCP server: the monitor's five (docs/phase3_mcp_plan.md, section 3) and the DQ
-recommender's four (dq_tools.py; docs/dq_recommender_design.md section 4).
+"""The read-only tools and the MCP server: the monitor's six (docs/phase3_mcp_plan.md, section 3, plus
+get_platform_state) and the DQ recommender's four (dq_tools.py; docs/dq_recommender_design.md section 4).
 
 Each tool returns {"status": "ok" | "unavailable" | "error", ...}; results pass through logic.redact. `Tools` holds
 the logic and takes a Reads-like object and a clock, so tests run it with fakes.
@@ -47,7 +47,7 @@ def tool_result(fn: Callable) -> Callable:
 
 
 MONITOR_TOOLS = ("get_recent_job_runs", "get_table_health", "get_pipeline_errors", "compare_bronze_to_source",
-                 "get_recent_deploys")
+                 "get_recent_deploys", "get_platform_state")
 DQ_TOOLS = ("get_dq_rules", "get_open_and_rejected_proposals", "profile_table", "get_rejects_summary")
 KNOWLEDGE_TOOLS = ("get_impact", "get_upstream", "explain_history", "search_metadata")
 
@@ -161,12 +161,14 @@ class Tools(DqTools, KnowledgeTools):
                 ts = e.get("timestamp")
                 if ts and dt.datetime.fromisoformat(ts.replace("Z", "+00:00")) < since:
                     continue
-                exc = ((e.get("error") or {}).get("exceptions") or [{}])[0]
+                excs = (e.get("error") or {}).get("exceptions") or [{}]
                 events.append({"time": ts, "level": e.get("level"), "event_type": e.get("event_type"),
                                "flow": (e.get("origin") or {}).get("flow_name"),
                                "update_id": (e.get("origin") or {}).get("update_id"),
                                "message": logic.truncate(e.get("message")),
-                               "exception": logic.truncate(exc.get("message"))})
+                               "exception": logic.truncate(excs[0].get("message")),
+                               # searched in the full text, before truncation (incident 30)
+                               "markers": logic.error_markers(e.get("message"), *(x.get("message") for x in excs))})
             entry = {"pipeline": alias, "name": name, "found": True,
                      "events": logic.bounded(events, config.DEFAULT_LIMIT)}
             if alias == "ingestion":
@@ -179,8 +181,8 @@ class Tools(DqTools, KnowledgeTools):
                 "a.started_at FROM aidq_metadata.run_audit a LEFT JOIN aidq_metadata.source_table_def d "
                 "USING (table_id) WHERE a.status = 'FAILED' AND a.started_at >= %s ORDER BY a.started_at DESC LIMIT %s",
                 (since, config.HARD_LIMIT))
-            audit = logic.bounded([{**r, "error": logic.truncate(r["error"]), "started_at": _iso(r["started_at"])}
-                                   for r in failed], config.DEFAULT_LIMIT)
+            audit = logic.bounded([{**r, "error": logic.truncate(r["error"]), "markers": logic.error_markers(r["error"]),
+                                    "started_at": _iso(r["started_at"])} for r in failed], config.DEFAULT_LIMIT)
         except Unavailable as e:
             audit = {"unavailable": str(e)}
         return {"env": env, "since": _iso(since), "pipelines": pipelines, "failed_run_audit": audit}
@@ -307,6 +309,52 @@ class Tools(DqTools, KnowledgeTools):
         return changes
 
 
+    # -- get_platform_state ---------------------------------------------------------------------
+
+    @tool_result
+    def get_platform_state(self, env: str = "dev", hours: int | None = None) -> dict:
+        """Lakebase endpoint state now, and the config changes applied to the metadata in the last `hours` (up to
+        now): the deterministic context a failure is read against (incident 30: a guard block 34 minutes after an
+        approved column change was diagnosed as a code bug)."""
+        cfg = config.env_config(env)
+        hours = config.clamp("hours", hours, 48, 168)
+        now = self.now()
+        since = now - dt.timedelta(hours=hours)
+        endpoints = []
+        for alias, endpoint in (("source", cfg.source_endpoint), ("metadata", cfg.metadata_endpoint)):
+            try:
+                st = self.reads.endpoint_status(endpoint)
+                endpoints.append({"endpoint": alias, "name": "/".join(endpoint.split("/")[1:4:2]),
+                                  "disabled": bool(st.get("disabled")), "state": st.get("current_state"),
+                                  "last_active": st.get("last_active_time")})
+            except Exception as e:  # noqa: BLE001 -- one endpoint's state must not hide the other or the changes
+                endpoints.append({"endpoint": alias, "unavailable": logic.truncate(f"{type(e).__name__}: {e}", 300)})
+        try:
+            rows = self.reads.pg_query(
+                cfg.metadata_endpoint,
+                "SELECT c.change_id, c.table_name, c.operation, c.changed_at, c.proposal_id, p.proposal_type, "
+                "p.status AS proposal_status, p.requires_rebuild, d.source_table, d.load_mode, "
+                "coalesce(c.new_row, c.old_row)->>'column_name' AS column_name, "
+                "coalesce(c.new_row, c.old_row)->>'rule_name' AS rule_name, "
+                "coalesce(c.new_row, c.old_row)->>'severity' AS severity "
+                "FROM aidq_metadata.config_change_log c "
+                "LEFT JOIN aidq_metadata.config_proposals p ON p.proposal_id = c.proposal_id "
+                "LEFT JOIN aidq_metadata.source_table_def d "
+                "ON d.table_id = (coalesce(c.new_row, c.old_row)->>'table_id')::int "
+                "WHERE c.changed_at >= %s AND c.changed_at <= %s ORDER BY c.changed_at DESC LIMIT %s",
+                (since, now, config.HARD_LIMIT))
+            changes = logic.bounded([{**r, "changed_at": _iso(r["changed_at"]),
+                                      "requires_bronze_rebuild": logic.change_requires_rebuild(r)} for r in rows],
+                                    config.DEFAULT_LIMIT)
+        except Unavailable as e:
+            changes = {"unavailable": str(e)}
+        return {"env": env, "since": _iso(since), "endpoints": endpoints, "applied_config_changes": changes,
+                "note": "applied_config_changes: rows of aidq_metadata.config_change_log (DQ rules, source columns, "
+                        "table definitions) with the proposal that made them; requires_bronze_rebuild = the change "
+                        "alters the hashed column set of an incremental table, so normal runs are blocked by the "
+                        "row-hash guard (BLOCKED) until bronze is rebuilt, by design"}
+
+
 for _name in DQ_TOOLS:   # the same status / redaction wrapper as the monitor's tools
     setattr(Tools, _name, tool_result(getattr(DqTools, _name)))
 for _name in KNOWLEDGE_TOOLS:
@@ -344,7 +392,9 @@ def build_server(tools: Tools) -> MCPServer:
         """ERROR and WARN events from the ingestion and canary pipelines' event logs in the last `hours` (default
         24, max 168), and run_audit rows with status FAILED in the same window. For the ingestion pipeline,
         `failed_updates`: each FAILED update with who started it (cause JOB_TASK = through the job, whose first task
-        refreshes the stored database credentials) and the credential's age then (they expire after ~60 min)."""
+        refreshes the stored database credentials) and the credential's age then (they expire after ~60 min).
+        Each error event and audit row has `markers`: known causes found anywhere in its FULL error text (the
+        message shown is truncated), e.g. row_hash_guard (BLOCKED by the row-hash guard), credential_rejected."""
         return tools.get_pipeline_errors(env, hours)
 
     @server.tool(annotations=READ_ONLY)
@@ -360,6 +410,14 @@ def build_server(tools: Tools) -> MCPServer:
         changes (create/update/reset/delete/permission changes) on this env's jobs and pipelines from the audit
         log, with the actor as a role (owner, ci-dev, data-generator, system, other)."""
         return tools.get_recent_deploys(env, days)
+
+    @server.tool(annotations=READ_ONLY)
+    def get_platform_state(env: str = "dev", hours: int | None = None) -> dict:
+        """Lakebase endpoint state now (source and metadata: disabled or not), and the config changes applied to
+        the metadata in the last `hours` (default 48, max 168): DQ rules, source columns and table definitions,
+        with the proposal that made each and whether it requires a bronze rebuild (normal runs are then BLOCKED
+        by the row-hash guard until the rebuild, by design)."""
+        return tools.get_platform_state(env, hours)
 
     @server.tool(annotations=READ_ONLY)
     def get_dq_rules(env: str = "dev", table: str | None = None) -> dict:

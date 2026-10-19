@@ -11,6 +11,8 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 
+from .facts import credential_facts, schedule_facts  # noqa: F401 -- moved to facts.py; kept importable here
+
 TOOLS = ("get_recent_job_runs", "get_table_health", "get_pipeline_errors", "compare_bronze_to_source",
          "get_recent_deploys")
 NOT_FAILED = {"SUCCESS", None}
@@ -123,66 +125,4 @@ def context_notes(results: dict[str, dict]) -> list[str]:
     guard = (results.get("get_table_health", {}) or {}).get("latest_guard") or {}
     if guard.get("status") == "WARN" and guard.get("event_log_reads") == 2:
         notes.append("guard WARN with 2 event-log reads is the normal baseline (not a signal)")
-    notes += schedule_facts(results)
-    notes += credential_facts(results)
-    return notes
-
-
-def credential_facts(results: dict[str, dict]) -> list[str]:
-    """For each failed ingestion pipeline update: who started it and how old the stored database credential was, as
-    deterministic facts (get_pipeline_errors.failed_updates). Incident 6 (2026-10-14): a manual update started on the
-    pipeline, not through the job, skipped refresh_credentials and failed on an expired token; the model, seeing only
-    a truncated traceback, called it a transient environment error."""
-    out = []
-    for p in (results.get("get_pipeline_errors", {}) or {}).get("pipelines") or []:
-        fails = p.get("failed_updates")
-        if not isinstance(fails, list):
-            continue
-        for f in fails:
-            who = ("through the job (refresh_credentials ran first)" if f.get("started_by_job")
-                   else f"by {f.get('cause') or 'unknown'}, not through the job, so refresh_credentials did not run first")
-            if f.get("credential_age_minutes") is None:
-                age = "no successful credential refresh found in the 2 days before it"
-            else:
-                h, m = divmod(f["credential_age_minutes"], 60)
-                age = (f"the stored database credential was last refreshed {f['last_credential_refresh']}, {h} h {m} min "
-                       f"before ({'EXPIRED' if f.get('credential_expired') else 'still valid'}: credentials last about "
-                       f"60 min)")
-            out.append(f"fact (from get_pipeline_errors): pipeline update {str(f.get('update_id'))[:8]} failed at "
-                       f"{f.get('created')}; started {who}; {age}")
-    return out
-
-
-def schedule_facts(results: dict[str, dict]) -> list[str]:
-    """When a scheduled run was missed: each job's schedule as the tools report it (pause state, cron) and its last
-    config change, as deterministic facts. The model must not have to infer them: in evals and in incident 1 it
-    left out the pause state or guessed the schedules "may have been paused" although they were UNPAUSED."""
-    jobs = (results.get("get_recent_job_runs", {}) or {}).get("jobs") or []
-    missed = [j for j in jobs if j.get("missed_schedules")]
-    if not missed:
-        return []
-    states = []
-    for j in jobs:
-        sched = j.get("schedule") or {}
-        if sched:
-            states.append(f"{j.get('job')} {sched.get('pause_status', 'unknown')} (cron {sched.get('cron')} "
-                          f"{sched.get('timezone', '')})".rstrip())
-    facts = ["fact (from get_recent_job_runs): schedules as configured now: " + "; ".join(states)]
-    deploys = results.get("get_recent_deploys", {}) or {}
-    changes = deploys.get("config_changes")
-    if isinstance(changes, dict) and "unavailable" in changes:
-        facts.append("fact: config-change history is unavailable to this identity (no audit access), so a schedule "
-                     "change cannot be seen directly; GitHub deploy runs are listed by get_recent_deploys")
-    else:
-        names = {j.get("job") for j in missed}
-        last: dict[str, dict] = {}
-        for c in _items(changes):
-            job = str(c.get("resource", "")).removeprefix("job:")
-            if job in names and (job not in last or str(c.get("time")) > str(last[job].get("time"))):
-                last[job] = c
-        for job in sorted(names):
-            c = last.get(job)
-            facts.append(f"fact (from get_recent_deploys): last config change to {job}: "
-                         + (f"{c.get('time')} {c.get('action')} by {c.get('actor')}" if c else "none in the window")
-                         + "; no pause or unpause action appears for it")
-    return facts
+    return notes   # the deterministic facts (schedules, credentials, markers, ...) come from facts.py

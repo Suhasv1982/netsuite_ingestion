@@ -39,6 +39,11 @@ anything). Update it when the design changes.
 * The hashed column set is recorded per table (`ledger.row_hash_columns`) when bronze is rebuilt. If the active
   `source_columns` of an incremental table change, normal runs fail at graph build with an error naming the table
   and the column change until bronze is rebuilt (`bronze_rebuild=true`).
+* Every error raised while the bronze notebook builds the graph (guards included) appears in the pipeline event log
+  as a long traceback that starts at `bronze.py, cell 1, line 8` (where the pipeline runs the notebook): that line
+  says nothing about the cause. The guards' messages start with `BLOCKED:` near the end of the text;
+  `get_pipeline_errors` reports them as `markers` (e.g. `row_hash_guard`). A failed update is retried by the
+  pipeline (`RETRY_ON_FAILURE`), so one blocked run shows several failed updates.
 * `ledger_check` verifies that the ledger matches bronze; OK means the two agree, not that bronze matches the
   source.
 * A full refresh of bronze is blocked unless `bronze_rebuild=true`.
