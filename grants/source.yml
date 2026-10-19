@@ -20,6 +20,9 @@ roles:
       netsuite.netsuite_certifications: [SELECT, INSERT]
       netsuite.netsuite_transactions: [SELECT, INSERT]
       netsuite.netsuite_transaction_lines: [SELECT, INSERT]
+      # onboarding plan #77 (decision 5): SELECT for the upsert (ON CONFLICT DO UPDATE) and the daily backup copy;
+      # UPDATE for in-place item changes (price, inactivation), like customers
+      netsuite.netsuite_items: [SELECT, INSERT, UPDATE]
     database: [CONNECT, CREATE]
 
   # dq-agent, run identity of the DQ recommender and the schema drift agent (owner decision 2026-10-15, plan #69):
@@ -35,4 +38,5 @@ roles:
       netsuite.netsuite_certifications: [SELECT]
       netsuite.netsuite_transactions: [SELECT]
       netsuite.netsuite_transaction_lines: [SELECT]
+      netsuite.netsuite_items: [SELECT]          # onboarding plan #77 (drift, profiling, onboarding)
     database: [CONNECT]
