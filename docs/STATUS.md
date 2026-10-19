@@ -44,6 +44,57 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
 **Source database (`netsuite-sample`):** production plus backups `pre-synthetic-backup-202609242053`,
 `...202609252235`, `...202609260101`, `...202609260109` (5 of 10 branches).
 
+## 0s. Handoff 2026-10-19 ~16:10 UTC (owner offline): quota restriction, open PRs, first steps after the reset
+
+**Free Edition fair-use quota restriction (incident 32, the only OPEN COMPUTE_QUOTA incident).** Started
+**2026-10-18** (last scheduled runs: 10-17, all SUCCESS; nothing fired on 10-18 or 10-19). Refused since: job
+run-now (`Triggering new runs for organization <id> is currently disabled temporarily`), the SQL warehouse, the
+foundation model endpoints. The Lakebase endpoints still work (re-enabled on use). **Not reset** as of 10-19 16:10 UTC.
+
+**At handoff:** `WATCHDOG_TRIGGER=off` (repository variable; the monitor runs and reports, triggers nothing). No
+Databricks run active. Three PR-check runs queued on GitHub for #83/#84/#85 (API and Lakebase calls only, no job).
+Nothing uncommitted; no worktree. No live eval, model call or job was started after the restriction began.
+
+**DQ proposals:** **none open.** The 7 from 10-14/10-15 were reviewed on 10-16 (0q: 17, 19, 22 rejected; 12, 13,
+18, 25 applied); the recommender has not run since (Sunday 10-18 did not fire), and no drift proposal was written.
+Still OPEN: incidents **7-15** (DQ_NOT_EXPRESSIBLE, 10-14: duplicate keys, late arrivals, orphan lines; for the
+owner's review) and **32** (quota).
+
+**Onboarding (#77):** the owner created `netsuite.netsuite_items` (10-19; 8 columns as planned, owner-owned;
+SELECT for ci-dev and ci-prod from the default privileges, accepted). Grants applied by this session: data-generator
+SELECT/INSERT/UPDATE, dq-agent SELECT; `apply_pg_grants.py --check` exact for both. The table is empty until the
+generator's first run with #85.
+
+**Open PRs (none may merge while the restriction lasts: a merge starts deploy-dev, which runs a job):**
+
+| PR | What | State |
+|---|---|---|
+| #83 | `grants/source.yml` for netsuite_items (+ least-privilege test: UPDATE on customers and items only) | applied already; **merge FIRST**: deploy-dev's `apply_pg_grants.py --check` fails on the live items grants until this file is on main |
+| #80 | this STATUS (0q, 0r, 0s) | docs |
+| #77 | onboarding plan | decisions approved 10-16; docs |
+| #81 | eval results as GitHub Actions artifacts (`agent-eval.yml`, dq-eval upload) | needed by #79's eval |
+| #79 | monitor deterministic facts (incident 30) | eval incomplete: see step 4 below |
+| #84 | onboarding step 1: review CLI / validator see ONBOARD_TABLE | unit tests only |
+| #85 | onboarding step 2: generator fills netsuite_items (item defects off) | unit tests only |
+| #82 | usage-reduction plan (chained daily job, quota-aware watchdog) | **7 owner decisions** (section 1) |
+
+**When the quota resets, first:**
+1. **Confirm the reset without starting anything:** the next scheduled 05:00 generator and 05:30 dev runs fire on
+   their own (schedules UNPAUSED). If they do not fire, the owner decides how to probe (watchdog stays off).
+2. `python tools/daily_check.py --date <that day> --profile DEFAULT`. 10-18 and 10-19 have no batch; no backfill
+   unless the owner says so (precedent 10-13: none).
+3. Merge **#83 first**, alone; wait for its deploy-dev (grant check exact). Then one PR at a time, each after the
+   previous deploy-dev: #80, #77, #81, #84, #85 (#85: the next generator run seeds the 23 items).
+4. **#79:** merge main into the branch (for `agent-eval.yml`), then run only `missed_runs_metadata_unavailable` and
+   `guard_blocked_after_add_column_10_15` (`gh workflow run agent-eval.yml --ref fix/monitor-deterministic-facts
+   -f cases="missed_runs_metadata_unavailable guard_blocked_after_add_column_10_15"`), explain the 10-16 run-3
+   failure, then the full suite once, then merge.
+5. Owner: the 7 decisions in #82; `WATCHDOG_TRIGGER` back to `on` only with the owner (#82 step 5).
+6. Optional, once: the live rolled-back review test for #84 (`tests/test_review_cli.py::test_review_on_dev_rolled_back`).
+
+**Eval policy (owner 2026-10-19):** the affected cases while developing, the full suite only before a merge.
+**Prod:** all activities on hold.
+
 ## 0r. 2026-10-17..19: platform restriction (no scheduled runs since 10-18); open items
 
 * **10-17:** generator, dev job, knowledge_refresh, schema_drift, dq_validator x2 all scheduled and SUCCESS.
@@ -79,8 +130,7 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
   * **Eval policy:** the affected cases while developing; the full suite only before a merge.
   * **Prod activities on hold.**
   * Worktree `../wt_status` removed.
-* **Waiting for the owner:** run the `netsuite_items` DDL (#77 section 2), then confirm, then the grants are applied;
-  the decisions in #82; reviews of #79, #81.
+* **Waiting for the owner:** see 0s (the DDL and the grants are done).
 
 ## 0q. 2026-10-16: daily cycle, incident 30, proposals reviewed, onboarding default privileges
 
