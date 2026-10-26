@@ -1,6 +1,8 @@
 # Defect config for the "before agents" baseline run (--init, seed 42).
 # 1% of eligible rows per defect. late_arriving is --increment only, so it is
 # not part of this init baseline.
+# Historical record of the 07-11 run: the generator now refuses duplicate_business_key > 0 (owner, 2026-10-26),
+# so this file no longer loads as is.
 allow_overlap: false
 
 rates:

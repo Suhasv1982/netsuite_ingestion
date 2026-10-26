@@ -31,7 +31,6 @@ Database access lives in pg_writer.py.
 from __future__ import annotations
 
 import argparse
-import copy
 import datetime as dt
 import hashlib
 import json
@@ -132,6 +131,12 @@ DEFECT_NAMES = [
     "customer_updated_before_created",
     "late_arriving",
 ]
+# The name stays known (old configs and manifests still parse), but the rate must be 0: the source never holds two
+# rows of one key on one updated_date day (owner, 2026-10-26). Uniqueness is a set-level check, not a source defect.
+DUPLICATES_REMOVED = (
+    "duplicate_business_key is no longer generated (owner, 2026-10-26): the source must not hold two rows of one "
+    "key on one updated_date day. Keep its rate at 0."
+)
 
 
 # --------------------------------------------------------------------------
@@ -162,6 +167,8 @@ class DefectConfig:
             if not 0.0 <= value <= 1.0:
                 raise ValueError(f"Rate for {name} must be between 0 and 1, got {value}")
             rates[name] = value
+        if rates["duplicate_business_key"] > 0:
+            raise ValueError(DUPLICATES_REMOVED)
         return cls(allow_overlap=allow_overlap, rates=rates)
 
     def to_dict(self) -> dict:
@@ -241,6 +248,35 @@ def _latest_by_key(rows: list[dict], key: str) -> dict:
         if current is None or version > current[0]:
             best[k] = (version, row)
     return {k: v[1] for k, v in best.items()}
+
+
+def duplicate_versions(existing: dict, data: dict) -> dict[str, list]:
+    """Per incremental table, the (key, updated_date day) pairs that `data` would hold twice: twice within the
+    batch, or once more next to a row the source already has. An exact copy counts too. NULL keys are not compared
+    (null_business_key rows cannot be told apart)."""
+    out = {}
+    for table in INCREMENTAL_TABLES:
+        key = BUSINESS_KEY[table]
+        held = {(r.get(key), _as_date(r.get("updated_date"))) for r in existing.get(table, []) if r.get(key) is not None}
+        clashes = []
+        for r in data.get(table, []):
+            if r.get(key) is None:
+                continue
+            pair = (r[key], _as_date(r.get("updated_date")))
+            if pair in held:
+                clashes.append(pair)
+            held.add(pair)
+        if clashes:
+            out[table] = clashes
+    return out
+
+
+def check_no_duplicate_versions(existing: dict, data: dict) -> None:
+    """Fail closed before anything is written (owner, 2026-10-26: no true duplicates in the source)."""
+    found = duplicate_versions(existing, data)
+    if found:
+        detail = "; ".join(f"{t}: {len(c)} (e.g. {', '.join(f'{k} on {d}' for k, d in c[:3])})" for t, c in found.items())
+        raise ValueError(f"Refusing to write a second row of a key on an updated_date day it already has: {detail}")
 
 
 def _max_int(rows: list[dict], key: str, default: int) -> int:
@@ -532,19 +568,6 @@ class DefectInjector:
                 note="business_keys lists the original key values that were nulled",
             )
 
-        picked = self._pick(rows, self._rate("duplicate_business_key"), lambda r: r[key] is not None)
-        dupes = []
-        for r in picked:
-            copy_row = copy.deepcopy(r)
-            copy_row["created_date"] = _add_days(r["created_date"], -1)  # same updated_date (watermark), so same snapshot
-            dupes.append(copy_row)
-        rows.extend(dupes)
-        if picked:
-            self.manifest.record(
-                "duplicate_business_key", table, [r[key] for r in picked], column=key,
-                note="same key appears twice within the same updated_date snapshot; the appended duplicate has created_date - 1 day",
-            )
-
     # -- driver -----------------------------------------------------------
 
     def apply(self, data: dict[str, list[dict]]) -> None:
@@ -617,6 +640,7 @@ def generate_init(gen: Generator, scale: ScaleConfig, batch_date: dt.date, cfg: 
 
     manifest = Manifest()
     DefectInjector(cfg, gen.rng, ctx, manifest).apply(data)
+    check_no_duplicate_versions({}, data)  # --init truncates first, so only the batch itself can clash
     return GenResult(data, {}, _finish_manifest("init", gen.seed, batch_date, cfg, scale, data, {}, manifest, None, {}))
 
 
@@ -733,6 +757,7 @@ def generate_increment(
     ctx.new_rows = {id(r) for r in new_m + new_c + new_t + new_l}
     manifest = Manifest()
     DefectInjector(cfg, rng, ctx, manifest).apply({**data, T_CUSTOMERS: new_customers + updated_cust})
+    check_no_duplicate_versions(existing, data)
     # customer defects were applied to the combined list (same dict objects), keep the split
     drift = (
         {"table": DRIFT_TABLE, "column": DRIFT_COLUMN, "type": "text",

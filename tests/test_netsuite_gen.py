@@ -71,6 +71,18 @@ class TestConfig:
         loaded = ng.load_config(str(path))
         assert all(rate == 0.0 for rate in loaded.rates.values())
 
+    def test_rejects_duplicate_business_key(self):
+        with pytest.raises(ValueError, match="no longer generated"):
+            ng.DefectConfig.from_dict({"rates": {"duplicate_business_key": 0.01}})
+        assert ng.DefectConfig.from_dict({"rates": {"duplicate_business_key": 0}}).rates["duplicate_business_key"] == 0
+
+    def test_baseline_config_with_duplicates_no_longer_loads(self):
+        from pathlib import Path
+
+        path = Path(__file__).resolve().parent.parent / "baseline" / "defects_baseline.yaml"
+        with pytest.raises(ValueError, match="no longer generated"):
+            ng.load_config(str(path))
+
     def test_digest_changes_with_config(self):
         assert cfg().digest() != cfg(negative_amount=0.1).digest()
 
@@ -192,22 +204,16 @@ class TestDefects:
             assert None not in entry["business_keys"]  # original keys are recorded
 
     def test_customers_never_get_key_defects(self):
-        result = init(null_business_key=1.0, duplicate_business_key=1.0)
+        result = init(null_business_key=1.0)
         assert by_defect(result, "null_business_key", ng.T_CUSTOMERS) == []
-        assert by_defect(result, "duplicate_business_key", ng.T_CUSTOMERS) == []
         keys = [r["customer_internal_id"] for r in result.data[ng.T_CUSTOMERS]]
         assert None not in keys and len(set(keys)) == len(keys)
 
-    def test_duplicate_business_key(self):
-        result = init(duplicate_business_key=0.1)
-        for table, base in [(ng.T_MEMBERSHIPS, SCALE.memberships), (ng.T_LINES, SCALE.lines)]:
-            key = ng.BUSINESS_KEY[table]
-            (entry,) = by_defect(result, "duplicate_business_key", table)
-            n = expected(base, 0.1)
-            assert entry["row_count"] == n
-            assert len(result.data[table]) == base + n
-            keys = [r[key] for r in result.data[table]]
-            assert sorted(k for k in set(keys) if keys.count(k) > 1) == sorted(entry["business_keys"])
+    def test_init_with_every_defect_has_one_row_per_key_and_date(self):
+        rates = {n: 0.05 for n in ng.DEFECT_NAMES if n != "duplicate_business_key"}
+        result = init(**rates)
+        assert ng.duplicate_versions({}, result.data) == {}
+        assert by_defect(result, "duplicate_business_key") == []
 
     def test_negative_amount(self):
         result = init(negative_amount=0.1)
@@ -281,7 +287,7 @@ class TestDefects:
         assert by_defect(result, "negative_amount")[0]["row_count"] == SCALE.lines
 
     def test_manifest_counts_match_rows_emitted(self):
-        result = init(duplicate_business_key=0.1)
+        result = init(null_business_key=0.1, orphan_lines=0.1)
         assert result.manifest["rows_emitted"][ng.T_LINES] == len(result.data[ng.T_LINES])
 
     def test_defects_are_deterministic(self):
@@ -407,11 +413,10 @@ class TestIncrement:
         assert {r["created_date"] for r in entry["rows"]} <= snapshot_dates
         assert all(r["updated_date"] < str(watermark) for r in entry["rows"])
 
-    def test_duplicates_in_increment_share_a_snapshot(self, existing):
-        result = increment(existing, duplicate_business_key=0.2)
-        (entry,) = by_defect(result, "duplicate_business_key", ng.T_TRANSACTIONS)
-        rows = [r for r in result.data[ng.T_TRANSACTIONS] if r["transaction_internal_id"] in set(entry["business_keys"])]
-        assert len({ng._as_date(r["updated_date"]) for r in rows}) == 1  # the watermark date is shared
+    def test_increment_with_every_defect_has_one_row_per_key_and_date(self, existing):
+        rates = {n: 0.05 for n in ng.DEFECT_NAMES if n != "duplicate_business_key"}
+        result = increment(existing, **rates)
+        assert ng.duplicate_versions(existing, result.data) == {}
 
     def test_orphan_ids_never_collide_with_real_transactions(self, existing):
         result = increment(existing, orphan_lines=0.2)
@@ -743,6 +748,27 @@ class TestDailyCadence:
                 held = {(r[key], ng._as_date(r["updated_date"])) for r in existing.get(table, [])}
                 clashes = [r[key] for r in res.data[table] if (r[key], ng._as_date(r["updated_date"])) in held]
                 assert clashes == [], (table, spread, clashes[:5])
+
+    def test_guard_refuses_a_version_on_a_date_the_source_already_has(self, existing):
+        # what generator run 2 (10-01) plus the 10-02/10-03 batches did: 287 rows, 21 of them exact copies
+        row = dict(existing[ng.T_MEMBERSHIPS][0])
+        assert ng.duplicate_versions(existing, {ng.T_MEMBERSHIPS: [row]}) == {
+            ng.T_MEMBERSHIPS: [(row["membership_internal_id"], ng._as_date(row["updated_date"]))]}
+        with pytest.raises(ValueError, match="day it already has: netsuite_memberships: 1 "):
+            ng.check_no_duplicate_versions(existing, {ng.T_MEMBERSHIPS: [row]})
+
+    def test_guard_refuses_the_same_key_and_date_twice_in_one_batch(self):
+        # what duplicate_business_key did on 07-11 (copy with created_date - 1, same updated_date)
+        row = {"transaction_line_id": "90001_1", "created_date": dt.datetime(2026, 7, 11), "updated_date": dt.datetime(2026, 7, 11)}
+        copy_row = {**row, "created_date": dt.datetime(2026, 7, 10)}
+        with pytest.raises(ValueError, match="netsuite_transaction_lines: 1"):
+            ng.check_no_duplicate_versions({}, {ng.T_LINES: [row, copy_row]})
+
+    def test_guard_allows_versions_on_other_dates_and_null_keys(self, existing):
+        row = dict(existing[ng.T_MEMBERSHIPS][0])
+        later = {**row, "updated_date": ng._add_days(row["updated_date"], 1)}
+        nulls = [{**row, "membership_internal_id": None}, {**row, "membership_internal_id": None}]
+        ng.check_no_duplicate_versions(existing, {ng.T_MEMBERSHIPS: [later, *nulls]})
 
     def test_batch_exists_detects_a_batch_already_generated(self, existing):
         wm = ng.current_watermark(existing)
