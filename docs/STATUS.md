@@ -89,6 +89,20 @@ as the next work after onboarding (owner, 10-26).
 3. #86 (then section 4 of its plan: backup branch, cleanup by the owner, dev bronze rebuild, `daily_check`), #87
    (after the DQ eval), the #82 build (spike first).
 
+**Handoff 2026-10-26 ~20:40 UTC (owner offline).**
+* **State:** no Databricks run active, no GitHub run in progress, nothing uncommitted, only `main` checked out (no
+  worktree). Quota still restricted (no scheduled run since 10-23). `monitor-dev.yml` disabled, `WATCHDOG_TRIGGER=off`.
+* **Open PRs (10):** #77 (onboarding plan + section 7 set-level checks), #79 (monitor facts; eval pending), #80
+  (this STATUS), #81 (eval artifacts), #82 (usage reduction; decisions recorded), #83 (items grants), #84, #85
+  (onboarding steps 1-2), #86 (generator duplicate guard + approved cleanup plan), #87 (finding evidence detail).
+  None may merge until the reset (a merge starts deploy-dev, which runs a job).
+* **OPEN incidents:** 7, 9, 11, 13 (duplicates; close after the cleanup and a clean `daily_check`), 14 (orphans,
+  known defects), 32 (quota), 36 (`netsuite_items` not onboarded).
+* **Reset date unknown:** Databricks publishes none. The first restriction lasted 10-18..10-19 (back on 10-20); this
+  one since 10-24. **How to tell:** the scheduled generator (05:00 UTC) and dev ingestion (05:30) show new PERIODIC
+  runs (`databricks jobs list-runs --profile DEFAULT`); start nothing to probe. Earliest: 2026-10-27 05:00 UTC.
+* **First steps after the reset:** the list above ("After the reset"), starting with re-enabling the monitor.
+
 **Prod:** on hold.
 
 ## 0s. Handoff 2026-10-19 ~16:10 UTC (owner offline): quota restriction, open PRs, first steps after the reset
