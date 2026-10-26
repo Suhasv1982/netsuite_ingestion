@@ -10,7 +10,7 @@ rates:
   # -- business keys (memberships, certifications, transactions, lines).
   #    Never applied to customers: it has a primary key.
   null_business_key: 0.0        # key set to NULL
-  duplicate_business_key: 0.0   # same key twice in the same created_date snapshot
+  duplicate_business_key: 0.0   # must stay 0 (owner, 2026-10-26): no true duplicates in the source
 
   # -- transaction lines
   negative_amount: 0.0          # amount < 0
