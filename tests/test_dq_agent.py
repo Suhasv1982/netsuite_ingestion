@@ -182,6 +182,38 @@ def test_the_router_escalates_once_when_the_primary_gives_no_valid_submission():
 # -- the graph -------------------------------------------------------------------------------------------------
 
 
+DETAIL = {"counts_by_date": [{"date": "2026-07-11", "count": 12}], "dates": 1, "example_keys": ["90017", "90042"]}
+
+
+class DetailToolBox(FakeToolBox):
+    async def call(self, name, args):
+        out = await super().call(name, args)
+        if name == "profile_table":
+            for c in out["candidates"]:
+                if c["id"] == FINDING["candidate_id"]:
+                    c["detail"] = DETAIL
+        return out
+
+
+def test_finding_evidence_carries_the_profiles_counts_by_date_and_example_keys():
+    # the model's own numbers never replace the profile's (owner, 2026-10-26)
+    finding = {**FINDING, "evidence": {**FINDING["evidence"], "example_keys": ["made-up"]}}
+    wt = FakeWriteTools()
+    run_graph(FakeRecommender({**SUBMISSION, "findings": [finding]}), wt, DetailToolBox())
+    [f] = wt.findings
+    assert f["evidence"]["counts_by_date"] == DETAIL["counts_by_date"] and f["evidence"]["dates"] == 1
+    assert f["evidence"]["example_keys"] == ["90017", "90042"]
+    assert f["evidence"]["keys_with_conflicting_created_date_same_day"] == 12
+
+
+def test_a_finding_without_profile_detail_keeps_its_evidence():
+    assert graph.candidate_detail({"profiles": {}}, "t", "t:late_rows") == {}
+    wt = FakeWriteTools()
+    run_graph(FakeRecommender(), wt)
+    [f] = wt.findings
+    assert "counts_by_date" not in f["evidence"] and f["evidence"]["candidate_id"] == FINDING["candidate_id"]
+
+
 def test_collect_recommend_submit_report():
     tb, wt, rec = FakeToolBox(), FakeWriteTools(), FakeRecommender()
     state = run_graph(rec, wt, tb)

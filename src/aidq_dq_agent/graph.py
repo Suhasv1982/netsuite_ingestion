@@ -41,6 +41,15 @@ class State(TypedDict, total=False):
     exit_code: int
 
 
+def candidate_detail(collected: dict, table: str | None, candidate_id: str | None) -> dict:
+    """The profile's counts by date and example keys for a finding's candidate ({} when the profile has none)."""
+    profile = ((collected or {}).get("profiles") or {}).get(table) or {}
+    for c in profile.get("candidates") or []:
+        if c.get("id") == candidate_id and c.get("detail"):
+            return dict(c["detail"])
+    return {}
+
+
 def build_graph(toolbox, recommender, write_tools, tables: list[str],
                 now: Callable[[], dt.datetime] = lambda: dt.datetime.now(dt.timezone.utc), tracer=None,
                 trace_meta: dict | None = None):
@@ -97,7 +106,10 @@ def build_graph(toolbox, recommender, write_tools, tables: list[str],
             out.append(_traced(tracer, "submit_proposal", "proposal", p, lambda a=args: write_tools.submit_proposal(a)))
         for f in result.get("findings", []):
             args = {k: v for k, v in f.items() if k != "candidate_id"}
-            args["evidence"] = {**(f.get("evidence") or {}), "candidate_id": f.get("candidate_id"), **trace_meta}
+            # counts by date and example keys come from the profile, not from the model (owner, 2026-10-26)
+            args["evidence"] = {**(f.get("evidence") or {}), "candidate_id": f.get("candidate_id"),
+                                **candidate_detail(state["collected"], f.get("table"), f.get("candidate_id")),
+                                **trace_meta}
             out.append(_traced(tracer, "report_finding", "finding", f, lambda a=args: write_tools.report_finding(a)))
         failed = [o for o in out if o["result"].get("status") == "store_error"]
         if failed:

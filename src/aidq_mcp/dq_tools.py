@@ -2,7 +2,8 @@
 
 get_dq_rules, get_open_and_rejected_proposals, profile_table, get_rejects_summary. Like the monitor's tools they
 only read (read-only Postgres sessions, fixed SQL templates over allowlisted tables and metadata-listed columns),
-never return raw rows (aggregates and, for low-cardinality columns, top values), and refuse env="prod".
+never return raw rows (aggregates; for low-cardinality columns, top values; for a not-expressible finding, counts by
+snapshot date and up to DETAIL_EXAMPLE_KEYS business-key values), and refuse env="prod".
 """
 
 from __future__ import annotations
@@ -17,6 +18,8 @@ RARE_SHARE = 0.01             # a value (or NULL) on fewer than 1% of rows of a 
 LATE_LOAD_HOURS = 12          # a new key loaded this long after its snapshot date was first loaded arrived late
 EMAIL_PATTERN = "^[^@ ]+@[^@ ]+[.][A-Za-z]+$"   # one @, no spaces, a domain ending in .letters (no escapes in SQL)
 METADATA_COLS = ("_row_hash", "_snapshot_date", "_loaded_at")
+DETAIL_MAX_DATES = 31         # a finding's counts by snapshot date: at most this many dates (the earliest)
+DETAIL_EXAMPLE_KEYS = 5       # and this many example business keys (key values only, never other columns)
 DATE_TYPES = ("date", "timestamp")
 NUMERIC_TYPES = ("int", "integer", "bigint", "smallint", "numeric", "decimal", "double", "float", "real")
 
@@ -102,6 +105,53 @@ def reference_sql(relation: str, column: str, target: str, target_key: str) -> s
             f"SELECT 1 FROM {target} t WHERE t.{bq(target_key)} = s.{bq(column)})")
 
 
+# -- finding detail: counts by snapshot date and a few example keys, for the incident's evidence (owner, 2026-10-26)
+
+def _detail_sql(inner: str) -> str:
+    """`inner` yields (k, d), one row per affected row; per date: the count and up to DETAIL_EXAMPLE_KEYS keys."""
+    return (f"SELECT cast(d AS string) AS d, count(*) AS n, "
+            f"slice(array_sort(collect_set(cast(k AS string))), 1, {DETAIL_EXAMPLE_KEYS}) AS examples "
+            f"FROM ({inner}) GROUP BY d ORDER BY d")
+
+
+def duplicates_detail_sql(relation: str, key: str) -> str:
+    """The keys counted by duplicates_sql's keys_with_conflicting_created_date, per snapshot date."""
+    return _detail_sql(f"SELECT {bq(key)} AS k, _snapshot_date AS d FROM {relation} WHERE {bq(key)} IS NOT NULL "
+                       f"GROUP BY {bq(key)}, _snapshot_date HAVING count(DISTINCT created_date) > 1")
+
+
+def late_rows_detail_sql(relation: str, key: str) -> str:
+    """The rows counted by late_rows_sql, per snapshot date."""
+    return _detail_sql(
+        f"WITH b AS (SELECT {bq(key)} AS k, _snapshot_date AS d, _loaded_at AS t FROM {relation} "
+        f"WHERE {bq(key)} IS NOT NULL), first_load AS (SELECT d, min(t) AS ft FROM b GROUP BY d), "
+        f"first_seen AS (SELECT k, min(d) AS fd FROM b GROUP BY k) "
+        f"SELECT b.k, b.d FROM b JOIN first_load f ON b.d = f.d JOIN first_seen s ON b.k = s.k "
+        f"WHERE b.d = s.fd AND b.t > f.ft + INTERVAL {LATE_LOAD_HOURS} HOURS")
+
+
+def reference_detail_sql(relation: str, row_key: str, column: str, target: str, target_key: str) -> str:
+    """The rows counted by reference_sql, per snapshot date; the examples are the referencing rows' own keys."""
+    return _detail_sql(f"SELECT s.{bq(row_key)} AS k, s._snapshot_date AS d FROM {relation} s "
+                       f"WHERE s.{bq(column)} IS NOT NULL AND NOT EXISTS ("
+                       f"SELECT 1 FROM {target} t WHERE t.{bq(target_key)} = s.{bq(column)})")
+
+
+def shape_detail(rows: list[dict]) -> dict:
+    """{counts_by_date: [{date, count}] (earliest DETAIL_MAX_DATES), dates, example_keys (earliest dates first)}."""
+    rows = sorted(rows, key=lambda r: str(r["d"]))
+    examples: list[str] = []
+    for r in rows:
+        for k in r.get("examples") or []:
+            if len(examples) < DETAIL_EXAMPLE_KEYS and k not in examples:
+                examples.append(str(k))
+    out = {"counts_by_date": [{"date": str(r["d"]), "count": int(r["n"])} for r in rows[:DETAIL_MAX_DATES]],
+           "dates": len(rows), "example_keys": examples}
+    if len(rows) > DETAIL_MAX_DATES:
+        out["dates_omitted"] = len(rows) - DETAIL_MAX_DATES
+    return out
+
+
 def top_values_sql(relation: str, column: str) -> str:
     return (f"SELECT cast({bq(column)} AS string) AS v, count(*) AS n FROM {relation} GROUP BY 1 "
             f"ORDER BY n DESC LIMIT {TOP_VALUES_LIMIT}")
@@ -159,9 +209,14 @@ def candidates(table: str, profile: dict) -> list[dict]:
                         "rate": round(count / rows, 6) if rows else None, "kind": kind, "columns": columns, **extra})
 
     key = profile.get("business_key")
+    detail = profile.get("finding_detail") or {}
+
+    def with_detail(check):
+        return {"detail": detail[check]} if check in detail else {}
+
     for name, n in (profile.get("candidate_checks") or {}).items():
         if name == "keys_with_conflicting_created_date_same_day":
-            add("duplicate_business_key", n, "not_expressible", [key])
+            add("duplicate_business_key", n, "not_expressible", [key], **with_detail("duplicate_business_key"))
         elif name == "null_business_key":
             add(name, n, "row_rule", [key])
         else:
@@ -178,8 +233,10 @@ def candidates(table: str, profile: dict) -> list[dict]:
         if col != key and rate and rate < RARE_SHARE:
             add(f"{col}_rare_nulls", round(rate * rows), "row_rule", [col])
     for ref, n in (profile.get("references_without_target") or {}).items():
-        add(f"orphan:{ref.split(' ')[0]}", n, "not_expressible", [ref.split(" ")[0]], reference=ref)
-    add("late_rows", (profile.get("late_arrivals") or {}).get("late_rows"), "not_expressible", [key])
+        check = f"orphan:{ref.split(' ')[0]}"
+        add(check, n, "not_expressible", [ref.split(" ")[0]], reference=ref, **with_detail(check))
+    add("late_rows", (profile.get("late_arrivals") or {}).get("late_rows"), "not_expressible", [key],
+        **with_detail("late_rows"))
     return out
 
 
@@ -252,28 +309,38 @@ class DqTools:
                 if kind_of(c.get("type")) == "text":
                     c["rare_values"] = rare_values(c["top_values"], out["rows"])
         incremental = (tdef.get("load_mode") or "").lower() == "incremental"
+        detail = {}   # finding check -> counts by date + example keys; queried only when the finding exists
         if incremental and key and any(c["column_name"] == "created_date" for c in cols):
             [d] = self.reads.sql(duplicates_sql(relation, key))
             out["candidate_checks"]["keys_with_conflicting_created_date_same_day"] = int(d["keys_with_conflicting_created_date"] or 0)
             out["info_same_day_versions"] = int(d["keys_with_same_day_versions"] or 0)
+            if out["candidate_checks"]["keys_with_conflicting_created_date_same_day"]:
+                detail["duplicate_business_key"] = shape_detail(self.reads.sql(duplicates_detail_sql(relation, key)))
         refs = {}
         names = [c["column_name"] for c in cols]
         for other, other_key in {**cfg.business_keys, **{t: "customer_internal_id" for t in cfg.full_load_tables}}.items():
             if other != table and other_key in names and other_key != key:
-                [r] = self.reads.sql(reference_sql(relation, other_key, f"{cfg.catalog}.poc_bronze.{other}", other_key))
+                target = f"{cfg.catalog}.poc_bronze.{other}"
+                [r] = self.reads.sql(reference_sql(relation, other_key, target, other_key))
                 refs[f"{other_key} -> {other}"] = int(r["n"] or 0)
+                if refs[f"{other_key} -> {other}"] and key:
+                    detail[f"orphan:{other_key}"] = shape_detail(
+                        self.reads.sql(reference_detail_sql(relation, key, other_key, target, other_key)))
         out["references_without_target"] = refs
         if incremental and key:
             [lr] = self.reads.sql(late_rows_sql(relation, key))
             out["late_arrivals"] = {"late_rows": int(lr["late_rows"] or 0), "late_dates": int(lr["late_dates"] or 0),
                                     "note": f"new keys loaded > {LATE_LOAD_HOURS} h after their day was first loaded; "
                                             "not visible from before the last bronze rebuild"}
+            if out["late_arrivals"]["late_rows"]:
+                detail["late_rows"] = shape_detail(self.reads.sql(late_rows_detail_sql(relation, key)))
+        out["finding_detail"] = detail
         out["candidates"] = candidates(table, out)
         out.update({"env": env, "table": table, "load_mode": tdef.get("load_mode"),
                     "watermark_col": tdef.get("watermark_col"),
                     "discard_threshold": None if tdef.get("discard_threshold") is None else float(tdef["discard_threshold"]),
                     "note": "computed on bronze (all rows, including those silver merges away or DQ rejects); "
-                            "aggregates only, no raw rows. info_same_day_versions are normal (bronze keys rows by "
+                            "aggregates only, no raw rows (a finding's detail lists key values only). info_same_day_versions are normal (bronze keys rows by "
                             "content), not duplicates; keys_with_conflicting_created_date_same_day are duplicates. "
                             "Uniqueness, references and late rows need more than one row: they are not row rules. "
                             "`candidates` is the checklist: every check with violations > 0, each to be answered."})
