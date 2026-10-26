@@ -1,4 +1,4 @@
-# STATUS (updated 2026-10-19)
+# STATUS (updated 2026-10-26)
 
 Read this first, then run `git status` and check open PRs. Updated after every Phase 2 step.
 
@@ -43,6 +43,53 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
 
 **Source database (`netsuite-sample`):** production plus backups `pre-synthetic-backup-202609242053`,
 `...202609252235`, `...202609260101`, `...202609260109` (5 of 10 branches).
+
+## 0t. 2026-10-26: quota again, incidents merged, monitor off, #82 decided, source duplicates
+
+**Quota timeline.** Available **10-20..10-23**: every scheduled dev job fired and ended SUCCESS (generator,
+ingestion, knowledge_refresh, schema_drift, dq_validator x2); nothing was merged. **Restricted again since 10-24**:
+no scheduled run on 10-24, 10-25 (incl. the Sunday dq_recommender) or 10-26; warehouse refused on 10-24.
+`daily_check` for 10-20..10-23 not run (needs the warehouse).
+
+**Incidents (owner).** 37, 39, 42, 43, 44, 45 merged into **32** (RESOLVED, `evidence.resolution.merged_into = 32`;
+32 lists them and the three episodes in `evidence.merge`). 32 is the only OPEN quota incident. 36
+(`netsuite_items` not onboarded) stays OPEN: it closes through onboarding.
+
+**Watchdog.** GitHub workflow `monitor-dev.yml` **disabled** (owner, 10-26; `gh workflow enable monitor-dev.yml`),
+on top of `WATCHDOG_TRIGGER=off`. No daily report, no incidents, no endpoint wakes; nothing reports the reset.
+**Turn the workflow back on as soon as the quota resets, with `WATCHDOG_TRIGGER=off`; triggering on after #82's
+build merges.**
+
+**#82 usage reduction: all 7 decisions taken** (plan section 1a: 1 rec., 2 rec., 3 once a day, 4 (a), 5 rec.,
+6 as listed, 7 rec.); the spike's throw-away dev deploy approved (after the reset).
+
+**Source duplicates (incidents 7/9/11/13), read-only analysis.** 716 true duplicates (same key, same
+`updated_date` day): 429 from the 07-11 base load's `duplicate_business_key` defect (= its manifest, = the
+incidents), 287 from incident 1's 10-02/10-03 collisions (21 exact copies). Nothing after 10-03; the daily config
+never had the defect. **PR #86**: the generator refuses the defect and a guard refuses any second row of a key on
+one day; the cleanup plan (`docs/source_duplicate_cleanup_plan.md`, backup branch, self-checking SQL for the owner
+to run) waits for approval. **Nothing deleted.**
+
+**Orphans (incident 14):** all 584 orphan line ids come from the 07-11 base load: 294 `orphan_lines` (= manifest)
+and 290 lines of the 99 transactions whose key `null_business_key` nulled. Known defects, not a bug; the row count
+grows because daily versions copy those lines (1,739 rows now; 1,340 through 10-14 = the incident).
+
+**Late rows (8/10/12/15):** the last `daily_check` (10-16) PASSED, bronze = source per table and day. Resolving them
+"handled by design" waits for the owner's decision (the owner asked for the results first).
+
+**PR #87:** DQ findings carry counts by snapshot date and up to 5 example keys (from the profile, not the model).
+
+**After the reset (owner order):**
+1. Re-enable `monitor-dev.yml` (`WATCHDOG_TRIGGER` stays off); `daily_check` for the first day back (and 10-20..23).
+2. Merge one at a time, outside 05:00-07:00 UTC, each after the previous deploy-dev: **#84, #85, #83, #81, #80,
+   #77** (owner's order; see the note below about #83). #79 after the owner has seen its eval.
+3. #86 (then section 4 of its plan: backup branch, cleanup by the owner, dev bronze rebuild, `daily_check`), #87
+   (after the DQ eval), the #82 build (spike first).
+* **Note on #83:** 0s put #83 first because deploy-dev's `apply_pg_grants.py --check` fails while the live
+  `netsuite_items` grants are not in `grants/source.yml` on main. Merging #84 first would make its deploy-dev fail.
+  To confirm with the owner.
+
+**Prod:** on hold.
 
 ## 0s. Handoff 2026-10-19 ~16:10 UTC (owner offline): quota restriction, open PRs, first steps after the reset
 
