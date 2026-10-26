@@ -183,3 +183,11 @@ project role, as it reads the other five. If it cannot, that is one more grant, 
 
 Prod (the prod metadata does not get `netsuite_items`; the prod pipeline ignores the table); auto-approval; DQ rules
 for the new table (the DQ recommender's job); a `workflow_dispatch` trigger unless decision 7 says so; gold changes.
+
+## 7. Next, after onboarding: set-level checks (owner, 2026-10-26)
+
+Uniqueness and referential integrity as checks that see more than one row, for real sources, where duplicates and
+orphans cannot be cleaned out of the source (the synthetic source's duplicates are removed instead:
+`docs/source_duplicate_cleanup_plan.md`). Confirmed real on 2026-10-26: 716 duplicate (key, day) rows (incidents 7,
+9, 11, 13) and 584 orphan line ids (incident 14). Today the DQ recommender can only report these as
+DQ_NOT_EXPRESSIBLE incidents. A plan PR of its own after phase 8 is done.
