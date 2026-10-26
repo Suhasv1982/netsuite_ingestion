@@ -1,6 +1,6 @@
 # Plan: reduce Free Edition usage (one chained daily job, quota-aware watchdog)
 
-Status: **plan, waiting for the owner's review** (written 2026-10-19). Dev only; prod stays on hold. **Nothing is
+Status: **plan approved by the owner on 2026-10-26** (decisions in section 1a; written 2026-10-19). Dev only; prod stays on hold. **Nothing is
 built or deployed by this plan.** Owner request 2026-10-19, after the Free Edition fair-use quota was reached on
 2026-10-18 (incident 32: no scheduled run on 10-18/10-19; run-now refused with "Triggering new runs for organization
 <id> is currently disabled temporarily"; SQL warehouse and foundation model endpoints refused too).
@@ -49,6 +49,23 @@ which runs one ingestion job.
 7. **No retries on a quota day:** after the first quota refusal of the day the watchdog stops (does not try the
    next job), and on the following days it tries **once** (one run-now of the parent), which also serves as the
    probe that the quota has reset. With `WATCHDOG_TRIGGER=off` it only reports.
+
+## 1a. Owner decisions (2026-10-26)
+
+| # | Decision |
+|---|---|
+| 1 | Parent job of `run_job_task`s; each child keeps its own `run_as` (as recommended) |
+| 2 | generator -> ingestion `ALL_SUCCESS`; the three later jobs `ALL_DONE` (as recommended) |
+| 3 | Validator once a day, last in the chain; the 08:45 run goes |
+| 4 | Option (a): Sunday `condition_task` in the chain, then `dq_recommender`, then the validator |
+| 5 | Quota day = one deterministic COMPUTE_QUOTA incident, no model call (as recommended) |
+| 6 | The quota markers as listed, unchanged |
+| 7 | No retries; one probe run-now of the parent per day (as recommended) |
+
+* **Step 1 spike approved:** the throw-away parent job, one dev deploy after the quota reset, deleted afterwards.
+* **Watchdog:** the GitHub workflow `monitor-dev.yml` was disabled on 2026-10-26 (owner). Turn it back on as soon as
+  the quota resets, with `WATCHDOG_TRIGGER=off` (report only). Turn triggering on (`WATCHDOG_TRIGGER=on`) after this
+  plan's build is merged (step 5).
 
 ## 2. Steps (one PR each, dev only)
 
