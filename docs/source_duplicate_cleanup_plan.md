@@ -1,6 +1,6 @@
 # Plan: remove true duplicates from the source (incidents 7, 9, 11, 13)
 
-Status: **plan, waiting for the owner's approval** (2026-10-26). Dev only; prod stays on hold. Nothing has been
+Status: **plan approved by the owner on 2026-10-26**; runs after the quota reset (section 4). Dev only; prod stays on hold. Nothing has been
 deleted or rebuilt. The generator fix in the same PR is unit-tested only (the Free Edition quota is exhausted).
 
 ## 1. Findings (read-only, netsuite-sample/production, 2026-10-26)
