@@ -68,26 +68,26 @@ build merges.**
 incidents), 287 from incident 1's 10-02/10-03 collisions (21 exact copies). Nothing after 10-03; the daily config
 never had the defect. **PR #86**: the generator refuses the defect and a guard refuses any second row of a key on
 one day; the cleanup plan (`docs/source_duplicate_cleanup_plan.md`, backup branch, self-checking SQL for the owner
-to run) waits for approval. **Nothing deleted.**
+to run) was **approved by the owner on 10-26**; it runs after the reset. **Nothing deleted yet.**
 
 **Orphans (incident 14):** all 584 orphan line ids come from the 07-11 base load: 294 `orphan_lines` (= manifest)
 and 290 lines of the 99 transactions whose key `null_business_key` nulled. Known defects, not a bug; the row count
-grows because daily versions copy those lines (1,739 rows now; 1,340 through 10-14 = the incident).
+grows because daily versions copy those lines (1,739 rows now; 1,340 through 10-14 = the incident). Stays OPEN.
 
-**Late rows (8/10/12/15):** the last `daily_check` (10-16) PASSED, bronze = source per table and day. Resolving them
-"handled by design" waits for the owner's decision (the owner asked for the results first).
+**Set-level checks** (uniqueness, referential integrity) for real sources: added to the phase 8 plan (#77, section 7)
+as the next work after onboarding (owner, 10-26).
+
+**Late rows (8/10/12/15): RESOLVED** (owner, 10-26) as handled by design (top-up flows); the last `daily_check`
+(10-16) PASSED, bronze = source per table and day.
 
 **PR #87:** DQ findings carry counts by snapshot date and up to 5 example keys (from the profile, not the model).
 
 **After the reset (owner order):**
 1. Re-enable `monitor-dev.yml` (`WATCHDOG_TRIGGER` stays off); `daily_check` for the first day back (and 10-20..23).
-2. Merge one at a time, outside 05:00-07:00 UTC, each after the previous deploy-dev: **#84, #85, #83, #81, #80,
-   #77** (owner's order; see the note below about #83). #79 after the owner has seen its eval.
+2. Merge one at a time, outside 05:00-07:00 UTC, each after the previous deploy-dev: **#83, #84, #85, #81, #80,
+   #77** (owner confirmed #83 first, 10-26). #79 after the owner has seen its eval.
 3. #86 (then section 4 of its plan: backup branch, cleanup by the owner, dev bronze rebuild, `daily_check`), #87
    (after the DQ eval), the #82 build (spike first).
-* **Note on #83:** 0s put #83 first because deploy-dev's `apply_pg_grants.py --check` fails while the live
-  `netsuite_items` grants are not in `grants/source.yml` on main. Merging #84 first would make its deploy-dev fail.
-  To confirm with the owner.
 
 **Prod:** on hold.
 
