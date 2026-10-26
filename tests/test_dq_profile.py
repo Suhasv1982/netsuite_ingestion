@@ -68,5 +68,38 @@ def test_every_check_with_violations_becomes_a_candidate():
     assert "notes_rare_nulls" not in c and "start_date_future" not in c
 
 
+def test_detail_sql_returns_counts_by_date_and_key_values_only():
+    rel, tgt = "workspace.poc_bronze.netsuite_transaction_lines", "workspace.poc_bronze.netsuite_transactions"
+    for sql in (dq.duplicates_detail_sql(rel, "transaction_line_id"), dq.late_rows_detail_sql(rel, "transaction_line_id"),
+                dq.reference_detail_sql(rel, "transaction_line_id", "transaction_internal_id", tgt, "transaction_internal_id")):
+        assert sql.startswith("SELECT cast(d AS string) AS d, count(*) AS n, ")
+        assert f"slice(array_sort(collect_set(cast(k AS string))), 1, {dq.DETAIL_EXAMPLE_KEYS}) AS examples" in sql
+        assert "GROUP BY d ORDER BY d" in sql
+    # the same conditions as the counting queries
+    assert "HAVING count(DISTINCT created_date) > 1" in dq.duplicates_detail_sql(rel, "transaction_line_id")
+    assert f"b.t > f.ft + INTERVAL {dq.LATE_LOAD_HOURS} HOURS" in dq.late_rows_detail_sql(rel, "transaction_line_id")
+    assert "s.`transaction_line_id` AS k" in dq.reference_detail_sql(rel, "transaction_line_id", "transaction_internal_id",
+                                                                     tgt, "transaction_internal_id")
+
+
+def test_shape_detail_orders_dates_caps_them_and_keeps_five_example_keys():
+    rows = [{"d": f"2026-10-{d:02d}", "n": d, "examples": [f"k{d}a", f"k{d}b"]} for d in range(1, 26)]
+    rows += [{"d": f"2026-09-{d:02d}", "n": 1, "examples": [f"s{d}"]} for d in range(1, 11)]   # 35 dates
+    out = dq.shape_detail(list(reversed(rows)))
+    assert out["dates"] == 35 and out["dates_omitted"] == 35 - dq.DETAIL_MAX_DATES
+    assert len(out["counts_by_date"]) == dq.DETAIL_MAX_DATES
+    assert out["counts_by_date"][0] == {"date": "2026-09-01", "count": 1}
+    assert out["example_keys"] == ["s1", "s2", "s3", "s4", "s5"]
+    assert dq.shape_detail([]) == {"counts_by_date": [], "dates": 0, "example_keys": []}
+
+
+def test_not_expressible_candidates_carry_their_detail():
+    detail = {"counts_by_date": [{"date": "2026-07-11", "count": 24}], "dates": 1, "example_keys": ["5040"]}
+    profile = {**PROFILE, "finding_detail": {"duplicate_business_key": detail, "late_rows": detail}}
+    c = {x["check"]: x for x in dq.candidates("netsuite_memberships", profile)}
+    assert c["duplicate_business_key"]["detail"] == detail and c["late_rows"]["detail"] == detail
+    assert "detail" not in c["orphan:customer_internal_id"] and "detail" not in c["end_date_before_start_date"]
+
+
 def test_a_clean_table_has_no_candidates():
     assert dq.candidates("t", {"rows": 5, "columns": [{"column": "a", "null_rate": 0.0}], "candidate_checks": {}}) == []
