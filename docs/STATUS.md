@@ -1,4 +1,4 @@
-# STATUS (updated 2026-10-15)
+# STATUS (updated 2026-10-26)
 
 Read this first, then run `git status` and check open PRs. Updated after every Phase 2 step.
 
@@ -43,6 +43,189 @@ source (owner's OK), prod metadata (by the owner, 20:53 UTC). Nothing runs on pr
 
 **Source database (`netsuite-sample`):** production plus backups `pre-synthetic-backup-202609242053`,
 `...202609252235`, `...202609260101`, `...202609260109` (5 of 10 branches).
+
+## 0t. 2026-10-26: quota again, incidents merged, monitor off, #82 decided, source duplicates
+
+**Quota timeline.** Available **10-20..10-23**: every scheduled dev job fired and ended SUCCESS (generator,
+ingestion, knowledge_refresh, schema_drift, dq_validator x2); nothing was merged. **Restricted again since 10-24**:
+no scheduled run on 10-24, 10-25 (incl. the Sunday dq_recommender) or 10-26; warehouse refused on 10-24.
+`daily_check` for 10-20..10-23 not run (needs the warehouse).
+
+**Incidents (owner).** 37, 39, 42, 43, 44, 45 merged into **32** (RESOLVED, `evidence.resolution.merged_into = 32`;
+32 lists them and the three episodes in `evidence.merge`). 32 is the only OPEN quota incident. 36
+(`netsuite_items` not onboarded) stays OPEN: it closes through onboarding.
+
+**Watchdog.** GitHub workflow `monitor-dev.yml` **disabled** (owner, 10-26; `gh workflow enable monitor-dev.yml`),
+on top of `WATCHDOG_TRIGGER=off`. No daily report, no incidents, no endpoint wakes; nothing reports the reset.
+**Turn the workflow back on as soon as the quota resets, with `WATCHDOG_TRIGGER=off`; triggering on after #82's
+build merges.**
+
+**#82 usage reduction: all 7 decisions taken** (plan section 1a: 1 rec., 2 rec., 3 once a day, 4 (a), 5 rec.,
+6 as listed, 7 rec.); the spike's throw-away dev deploy approved (after the reset).
+
+**Source duplicates (incidents 7/9/11/13), read-only analysis.** 716 true duplicates (same key, same
+`updated_date` day): 429 from the 07-11 base load's `duplicate_business_key` defect (= its manifest, = the
+incidents), 287 from incident 1's 10-02/10-03 collisions (21 exact copies). Nothing after 10-03; the daily config
+never had the defect. **PR #86**: the generator refuses the defect and a guard refuses any second row of a key on
+one day; the cleanup plan (`docs/source_duplicate_cleanup_plan.md`, backup branch, self-checking SQL for the owner
+to run) was **approved by the owner on 10-26**; it runs after the reset. **Nothing deleted yet.**
+
+**Orphans (incident 14):** all 584 orphan line ids come from the 07-11 base load: 294 `orphan_lines` (= manifest)
+and 290 lines of the 99 transactions whose key `null_business_key` nulled. Known defects, not a bug; the row count
+grows because daily versions copy those lines (1,739 rows now; 1,340 through 10-14 = the incident). Stays OPEN.
+
+**Set-level checks** (uniqueness, referential integrity) for real sources: added to the phase 8 plan (#77, section 7)
+as the next work after onboarding (owner, 10-26).
+
+**Late rows (8/10/12/15): RESOLVED** (owner, 10-26) as handled by design (top-up flows); the last `daily_check`
+(10-16) PASSED, bronze = source per table and day.
+
+**PR #87:** DQ findings carry counts by snapshot date and up to 5 example keys (from the profile, not the model).
+
+**After the reset (owner order):**
+1. Re-enable `monitor-dev.yml` (`WATCHDOG_TRIGGER` stays off); `daily_check` for the first day back (and 10-20..23).
+2. Merge one at a time, outside 05:00-07:00 UTC, each after the previous deploy-dev: **#83, #84, #85, #81, #80,
+   #77** (owner confirmed #83 first, 10-26). #79 after the owner has seen its eval.
+3. #86 (then section 4 of its plan: backup branch, cleanup by the owner, dev bronze rebuild, `daily_check`), #87
+   (after the DQ eval), the #82 build (spike first).
+
+**Handoff 2026-10-26 ~20:40 UTC (owner offline).**
+* **State:** no Databricks run active, no GitHub run in progress, nothing uncommitted, only `main` checked out (no
+  worktree). Quota still restricted (no scheduled run since 10-23). `monitor-dev.yml` disabled, `WATCHDOG_TRIGGER=off`.
+* **Open PRs (10):** #77 (onboarding plan + section 7 set-level checks), #79 (monitor facts; eval pending), #80
+  (this STATUS), #81 (eval artifacts), #82 (usage reduction; decisions recorded), #83 (items grants), #84, #85
+  (onboarding steps 1-2), #86 (generator duplicate guard + approved cleanup plan), #87 (finding evidence detail).
+  None may merge until the reset (a merge starts deploy-dev, which runs a job).
+* **OPEN incidents:** 7, 9, 11, 13 (duplicates; close after the cleanup and a clean `daily_check`), 14 (orphans,
+  known defects), 32 (quota), 36 (`netsuite_items` not onboarded).
+* **Reset date unknown:** Databricks publishes none. The first restriction lasted 10-18..10-19 (back on 10-20); this
+  one since 10-24. **How to tell:** the scheduled generator (05:00 UTC) and dev ingestion (05:30) show new PERIODIC
+  runs (`databricks jobs list-runs --profile DEFAULT`); start nothing to probe. Earliest: 2026-10-27 05:00 UTC.
+* **First steps after the reset:** the list above ("After the reset"), starting with re-enabling the monitor.
+
+**Prod:** on hold.
+
+## 0s. Handoff 2026-10-19 ~16:10 UTC (owner offline): quota restriction, open PRs, first steps after the reset
+
+**Free Edition fair-use quota restriction (incident 32, the only OPEN COMPUTE_QUOTA incident).** Started
+**2026-10-18** (last scheduled runs: 10-17, all SUCCESS; nothing fired on 10-18 or 10-19). Refused since: job
+run-now (`Triggering new runs for organization <id> is currently disabled temporarily`), the SQL warehouse, the
+foundation model endpoints. The Lakebase endpoints still work (re-enabled on use). **Not reset** as of 10-19 16:10 UTC.
+
+**At handoff:** `WATCHDOG_TRIGGER=off` (repository variable; the monitor runs and reports, triggers nothing). No
+Databricks run active. Three PR-check runs queued on GitHub for #83/#84/#85 (API and Lakebase calls only, no job).
+Nothing uncommitted; no worktree. No live eval, model call or job was started after the restriction began.
+
+**DQ proposals:** **none open.** The 7 from 10-14/10-15 were reviewed on 10-16 (0q: 17, 19, 22 rejected; 12, 13,
+18, 25 applied); the recommender has not run since (Sunday 10-18 did not fire), and no drift proposal was written.
+Still OPEN: incidents **7-15** (DQ_NOT_EXPRESSIBLE, 10-14: duplicate keys, late arrivals, orphan lines; for the
+owner's review) and **32** (quota).
+
+**Onboarding (#77):** the owner created `netsuite.netsuite_items` (10-19; 8 columns as planned, owner-owned;
+SELECT for ci-dev and ci-prod from the default privileges, accepted). Grants applied by this session: data-generator
+SELECT/INSERT/UPDATE, dq-agent SELECT; `apply_pg_grants.py --check` exact for both. The table is empty until the
+generator's first run with #85.
+
+**Open PRs (none may merge while the restriction lasts: a merge starts deploy-dev, which runs a job):**
+
+| PR | What | State |
+|---|---|---|
+| #83 | `grants/source.yml` for netsuite_items (+ least-privilege test: UPDATE on customers and items only) | applied already; **merge FIRST**: deploy-dev's `apply_pg_grants.py --check` fails on the live items grants until this file is on main |
+| #80 | this STATUS (0q, 0r, 0s) | docs |
+| #77 | onboarding plan | decisions approved 10-16; docs |
+| #81 | eval results as GitHub Actions artifacts (`agent-eval.yml`, dq-eval upload) | needed by #79's eval |
+| #79 | monitor deterministic facts (incident 30) | eval incomplete: see step 4 below |
+| #84 | onboarding step 1: review CLI / validator see ONBOARD_TABLE | unit tests only |
+| #85 | onboarding step 2: generator fills netsuite_items (item defects off) | unit tests only |
+| #82 | usage-reduction plan (chained daily job, quota-aware watchdog) | **7 owner decisions** (section 1) |
+
+**When the quota resets, first:**
+1. **Confirm the reset without starting anything:** the next scheduled 05:00 generator and 05:30 dev runs fire on
+   their own (schedules UNPAUSED). If they do not fire, the owner decides how to probe (watchdog stays off).
+2. `python tools/daily_check.py --date <that day> --profile DEFAULT`. 10-18 and 10-19 have no batch; no backfill
+   unless the owner says so (precedent 10-13: none).
+3. Merge **#83 first**, alone; wait for its deploy-dev (grant check exact). Then one PR at a time, each after the
+   previous deploy-dev: #80, #77, #81, #84, #85 (#85: the next generator run seeds the 23 items).
+4. **#79:** merge main into the branch (for `agent-eval.yml`), then run only `missed_runs_metadata_unavailable` and
+   `guard_blocked_after_add_column_10_15` (`gh workflow run agent-eval.yml --ref fix/monitor-deterministic-facts
+   -f cases="missed_runs_metadata_unavailable guard_blocked_after_add_column_10_15"`), explain the 10-16 run-3
+   failure, then the full suite once, then merge.
+5. Owner: the 7 decisions in #82; `WATCHDOG_TRIGGER` back to `on` only with the owner (#82 step 5).
+6. Optional, once: the live rolled-back review test for #84 (`tests/test_review_cli.py::test_review_on_dev_rolled_back`).
+
+**Eval policy (owner 2026-10-19):** the affected cases while developing, the full suite only before a merge.
+**Prod:** all activities on hold.
+
+## 0r. 2026-10-17..19: platform restriction (no scheduled runs since 10-18); open items
+
+* **10-17:** generator, dev job, knowledge_refresh, schema_drift, dq_validator x2 all scheduled and SUCCESS.
+* **10-18 and 10-19: no scheduled run fired** (no generator, dev job, knowledge_refresh, schema_drift,
+  dq_validator; the Sunday 10-18 `dq_recommender` did not run either). The watchdog's run-now was refused:
+  `Triggering new runs for organization <id> is currently disabled temporarily`. Also refused since 10-18: the SQL
+  warehouse (`The request could not be processed by the warehouse`) and the foundation model endpoints
+  (`Cannot create or query foundation model endpoints, please try again later`). The monitor re-enabled both
+  Lakebase endpoints each day. Free Edition platform restriction, cause not confirmed; nothing was changed on our
+  side. Nothing done about it (owner decision pending).
+* **New OPEN incidents:** 31 (10-17, OTHER): the same misdiagnosis as incident 30 (the 10-15 20:01 run is still in
+  the 3-day window; new fingerprint because 30 was resolved); #79 fixes the diagnosis. 32 and 34 (ORCHESTRATION,
+  "[self-heal failed]": missed runs 10-18, 10-19, run-now refused). 33 and 35 (OTHER: warehouse refused; 35 has no
+  RCA, the model call was refused).
+* **PR #79** (monitor deterministic facts, incident 30): built, pytest green, the new eval case met its targets on
+  10-16. The full regression eval is incomplete (one failed run in `missed_runs_metadata_unavailable`, not yet
+  examined; the last case lost the network); a re-run on 10-19 was refused by the model endpoints. Re-run before
+  merging.
+* **Owner decisions 2026-10-19:**
+  * The restriction is the **Free Edition fair-use quota** (same message on the Databricks community). **Trigger
+    nothing until it resets.** Watchdog kill switch set: repository variable **`WATCHDOG_TRIGGER=off`** (the monitor
+    still runs and reports; back to `on` only with the owner). **Hold every merge** too: a merge starts deploy-dev,
+    which runs an ingestion job.
+  * Incidents: **32 is the single OPEN COMPUTE_QUOTA incident** (33, 34, 35 merged into it and RESOLVED, each with
+    `evidence.resolution.merged_into = 32`; 32 lists them in `evidence.merge`). **31 RESOLVED as a duplicate of 30**
+    (SCHEMA_DRIFT, proposal 48).
+  * **Usage reduction: plan PR #82** (one chained daily job of run_job_tasks, validator once a day, a quota refusal =
+    one COMPUTE_QUOTA incident per day with no model call and no retries).
+  * **#79:** when the model endpoints work again, re-run only `missed_runs_metadata_unavailable` and
+    `guard_blocked_after_add_column_10_15` first and explain the run-3 failure before merging.
+  * **Eval results as GitHub Actions artifacts: PR #81** (new manual workflow `agent-eval.yml`; `dq-eval.yml` uploads
+    too; timestamped result files).
+  * **Eval policy:** the affected cases while developing; the full suite only before a merge.
+  * **Prod activities on hold.**
+  * Worktree `../wt_status` removed.
+* **Waiting for the owner:** see 0s (the DDL and the grants are done).
+
+## 0q. 2026-10-16: daily cycle, incident 30, proposals reviewed, onboarding default privileges
+
+**Daily cycle 10-16 (all scheduled, all SUCCESS):** generator 05:00, dev `netsuite_ingestion_daily` 05:30-05:42,
+`knowledge_refresh` 07:15, `schema_drift` 07:30 (no new proposals), `dq_validator` 07:45 and 08:45.
+`daily_check --date 2026-10-16`: **PASSED** (bronze = source per table and date, ledger OK; WARN only for no prod
+run). No Lakebase endpoint had to be re-enabled.
+
+**Incident 30 (monitor 11:32 UTC): misdiagnosis, corrected and RESOLVED (owner 2026-10-16).** The monitor wrote
+ORCHESTRATION, "a code bug in bronze.py line 8", and recommended a code rollback. Real cause: the row-hash guard
+blocked the 10-15 20:01 dev run and its 5 retries (`BLOCKED: the hashed column set of netsuite_transactions changed
+in source_columns (added custbody_region)`) after proposal 48 was applied at 19:27, by design (0o); the rebuild at
+20:20 fixed it. The error text is ~14k characters and the BLOCKED line is near its end; the tool returned the first
+500 (same pattern as incident 6). Re-categorized SCHEMA_DRIFT, linked to proposal 48, the monitor's original
+diagnosis kept in `evidence.resolution`. Fix: PR #79 (0r).
+
+**DQ proposals reviewed (owner 2026-10-16):** rejected 17, 19, 22 (HARD "ID not null" on certifications,
+transactions, lines) with the reason "NULL IDs are injected generator defects, not real source behaviour; do not
+enforce". Approved and applied as SOFT: 12 (Company Name Not Null), 13 (Valid Email Format), 18 (Certification Start
+Not In Future), 25 (Transaction Date Not In Future): rules 18-21, enforced from the next dev run. No proposal open.
+Rule 11 (memberships ID not null, HARD) unchanged. Incidents 7-15 (DQ_NOT_EXPRESSIBLE, 10-14) are still OPEN.
+
+**aidq MCP server registered in Claude Code** on the owner's machine (user scope, all projects; not committed):
+`claude mcp add aidq --scope user -e PYTHONPATH=<repo>/src -e PYTHONIOENCODING=utf-8 -- <repo>/.venv/Scripts/python.exe
+-m aidq_mcp --profile DEFAULT`. Connected. (The package is not installed in the venv, so `PYTHONPATH` is needed;
+the bare command in 0p fails with `No module named 'aidq_mcp'`.) Remove: `claude mcp remove aidq -s user`.
+
+**Onboarding (#77): plan decisions approved (owner 2026-10-16); default privileges checked (read-only).** On
+`netsuite-sample`/production the owner's role has default privileges in schema `netsuite`: every table the owner
+creates there gets **SELECT for ci-dev and ci-prod** automatically (`pg_default_acl`, objtype r), nothing else.
+So `netsuite.netsuite_items` will be readable by **ci-prod** as soon as it exists. **Accepted by the owner
+(2026-10-16)**: read-only, and prod ignores the table until it is onboarded in prod metadata. It also means ci-dev
+(the dev pipeline identity) needs no extra grant. dq-agent and data-generator get theirs explicitly (plan section 3)
+after the owner runs the DDL.
 
 ## 0p. End of day 2026-10-15: RAG done-when, what is merged, waiting, scheduled
 
